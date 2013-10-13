@@ -9,7 +9,8 @@ func main() {
 	hello = ":-)"  // Change the global first
 
 	var hello string = "Hello"
-	hello = hello + ", world"
+	var world string = "world"
+	hello = hello + ", " + world
 	hello += "!"
 	fmt.Println(hello)
 }

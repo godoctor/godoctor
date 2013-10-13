@@ -7,11 +7,12 @@ package doctor
 import (
 	//"code.google.com/p/go.tools/go/types"
 	//"code.google.com/p/go.tools/importer"
-	//"fmt"
+	"fmt"
 	"go.tools/importer"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/ioutil"
 )
 
 // The Refactoring interface provides the methods common to all refactorings.
@@ -31,6 +32,7 @@ type Refactoring interface {
 type RefactoringBase struct {
 	fset           *token.FileSet
 	file           *ast.File
+	filename       string
 	selectionStart token.Pos
 	selectionEnd   token.Pos
 	selectedNode   ast.Node
@@ -47,15 +49,14 @@ func (r *RefactoringBase) SetSelection(selection TextSelection) bool {
 	r.log = NewLog()
 
 	r.fset = token.NewFileSet()
+	r.filename = selection.filename
 	r.file = r.parse(selection.filename)
 	if r.file == nil {
 		return false
 	}
 
-	r.selectionStart = lineColToPos(r.fset, r.file,
-		selection.startLine, selection.endLine)
-	r.selectionEnd = lineColToPos(r.fset, r.file,
-		selection.startLine, selection.endLine)
+	r.selectionStart = r.lineColToPos(selection.startLine, selection.startCol)
+	r.selectionEnd = r.lineColToPos(selection.endLine, selection.endCol)
 
 	r.importer = importer.New(new(importer.Config))
 	r.pkgInfo = r.importer.CreatePackage(r.file.Name.Name, r.file)
@@ -85,8 +86,8 @@ func (r *RefactoringBase) parse(filename string) *ast.File {
 
 // Converts a line/column position (where the first character in a file is at
 // line 1, column 1) into a token.Pos
-func lineColToPos(fset *token.FileSet, astFile *ast.File, line int, column int) token.Pos {
-	file := fset.File(astFile.Pos())
+func (r *RefactoringBase) lineColToPos(line int, column int) token.Pos {
+	file := r.fset.File(r.file.Pos())
 	lastLine := -1
 	thisColumn := 1
 	for i := 0; i < file.Size(); i++ {
@@ -100,9 +101,42 @@ func lineColToPos(fset *token.FileSet, astFile *ast.File, line int, column int) 
 		if thisLine == line && thisColumn == column {
 			return pos
 		}
-		lastLine = line
+		lastLine = thisLine
 	}
-	return astFile.Pos()
+	return r.file.Pos()
+}
+
+func (r *RefactoringBase) checkForErrors() {
+	contents, err := ioutil.ReadFile(r.filename)
+	if err != nil {
+		r.log.Log(ERROR, "Unable to read source file: "+err.Error())
+		return
+	}
+	sourceFromFile := string(contents)
+
+	string, err := r.editSet.ApplyToString(sourceFromFile)
+	if err != nil {
+		r.log.Log(ERROR, "Transformation produced invalid EditSet: "+
+			err.Error())
+		return
+	}
+
+	f, err := parser.ParseFile(r.fset, "", string, parser.ParseComments)
+	if err != nil {
+		fmt.Println("vvvvv")
+		fmt.Println(string)
+		fmt.Println("^^^^^")
+		r.log.Log(ERROR, "Transformation will introduce "+
+			"syntax errors: "+err.Error())
+		return
+	}
+
+	r.pkgInfo = r.importer.CreatePackage(r.file.Name.Name, f)
+	if r.pkgInfo.Err != nil {
+		r.log.Log(ERROR, "Transformation will introduce semantic "+
+			"errors: "+r.pkgInfo.Err.Error())
+		return
+	}
 }
 
 func (r *RefactoringBase) GetLog() *Log {

@@ -47,6 +47,9 @@ func (r *RenameRefactoring) Run() {
 			r.editSet.Add(occurrence, r.newName)
 		}
 		//fmt.Println(editSet.String())
+
+		r.checkForErrors()
+
 		return
 
 	default:

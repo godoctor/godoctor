@@ -22,6 +22,7 @@ func TestRename1(t *testing.T) {
 		t.Errorf("SetSelection failed")
 	}
 	r.SetNewName("renamed")
+	//r.SetNewName("world")
 	r.Run()
 	log, editSet := r.GetResult()
 	if log.ContainsErrors() {

@@ -41,7 +41,7 @@ type EditSet interface {
 	Add(position OffsetLength, replacement string)
 	ApplyTo(in io.Reader, out io.Writer) error
 	ApplyToFile(filename string, out io.Writer) error
-	ApplyToString(s string) string
+	ApplyToString(s string) (string, error)
 	String() string
 }
 
@@ -100,14 +100,11 @@ func (e *editSet) ApplyToFile(filename string, out io.Writer) error {
 	return e.ApplyTo(file, out)
 }
 
-func (e *editSet) ApplyToString(s string) string {
+func (e *editSet) ApplyToString(s string) (string, error) {
 	var reader io.Reader = strings.NewReader(s)
 	var writer bytes.Buffer
 	err := e.ApplyTo(reader, &writer)
-	if err != nil {
-		return "ERROR: " + err.Error()
-	}
-	return writer.String()
+	return writer.String(), err
 }
 
 func (e *editSet) ApplyTo(in io.Reader, out io.Writer) error {
