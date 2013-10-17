@@ -10,6 +10,7 @@ import (
 	"go/parser"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -18,6 +19,8 @@ import (
 
 const MARKER = "<<<<<"
 const PASS = "pass"
+const FAIL_SELECTION = "fail-selection"
+const FAIL_CONFIGURE = "fail-configure"
 const FAIL = "fail"
 
 // assertEquals is a utility method for unit tests that marks a function as
@@ -93,7 +96,17 @@ func runTestsInFiles(files []os.FileInfo,
 
 	for filename, markersInFile := range markers {
 		for _, marker := range markersInFile {
+			if filename == "main.go" {
+				cmd := exec.Command("go", "run", "main.go")
+				_, err := cmd.Output()
+				if err != nil {
+					fmt.Println("go run main.go failed:")
+					t.Error(err)
+					t.FailNow()
+				}
+			}
 			runRefactoring(filename, marker, r, configure, t)
+			// TODO: Compare output after refactoring
 		}
 	}
 }
@@ -109,10 +122,24 @@ func runRefactoring(filename string, marker string,
 	fmt.Println("Running", name, "on", filename, selection)
 
 	ok := r.SetSelection(selection)
-	check(ok, shouldPass, "SetSelection failed", t)
+	log := r.GetLog()
+	if result == FAIL_SELECTION && !ok {
+		return // We expected SetSelection to fail -- good
+	} else if shouldPass && (!ok || log.ContainsErrors()) {
+		t.Errorf("SetSelection produced unexpected errors")
+		fmt.Println(log)
+		t.FailNow()
+	}
 
 	ok = configure(remainder)
-	check(ok, shouldPass, "configure failed", t)
+	log = r.GetLog()
+	if result == FAIL_CONFIGURE && !ok {
+		return // We expected configuration to fail -- good
+	} else if shouldPass && (!ok || log.ContainsErrors()) {
+		t.Errorf("Refactoring configuration failed")
+		fmt.Println(log)
+		t.FailNow()
+	}
 
 	r.Run()
 	log, edits := r.GetResult()
@@ -130,13 +157,6 @@ func runRefactoring(filename string, marker string,
 	}
 	if shouldPass {
 		checkResult(filename, output.String(), t)
-	}
-}
-
-func check(didPass bool, shouldPass bool, msgIfFailed string, t *testing.T) {
-	if didPass != shouldPass {
-		t.Errorf("%s", msgIfFailed)
-		t.FailNow()
 	}
 }
 
@@ -180,8 +200,9 @@ func splitMarker(filename string, marker string, t *testing.T) (
 	remainder = fields[4:len(fields)-1]
 	result = fields[len(fields)-1]
 	if result != PASS && result != FAIL {
-		t.Errorf("Marker is invalid: last field must be %s or %s",
-			PASS, FAIL)
+		t.Errorf("Marker is invalid: last field must be one of: " +
+			"%s, %s, %s, or %s",
+			PASS, FAIL_SELECTION, FAIL_CONFIGURE, FAIL)
 		t.FailNow()
 	}
 	return

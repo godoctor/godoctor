@@ -52,6 +52,7 @@ func (r *RefactoringBase) SetSelection(selection TextSelection) bool {
 	r.filename = selection.filename
 	r.file = r.parse(selection.filename)
 	if r.file == nil {
+		r.log.Log(FATAL_ERROR, "Unable to parse "+selection.filename)
 		return false
 	}
 
@@ -131,6 +132,7 @@ func (r *RefactoringBase) checkForErrors() {
 		return
 	}
 
+	// TODO: importer.CreatePackage outputs error message -- suppress
 	r.pkgInfo = r.importer.CreatePackage(r.file.Name.Name, f)
 	if r.pkgInfo.Err != nil {
 		r.log.Log(ERROR, "Transformation will introduce semantic "+

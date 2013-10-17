@@ -9,7 +9,7 @@ func main() {
 	hello = ":-)"  // Don't change this
 
 	var renamed string = "Hello"	// <<<<< 11,6,11,6,renamed,pass
-	var world string = "world"
+	var world string = "world"	// <<<<< 12,6,12,6,hello,fail
 	renamed = renamed + ", " + world
 	renamed += "!"
 	fmt.Println(renamed)
