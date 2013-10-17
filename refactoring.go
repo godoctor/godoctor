@@ -24,7 +24,7 @@ import (
 type Refactoring interface {
 	Name() string
 	SetSelection(selection TextSelection) bool
-	Run() bool
+	Run()
 	GetLog() *Log
 	GetResult() (*Log, EditSet)
 }

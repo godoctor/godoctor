@@ -2,16 +2,28 @@ package doctor
 
 import (
 	"bytes"
-	"fmt"
-	//"go/ast"
-	//"go/parser"
-	//"go/token"
+	//"fmt"
 	"os"
 	"testing"
 )
 
-func TestRename1(t *testing.T) {
-	DIR := "testdata/rename"
+const DIRECTORY = "testdata/rename"
+
+func TestRename(t *testing.T) {
+	rename := new(RenameRefactoring)
+	runAllTests(DIRECTORY, rename,
+		func(args []string) bool {
+			if len(args) != 1 {
+				t.Errorf("Marker is missing new name")
+			}
+			rename.SetNewName(args[0])
+			return true
+		}, t);
+}
+
+// This is old -- do not write any tests like this -- use runAllTests (above)
+func TestRename_OLD__DO_NOT_WRITE_TESTS_LIKE_THIS(t *testing.T) {
+	DIR := "testdata/rename/001-local"
 	err := os.Chdir(DIR)
 	if err != nil {
 		t.Error(err)
@@ -33,5 +45,5 @@ func TestRename1(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(writer.String())
+	//fmt.Println(writer.String())
 }
