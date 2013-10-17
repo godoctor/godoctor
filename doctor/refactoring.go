@@ -13,15 +13,52 @@ import (
 	"go/parser"
 	"go/token"
 	"io/ioutil"
+	"log"
 	"path/filepath"
 )
 
 // The Refactoring interface provides the methods common to all refactorings.
 //
-// Name returns a human-readable name for the refactoring, properly capitalized
-// (e.g., "Rename" or "Extract Function").
+// The protocol for invoking a refactoring is:
 //
-// TODO: DOCUMENT REMAINING METHODS
+//     1. Invoke SetSelection to initialize the refactoring and specify what
+//        file is to be refactored.
+//     2. Invoke any custom configuration methods (or Configure) to specify
+//        any arguments.  For example, for the Rename refactoring, you must
+//        specify a new name for the entity being renamed.
+//     3. Invoke Run.
+//     4. Invoke GetResult to get the resulting Log and EditSet.
+//
+// Name returns a human-readable name for the refactoring, properly capitalized
+// (e.g., "Rename" or "Extract Function").  Every refactoring should have a
+// unique name.
+//
+// Refactorings are typically invoked from a text editor.  The SetSelection
+// method initializes the refactoring, clears the log (see GetLog/GetResult),
+// and provides the refactoring with the file that was open in the text editor
+// and the selected region/caret position.  The method returns true if the
+// refactoring can be invoked on the given selection.  If the method returns
+// false, more information may be obtained by invoking the GetLog method.
+//
+// The Configure method is used by the testing infrastructure to pass
+// configuration information to the refactoring.  Test files are annotated
+// with markers of the form
+//     //<<<<<name,startline,startcol,endline,endcol,arg1,arg2,...,argn,pass
+// which indicate what refactoring(s) to run.  The arguments arg1,arg2,...,argn
+// (if present) are passed as the args of the Configure method.  This method
+// returns false if configuration fails, i.e., if the wrong number of
+// arguments are passed or the arguments are invalid.  If the method fails,
+// more information may be obtained by invoking the GetLog method.
+//
+// The Run method runs the refactoring.
+//
+// Informational message, errors, and warnings are logged so that they can be
+// displayed to the user.  This log can be obtained by invoking the GetLog
+// method, or it can be obtained along with the resulting EditSet by invoking
+// the GetResult method.
+//
+// If the log contains errors (log.ContainsErrors()), the resulting EditSet
+// may be empty, since it may not be possible to perform the refactoring.
 type Refactoring interface {
 	Name() string
 	SetSelection(selection TextSelection) bool
@@ -173,7 +210,8 @@ func (r *RefactoringBase) checkForErrors() {
 		return
 	}
 
-	// TODO: importer.CreatePackage outputs error message -- suppress
+	// TODO: importer.CreatePackage outputs error message -- suppress?
+	// TODO: This may be wrong if several files are changed...?
 	r.pkgInfo = r.importer.CreatePackage(r.file.Name.Name, f)
 	if r.pkgInfo.Err != nil {
 		r.log.Log(ERROR, "Transformation will introduce semantic "+
@@ -188,4 +226,25 @@ func (r *RefactoringBase) GetLog() *Log {
 
 func (r *RefactoringBase) GetResult() (*Log, EditSet) {
 	return r.log, r.editSet
+}
+
+func (r *RefactoringBase) forEachFile(f func(file *token.File, ast *ast.File)) {
+	r.importer.Fset.Iterate(func(tfile *token.File) bool {
+		r.findFile(tfile, f)
+		return true
+	})
+}
+
+func (r *RefactoringBase) findFile(tfile *token.File, f func(file *token.File, ast *ast.File)) {
+	filename := tfile.Name()
+	for _, pkgInfo := range r.importer.AllPackages() {
+		for _, file := range pkgInfo.Files {
+			pkgInfoFilename := r.importer.Fset.Position(file.Pos()).Filename
+			if pkgInfoFilename == filename {
+				f(tfile, file)
+				return
+			}
+		}
+	}
+	log.Fatalf("Unable to find file %s in importer.AllPackages()", filename)
 }

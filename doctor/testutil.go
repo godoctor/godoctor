@@ -169,7 +169,7 @@ func runRefactoring(filename string, marker string) {
 }
 
 func checkResult(filename string, actualOutput string) {
-	fmt.Println("Comparing", filename, "to", filename+"lden")
+	fmt.Println("- Comparing", filename, "to", filename+"lden")
 
 	bytes, err := ioutil.ReadFile(filename + "lden")
 	if err != nil {

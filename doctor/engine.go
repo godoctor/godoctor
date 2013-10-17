@@ -1,12 +1,16 @@
 package doctor
 
-// TODO: Document engine
+// Entrypoint for the refactoring engine.  This package enumerates the
+// available refactorings and provides the a short name for each refactoring
+// (which is used by tests, among other things).
 
 var refactorings map[string]Refactoring
 
 func init() {
 	refactorings = map[string]Refactoring{
-		"rename": new(RenameRefactoring)}
+		"null":   new(NullRefactoring),
+		"rename": new(RenameRefactoring),
+	}
 }
 
 func GetAllRefactorings() map[string]Refactoring {
