@@ -30,14 +30,13 @@ type Refactoring interface {
 }
 
 type RefactoringBase struct {
-	fset           *token.FileSet
+	importer       *importer.Importer
+	pkgInfo        *importer.PackageInfo
 	file           *ast.File
 	filename       string
 	selectionStart token.Pos
 	selectionEnd   token.Pos
 	selectedNode   ast.Node
-	importer       *importer.Importer
-	pkgInfo        *importer.PackageInfo
 	log            *Log
 	editSet        EditSet
 }
@@ -48,9 +47,30 @@ type RefactoringBase struct {
 func (r *RefactoringBase) SetSelection(selection TextSelection) bool {
 	r.log = NewLog()
 
-	r.fset = token.NewFileSet()
 	r.filename = selection.filename
-	r.file = r.parse(selection.filename)
+
+	r.importer = importer.New(new(importer.Config))
+	pkgInfo, _, err := r.importer.LoadInitialPackages([]string{r.filename})
+	if err != nil {
+		r.log.Log(FATAL_ERROR, r.pkgInfo.Err.Error())
+		return false
+	} else if len(pkgInfo) != 1 {
+		r.log.Log(FATAL_ERROR, "Analysis error: unable to import package")
+		return false
+	}
+
+	r.pkgInfo = pkgInfo[0]
+	if r.pkgInfo.Err != nil {
+		r.log.Log(FATAL_ERROR, r.pkgInfo.Err.Error())
+		return false
+	}
+
+	if len(r.pkgInfo.Files) < 1 {
+		r.log.Log(FATAL_ERROR, "Package contains no files")
+		return false
+	}
+
+	r.file = r.pkgInfo.Files[0]
 	if r.file == nil {
 		r.log.Log(FATAL_ERROR, "Unable to parse "+selection.filename)
 		return false
@@ -59,12 +79,6 @@ func (r *RefactoringBase) SetSelection(selection TextSelection) bool {
 	r.selectionStart = r.lineColToPos(selection.startLine, selection.startCol)
 	r.selectionEnd = r.lineColToPos(selection.endLine, selection.endCol)
 
-	r.importer = importer.New(new(importer.Config))
-	r.pkgInfo = r.importer.CreatePackage(r.file.Name.Name, r.file)
-	if r.pkgInfo.Err != nil {
-		r.log.Log(FATAL_ERROR, "Analysis error: "+r.pkgInfo.Err.Error())
-		return false
-	}
 
 	nodes, _ := importer.PathEnclosingInterval(r.file,
 		r.selectionStart, r.selectionEnd)
@@ -74,21 +88,30 @@ func (r *RefactoringBase) SetSelection(selection TextSelection) bool {
 	return true
 }
 
-// Parses the given file, logging errors to the given log, and returning both
-// a FileSet and a File
-func (r *RefactoringBase) parse(filename string) *ast.File {
-	f, err := parser.ParseFile(r.fset, filename, nil, parser.ParseComments)
-	if err != nil {
-		r.log.Log(FATAL_ERROR, "Error parsing "+filename+": "+
-			err.Error())
-	}
-	return f
-}
+//// Parses the given file, logging errors to the given log, and returning both
+//// a FileSet and a File
+//func (r *RefactoringBase) parse(filename string) *ast.File {
+//	//f, err := parser.ParseFile(r.importer.Fset, filename, nil, parser.ParseComments)
+//	fs, err := importer.ParseFiles(r.importer.Fset, ".", filename)
+//	if err != nil {
+//		r.log.Log(FATAL_ERROR, "Error parsing "+filename+": "+
+//			err.Error())
+//		return nil
+//	}
+//	if len(fs) != 1 {
+//		r.log.Log(FATAL_ERROR, "Unable to parse " + filename)
+//		return nil
+//	}
+//	return fs[0]
+//}
 
 // Converts a line/column position (where the first character in a file is at
 // line 1, column 1) into a token.Pos
 func (r *RefactoringBase) lineColToPos(line int, column int) token.Pos {
-	file := r.fset.File(r.file.Pos())
+	file := r.importer.Fset.File(r.file.Pos())
+	if file == nil {
+		panic("file is nil")
+	}
 	lastLine := -1
 	thisColumn := 1
 	for i := 0; i < file.Size(); i++ {
@@ -122,7 +145,7 @@ func (r *RefactoringBase) checkForErrors() {
 		return
 	}
 
-	f, err := parser.ParseFile(r.fset, "", string, parser.ParseComments)
+	f, err := parser.ParseFile(r.importer.Fset, "", string, parser.ParseComments)
 	if err != nil {
 		fmt.Println("vvvvv")
 		fmt.Println(string)

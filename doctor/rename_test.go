@@ -4,10 +4,11 @@ import (
 	"bytes"
 	//"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
-const DIRECTORY = "testdata/rename"
+const DIRECTORY = "../testdata/rename"
 
 func TestRename(t *testing.T) {
 	rename := new(RenameRefactoring)
@@ -23,8 +24,8 @@ func TestRename(t *testing.T) {
 
 // This is old -- do not write any tests like this -- use runAllTests (above)
 func TestRename_OLD__DO_NOT_WRITE_TESTS_LIKE_THIS(t *testing.T) {
-	DIR := "testdata/rename/001-local"
-	err := os.Chdir(DIR)
+	dir := filepath.Join(DIRECTORY, "001-local")
+	err := os.Chdir(dir)
 	if err != nil {
 		t.Error(err)
 	}
