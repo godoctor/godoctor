@@ -10,9 +10,12 @@ import (
 	"fmt"
 	"go.tools/importer"
 	"go/ast"
+	"go/build"
 	"go/parser"
 	"go/token"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 )
 
 // The Refactoring interface provides the methods common to all refactorings.
@@ -47,12 +50,30 @@ type RefactoringBase struct {
 func (r *RefactoringBase) SetSelection(selection TextSelection) bool {
 	r.log = NewLog()
 
-	r.filename = selection.filename
+	//r.filename = selection.filename
+	filename, err := filepath.Abs(selection.filename)
+	if err != nil {
+		r.log.Log(FATAL_ERROR, err.Error())
+		return false
+	}
+	r.filename = filename
 
-	r.importer = importer.New(new(importer.Config))
+	cwd, err := os.Getwd()
+	if err != nil {
+		r.log.Log(FATAL_ERROR, err.Error())
+		return false
+	}
+
+	buildContext := build.Default
+	buildContext.GOPATH = cwd
+
+	//r.importer = importer.New(new(importer.Config))
+	//r.importer = importer.New(&importer.Config{Build: &build.Default})
+	fmt.Println("GOPATH is", buildContext.GOPATH)
+	r.importer = importer.New(&importer.Config{Build: &buildContext})
 	pkgInfo, _, err := r.importer.LoadInitialPackages([]string{r.filename})
 	if err != nil {
-		r.log.Log(FATAL_ERROR, r.pkgInfo.Err.Error())
+		r.log.Log(FATAL_ERROR, err.Error())
 		return false
 	} else if len(pkgInfo) != 1 {
 		r.log.Log(FATAL_ERROR, "Analysis error: unable to import package")
@@ -78,7 +99,6 @@ func (r *RefactoringBase) SetSelection(selection TextSelection) bool {
 
 	r.selectionStart = r.lineColToPos(selection.startLine, selection.startCol)
 	r.selectionEnd = r.lineColToPos(selection.endLine, selection.endCol)
-
 
 	nodes, _ := importer.PathEnclosingInterval(r.file,
 		r.selectionStart, r.selectionEnd)
