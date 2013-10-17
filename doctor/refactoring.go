@@ -5,16 +5,14 @@ package doctor
 // SetSelection, GetLog, and GetResult.
 
 import (
-	//"code.google.com/p/go.tools/go/types"
-	//"code.google.com/p/go.tools/importer"
+	"code.google.com/p/go.tools/importer"
+	//"go.tools/importer"
 	"fmt"
-	"go.tools/importer"
 	"go/ast"
 	"go/build"
 	"go/parser"
 	"go/token"
 	"io/ioutil"
-	"os"
 	"path/filepath"
 )
 
@@ -27,6 +25,7 @@ import (
 type Refactoring interface {
 	Name() string
 	SetSelection(selection TextSelection) bool
+	Configure(args []string) bool
 	Run()
 	GetLog() *Log
 	GetResult() (*Log, EditSet)
@@ -58,18 +57,17 @@ func (r *RefactoringBase) SetSelection(selection TextSelection) bool {
 	}
 	r.filename = filename
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		r.log.Log(FATAL_ERROR, err.Error())
-		return false
-	}
+	//	cwd, err := os.Getwd()
+	//	if err != nil {
+	//		r.log.Log(FATAL_ERROR, err.Error())
+	//		return false
+	//	}
 
 	buildContext := build.Default
-	buildContext.GOPATH = cwd
+	//	buildContext.GOPATH = cwd
 
 	//r.importer = importer.New(new(importer.Config))
 	//r.importer = importer.New(&importer.Config{Build: &build.Default})
-	fmt.Println("GOPATH is", buildContext.GOPATH)
 	r.importer = importer.New(&importer.Config{Build: &buildContext})
 	pkgInfo, _, err := r.importer.LoadInitialPackages([]string{r.filename})
 	if err != nil {

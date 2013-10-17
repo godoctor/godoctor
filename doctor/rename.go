@@ -31,6 +31,16 @@ func (r *RenameRefactoring) SetNewName(newName string) {
 	r.newName = newName
 }
 
+func (r *RenameRefactoring) Configure(args []string) bool {
+	if len(args) == 1 {
+		r.SetNewName(args[0])
+		return true
+	} else {
+		r.log.Log(FATAL_ERROR, "Marker is missing new name")
+		return false
+	}
+}
+
 func (r *RenameRefactoring) Run() {
 	if r.selectedNode == nil {
 		r.log.Log(FATAL_ERROR, "selection cannot be null")

@@ -1,7 +1,6 @@
 package doctor
 
 import (
-	//"strings"
 	"testing"
 )
 

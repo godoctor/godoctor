@@ -8,8 +8,8 @@ var hello = ":-(" // This is a different hello
 func main() {
 	hello = ":-)"  // Don't change this
 
-	var hello string = "Hello"	// <<<<< 11,6,11,6,renamed,pass
-	var world string = "world"	// <<<<< 12,6,12,6,hello,fail
+	var hello string = "Hello"	// <<<<< rename,11,6,11,6,renamed,pass
+	var world string = "world"	// <<<<< rename,12,6,12,6,hello,fail
 	hello = hello + ", " + world
 	hello += "!"
 	fmt.Println(hello)

@@ -1,0 +1,4 @@
+.DS_Store
+._*
+go-doctor
+doctor/doctor.test
