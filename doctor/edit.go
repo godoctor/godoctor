@@ -38,8 +38,9 @@ import (
 //
 // The String method returns a description of this EditSet (for debugging).
 type EditSet interface {
-	Add(position OffsetLength, replacement string)
+	Add(file string, position OffsetLength, replacement string)
 	ApplyTo(in io.Reader, out io.Writer) error
+	ApplyToAllFiles(out io.Writer) error
 	ApplyToFile(filename string, out io.Writer) error
 	ApplyToString(s string) (string, error)
 	String() string
@@ -51,28 +52,35 @@ type edit struct {
 }
 
 type editSet struct {
-	edits []edit
+	edits map[string][]edit
 }
 
 // NewEditSet returns a new, empty EditSet.
 func NewEditSet() EditSet {
-	var result editSet = editSet{edits: make([]edit, 0, 1)}
-	return &result
+	return &editSet{edits: make(map[string][]edit, 1)}
 }
 
-func (e *editSet) Add(position OffsetLength, replacement string) {
-	var pos int = len(e.edits)
-	for i := len(e.edits) - 1; i >= 0; i-- {
-		if e.edits[i].offset > position.offset {
+//Adds an edit to the editset, mapping to the appropriate file
+//
+func (e *editSet) Add(file string, position OffsetLength, replacement string) {
+	//TODO see if need to malloc fedits?
+	//TODO meh, kind of don't like that it's not in place, but [index][index] is bad
+	fedits := e.edits[file]
+
+	var pos int = len(fedits)
+	for i := len(fedits) - 1; i >= 0; i-- {
+		if fedits[i].offset > position.offset {
 			pos = i
 		} else {
 			break
 		}
 	}
 	newEdit := edit{position, replacement}
-	e.edits = append(e.edits, newEdit)
-	copy(e.edits[pos+1:], e.edits[pos:])
-	e.edits[pos] = newEdit
+	fedits = append(fedits, newEdit)
+	copy(fedits[pos+1:], fedits[pos:])
+	fedits[pos] = newEdit
+
+	e.edits[file] = fedits
 }
 
 func (e *edit) String() string {
@@ -82,13 +90,31 @@ func (e *edit) String() string {
 
 func (e *editSet) String() string {
 	var buffer bytes.Buffer
-	for _, edit := range e.edits {
-		buffer.WriteString(edit.String())
-		buffer.WriteString("\n")
+	for _, edits := range e.edits {
+		for _, edit := range edits {
+			buffer.WriteString(edit.String())
+			buffer.WriteString("\n")
+		}
 	}
 	return buffer.String()
 }
 
+//Applies all of the edits in an edit set
+//
+func (e *editSet) ApplyToAllFiles(out io.Writer) (err error) {
+	//TODO ApplyToFile probably needs some modification, I'm antsy
+	//this is shit, but works since we assume 1 file for meow
+	//TODO see if we can get a file from importer or if we actually
+	//need this double for loop
+	for file, _ := range e.edits {
+		err = e.ApplyToFile(file, out)
+	}
+	return
+}
+
+//Applies all of the edits in an edit set to a file (not good for multi files)
+//TODO change to take a set of changes and a file?
+//
 func (e *editSet) ApplyToFile(filename string, out io.Writer) error {
 	file, err := os.OpenFile(filename, syscall.O_RDWR, 0666)
 	if err != nil {
@@ -100,6 +126,8 @@ func (e *editSet) ApplyToFile(filename string, out io.Writer) error {
 	return e.ApplyTo(file, out)
 }
 
+//Applies all of the edits to a string, mainly for debugging
+//
 func (e *editSet) ApplyToString(s string) (string, error) {
 	var reader io.Reader = strings.NewReader(s)
 	var writer bytes.Buffer
@@ -116,38 +144,41 @@ func (e *editSet) ApplyTo(in io.Reader, out io.Writer) error {
 func (e *editSet) applyTo(in *bufio.Reader, out *bufio.Writer) error {
 	defer out.Flush()
 	var offset int = 0
-	for _, edit := range e.edits {
-		// Check for negative-offset or overlapping edits
-		if edit.offset < 0 {
-			return fmt.Errorf("Edit has negative offset (%d)",
-				edit.offset)
-		} else if offset > edit.offset {
-			return fmt.Errorf("Overlapping edit at offset %d",
-				edit.offset)
-		}
-		// Copy bytes preceding this edit
-		for ; offset < edit.offset; offset++ {
-			byte, err := in.ReadByte()
-			if err == io.EOF {
-				return fmt.Errorf("Edit offset %d is beyond "+
-					"the end of the file (%d bytes)",
-					edit.offset, offset)
-			} else if err != nil {
-				return err
-			} else {
-				out.WriteByte(byte)
+	for _, edits := range e.edits {
+		for _, edit := range edits {
+			// Check for negative-offset or overlapping edits
+			if edit.offset < 0 {
+				return fmt.Errorf("Edit has negative offset (%d)",
+					edit.offset)
+			} else if offset > edit.offset {
+				return fmt.Errorf("Overlapping edit at offset %d",
+					edit.offset)
 			}
-		}
-		// Write replacement
-		out.WriteString(edit.replacement)
-		// Skip bytes replaced by this edit
-		for ; offset < (edit.offset + edit.length); offset++ {
-			_, err := in.ReadByte()
-			if err != nil {
-				return err
+			// Copy bytes preceding this edit
+			for ; offset < edit.offset; offset++ {
+				byte, err := in.ReadByte()
+				if err == io.EOF {
+					return fmt.Errorf("Edit offset %d is beyond "+
+						"the end of the file (%d bytes)",
+						edit.offset, offset)
+				} else if err != nil {
+					return err
+				} else {
+					out.WriteByte(byte)
+				}
+			}
+			// Write replacement
+			out.WriteString(edit.replacement)
+			// Skip bytes replaced by this edit
+			for ; offset < (edit.offset + edit.length); offset++ {
+				_, err := in.ReadByte()
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
+	//TODO (reed's fault) uh move to above somehow?
 	// Copy remaining bytes until end of file
 	for {
 		byte, err := in.ReadByte()

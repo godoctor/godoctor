@@ -55,7 +55,9 @@ func (r *RenameRefactoring) Run() {
 	switch ident := r.selectedNode.(type) {
 	case *ast.Ident:
 		for _, occurrence := range r.findOccurrences(ident) {
-			r.editSet.Add(occurrence, r.newName)
+			//TODO NOT HARD CODED FILENAME (reed)
+			//iterate over files from a "fileSet"? importer? IDK my BFF Jill
+			r.editSet.Add(r.filename, occurrence, r.newName)
 		}
 		//fmt.Println(editSet.String())
 
