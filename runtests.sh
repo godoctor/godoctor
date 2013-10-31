@@ -38,7 +38,7 @@ do
 		cp -R $dir temp/
 		cd temp/`basename $dir`
 		export GOPATH=`pwd`
-		$doctor --runtests
+		$doctor -runtests=true
 		RESULT=$?
 		cd ../..
 		rm -rf temp

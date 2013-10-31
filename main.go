@@ -7,6 +7,9 @@ import (
 	"os"
 )
 
+var runTestsFlag = flag.Bool("runtests", false,
+	"(For internal use only)")
+
 var posFlag = flag.String("pos", "",
 	"Filename and byte offset are necessary, e.g. -pos=foo.go:#500,#505")
 
@@ -64,9 +67,10 @@ func main() {
 	flag.Parse()
 	args := flag.Args()
 
-	// FIXME: Modify main so this only happens if you pass --runtests
-	// TODO: (reed) you sure?
-	//doctor.RunAllTests()
+	if *runTestsFlag == true {
+		doctor.RunAllTests()
+		os.Exit(0)
+	}
 
 	if *posFlag == "" {
 		fmt.Errorf("Error: -pos required")
