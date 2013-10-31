@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -39,8 +40,9 @@ import (
 // The String method returns a description of this EditSet (for debugging).
 type EditSet interface {
 	Add(file string, position OffsetLength, replacement string)
-	ApplyTo(in io.Reader, out io.Writer) error
+	ApplyTo(key string, in io.Reader, out io.Writer) error
 	ApplyToAllFiles(out io.Writer) error
+	WriteToAllFiles() error
 	ApplyToFile(filename string, out io.Writer) error
 	ApplyToString(s string) (string, error)
 	String() string
@@ -102,14 +104,35 @@ func (e *editSet) String() string {
 //Applies all of the edits in an edit set
 //
 func (e *editSet) ApplyToAllFiles(out io.Writer) (err error) {
-	//TODO ApplyToFile probably needs some modification, I'm antsy
-	//this is shit, but works since we assume 1 file for meow
-	//TODO see if we can get a file from importer or if we actually
-	//need this double for loop
 	for file, _ := range e.edits {
 		err = e.ApplyToFile(file, out)
 	}
 	return
+}
+
+func (e *editSet) WriteToAllFiles() (err error) {
+	var buf bytes.Buffer
+	for file, _ := range e.edits {
+		if err = e.ApplyToFile(file, &buf); err != nil {
+			return err
+		}
+
+		if err := ioutil.WriteFile(file, buf.Bytes(), 0); err != nil {
+			return err
+		}
+	}
+
+	return
+}
+
+func (e *editSet) writeToFile(filename string) error {
+	file, err := os.OpenFile(filename, syscall.O_RDWR, 0666)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	return e.ApplyTo(filename, file, file)
 }
 
 //Applies all of the edits in an edit set to a file (not good for multi files)
@@ -123,58 +146,59 @@ func (e *editSet) ApplyToFile(filename string, out io.Writer) error {
 
 	defer file.Close()
 
-	return e.ApplyTo(file, out)
+	return e.ApplyTo(filename, file, out)
 }
 
 //Applies all of the edits to a string, mainly for debugging
+//TODO this doesn't really work, takes s as a key to e.edits
 //
 func (e *editSet) ApplyToString(s string) (string, error) {
 	var reader io.Reader = strings.NewReader(s)
 	var writer bytes.Buffer
-	err := e.ApplyTo(reader, &writer)
+	err := e.ApplyTo(s, reader, &writer)
 	return writer.String(), err
 }
 
-func (e *editSet) ApplyTo(in io.Reader, out io.Writer) error {
+//TODO (reed) still thinks this doesn't exactly work as intended?
+//
+func (e *editSet) ApplyTo(key string, in io.Reader, out io.Writer) error {
 	bufin := bufio.NewReader(in)
 	bufout := bufio.NewWriter(out)
-	return e.applyTo(bufin, bufout)
+	return e.applyTo(key, bufin, bufout)
 }
 
-func (e *editSet) applyTo(in *bufio.Reader, out *bufio.Writer) error {
+func (e *editSet) applyTo(key string, in *bufio.Reader, out *bufio.Writer) error {
 	defer out.Flush()
 	var offset int = 0
-	for _, edits := range e.edits {
-		for _, edit := range edits {
-			// Check for negative-offset or overlapping edits
-			if edit.offset < 0 {
-				return fmt.Errorf("Edit has negative offset (%d)",
-					edit.offset)
-			} else if offset > edit.offset {
-				return fmt.Errorf("Overlapping edit at offset %d",
-					edit.offset)
+	for _, edit := range e.edits[key] {
+		// Check for negative-offset or overlapping edits
+		if edit.offset < 0 {
+			return fmt.Errorf("Edit has negative offset (%d)",
+				edit.offset)
+		} else if offset > edit.offset {
+			return fmt.Errorf("Overlapping edit at offset %d",
+				edit.offset)
+		}
+		// Copy bytes preceding this edit
+		for ; offset < edit.offset; offset++ {
+			byte, err := in.ReadByte()
+			if err == io.EOF {
+				return fmt.Errorf("Edit offset %d is beyond "+
+					"the end of the file (%d bytes)",
+					edit.offset, offset)
+			} else if err != nil {
+				return err
+			} else {
+				out.WriteByte(byte)
 			}
-			// Copy bytes preceding this edit
-			for ; offset < edit.offset; offset++ {
-				byte, err := in.ReadByte()
-				if err == io.EOF {
-					return fmt.Errorf("Edit offset %d is beyond "+
-						"the end of the file (%d bytes)",
-						edit.offset, offset)
-				} else if err != nil {
-					return err
-				} else {
-					out.WriteByte(byte)
-				}
-			}
-			// Write replacement
-			out.WriteString(edit.replacement)
-			// Skip bytes replaced by this edit
-			for ; offset < (edit.offset + edit.length); offset++ {
-				_, err := in.ReadByte()
-				if err != nil {
-					return err
-				}
+		}
+		// Write replacement
+		out.WriteString(edit.replacement)
+		// Skip bytes replaced by this edit
+		for ; offset < (edit.offset + edit.length); offset++ {
+			_, err := in.ReadByte()
+			if err != nil {
+				return err
 			}
 		}
 	}

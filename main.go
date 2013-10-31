@@ -13,6 +13,8 @@ var posFlag = flag.String("pos", "",
 var scopeFlag = flag.String("scope", "",
 	"If you'd like, give a scope, e.g. -scope=code.google.com/p/go.tools/")
 
+var writeFlag = flag.Bool("w", false, "Write the refactored files in place")
+
 func usage() {
 	//TODO figure out multi line strings and get back to me
 	fmt.Errorf(`Usage of %s:
@@ -82,8 +84,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	//for now this just prints to stdout
-	fmt.Println(es.ApplyToAllFiles(os.Stdout))
+	if *writeFlag {
+		err := es.WriteToAllFiles()
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+	} else {
+		//for now this just prints to stdout
+		err := es.ApplyToAllFiles(os.Stdout)
+
+		if err != nil {
+			os.Exit(1)
+		}
+	}
 
 	//TODO different output handling
 
