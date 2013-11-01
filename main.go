@@ -7,16 +7,20 @@ import (
 	"os"
 )
 
-var runTestsFlag = flag.Bool("runtests", false,
-	"(For internal use only)")
+var (
+	runTestsFlag = flag.Bool("runtests", false,
+		"(For internal use only)")
 
-var posFlag = flag.String("pos", "",
-	"Filename and byte offset are necessary, e.g. -pos=foo.go:#500,#505")
+	posFlag = flag.String("pos", "",
+		"Filename and byte offset are necessary, e.g. -pos=foo.go:#500,#505")
 
-var scopeFlag = flag.String("scope", "",
-	"If you'd like, give a scope, e.g. -scope=code.google.com/p/go.tools/")
+	scopeFlag = flag.String("scope", "",
+		"If you'd like, give a scope, e.g. -scope=code.google.com/p/go.tools/")
 
-var writeFlag = flag.Bool("w", false, "Write the refactored files in place")
+	writeFlag = flag.Bool("w", false, "Write the refactored files in place")
+
+	skipLogFlag = flag.Bool("l", false, "Write results even if log, dangerous")
+)
 
 func usage() {
 	//TODO figure out multi line strings and get back to me
@@ -42,11 +46,11 @@ func usage() {
 	os.Exit(1)
 }
 
-//TODO (reed / josh) handle -w to write, -format=json, -? to skip log
+//TODO (reed / josh) handle -format=json,
 // -d for diff files, -comments to change comments (if a thing?)
 //e.g. be a lot like gofmt, which I've listed below
 //
-//TODO (reed / josh) scope (importer? wait a month?)
+//TODO (reed / josh) scope (importer? wait?)
 //
 //HERE BE gofmt
 //
@@ -83,7 +87,7 @@ func main() {
 	}
 
 	l, es := doctor.Query(args[1:], args[0], *posFlag, *scopeFlag)
-	if l.ContainsErrors() {
+	if l.ContainsErrors() && !*skipLogFlag {
 		fmt.Println(l)
 		os.Exit(1)
 	}

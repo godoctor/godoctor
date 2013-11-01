@@ -101,42 +101,36 @@ func (e *editSet) String() string {
 	return buffer.String()
 }
 
-//Applies all of the edits in an edit set
+//Applies all of the edits to all files
 //
 func (e *editSet) ApplyToAllFiles(out io.Writer) (err error) {
 	for file, _ := range e.edits {
+		fmt.Fprintf(out, "\n"+file+":\n\n")
 		err = e.ApplyToFile(file, out)
 	}
 	return
 }
 
+//Applies all edits to all files and writes the results over each file
+//
 func (e *editSet) WriteToAllFiles() (err error) {
-	var buf bytes.Buffer
 	for file, _ := range e.edits {
-		if err = e.ApplyToFile(file, &buf); err != nil {
-			return err
-		}
-
-		if err := ioutil.WriteFile(file, buf.Bytes(), 0); err != nil {
-			return err
-		}
+		e.writeToFile(file)
 	}
 
 	return
 }
 
-func (e *editSet) writeToFile(filename string) error {
-	file, err := os.OpenFile(filename, syscall.O_RDWR, 0666)
-	if err != nil {
-		log.Fatal(err)
+func (e *editSet) writeToFile(filename string) (err error) {
+	var buf bytes.Buffer
+	if err = e.ApplyToFile(filename, &buf); err != nil {
+		return
 	}
-	defer file.Close()
 
-	return e.ApplyTo(filename, file, file)
+	return ioutil.WriteFile(filename, buf.Bytes(), 0)
 }
 
-//Applies all of the edits in an edit set to a file (not good for multi files)
-//TODO change to take a set of changes and a file?
+//Applies all edits associated with a given filename
 //
 func (e *editSet) ApplyToFile(filename string, out io.Writer) error {
 	file, err := os.OpenFile(filename, syscall.O_RDWR, 0666)
@@ -159,7 +153,8 @@ func (e *editSet) ApplyToString(s string) (string, error) {
 	return writer.String(), err
 }
 
-//TODO (reed) still thinks this doesn't exactly work as intended?
+//TODO (reed) still think this doesn't exactly work as intended?
+//Takes the key in map of edits, applies changes to given writer
 //
 func (e *editSet) ApplyTo(key string, in io.Reader, out io.Writer) error {
 	bufin := bufio.NewReader(in)
@@ -167,9 +162,12 @@ func (e *editSet) ApplyTo(key string, in io.Reader, out io.Writer) error {
 	return e.applyTo(key, bufin, bufout)
 }
 
+//TODO definitely don't think this is as intended. For string reasons, mainly
 func (e *editSet) applyTo(key string, in *bufio.Reader, out *bufio.Writer) error {
 	defer out.Flush()
 	var offset int = 0
+
+	//all edits for a given key
 	for _, edit := range e.edits[key] {
 		// Check for negative-offset or overlapping edits
 		if edit.offset < 0 {
@@ -202,7 +200,6 @@ func (e *editSet) applyTo(key string, in *bufio.Reader, out *bufio.Writer) error
 			}
 		}
 	}
-	//TODO (reed's fault) uh move to above somehow?
 	// Copy remaining bytes until end of file
 	for {
 		byte, err := in.ReadByte()
