@@ -92,8 +92,12 @@ func (e *edit) String() string {
 
 func (e *editSet) String() string {
 	var buffer bytes.Buffer
-	for _, edits := range e.edits {
+	for filename, edits := range e.edits {
+		buffer.WriteString("Edits for ")
+		buffer.WriteString(filename)
+		buffer.WriteString(":\n")
 		for _, edit := range edits {
+			buffer.WriteString("    ")
 			buffer.WriteString(edit.String())
 			buffer.WriteString("\n")
 		}
