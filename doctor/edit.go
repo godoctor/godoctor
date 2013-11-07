@@ -44,7 +44,7 @@ type EditSet interface {
 	ApplyToAllFiles(out io.Writer) error
 	WriteToAllFiles() error
 	ApplyToFile(filename string, out io.Writer) error
-	ApplyToString(s string) (string, error)
+	ApplyToString(key string, s string) (string, error)
 	String() string
 }
 
@@ -150,10 +150,10 @@ func (e *editSet) ApplyToFile(filename string, out io.Writer) error {
 //Applies all of the edits to a string, mainly for debugging
 //TODO this doesn't really work, takes s as a key to e.edits
 //
-func (e *editSet) ApplyToString(s string) (string, error) {
+func (e *editSet) ApplyToString(key string, s string) (string, error) {
 	var reader io.Reader = strings.NewReader(s)
 	var writer bytes.Buffer
-	err := e.ApplyTo(s, reader, &writer)
+	err := e.ApplyTo(key, reader, &writer)
 	return writer.String(), err
 }
 

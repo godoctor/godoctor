@@ -14,7 +14,7 @@ import (
 	"go/token"
 	"io/ioutil"
 	"log"
-	"path/filepath"
+	//"path/filepath"
 )
 
 // The Refactoring interface provides the methods common to all refactorings.
@@ -86,13 +86,13 @@ type RefactoringBase struct {
 func (r *RefactoringBase) SetSelection(selection TextSelection) bool {
 	r.log = NewLog()
 
-	//r.filename = selection.filename
-	filename, err := filepath.Abs(selection.filename)
-	if err != nil {
-		r.log.Log(FATAL_ERROR, err.Error())
-		return false
-	}
-	r.filename = filename
+	r.filename = selection.filename
+	//filename, err := filepath.Abs(selection.filename)
+	//if err != nil {
+	//	r.log.Log(FATAL_ERROR, err.Error())
+	//	return false
+	//}
+	//r.filename = filename
 
 	//	cwd, err := os.Getwd()
 	//	if err != nil {
@@ -193,7 +193,7 @@ func (r *RefactoringBase) checkForErrors() {
 	}
 	sourceFromFile := string(contents)
 
-	string, err := r.editSet.ApplyToString(sourceFromFile)
+	string, err := r.editSet.ApplyToString(r.filename, sourceFromFile)
 	if err != nil {
 		r.log.Log(ERROR, "Transformation produced invalid EditSet: "+
 			err.Error())
