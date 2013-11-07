@@ -227,7 +227,6 @@ func (r *RefactoringBase) checkForErrors() {
 		return
 	}
 
-	// TODO: importer.CreatePackage outputs error message -- suppress?
 	// TODO: This may be wrong if several files are changed...?
 	r.pkgInfo = r.importer.CreatePackage(r.file.Name.Name, f)
 	if r.pkgInfo.Err != nil {
