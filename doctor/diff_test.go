@@ -8,5 +8,5 @@ import (
 
 func TestNoChange(t *testing.T) {
 	diff := Diff("abc", "abd")
-	assertEquals("", diff.String())
+	assertEquals("", diff.String(), t)
 }

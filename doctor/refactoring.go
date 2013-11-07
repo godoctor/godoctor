@@ -14,6 +14,7 @@ import (
 	"go/token"
 	"io/ioutil"
 	"log"
+	"os"
 	//"path/filepath"
 )
 
@@ -101,11 +102,27 @@ func (r *RefactoringBase) SetSelection(selection TextSelection) bool {
 	//	}
 
 	buildContext := build.Default
-	//	buildContext.GOPATH = cwd
+	if os.Getenv("GOPATH") != "" {
+		// The test runner may change the GOPATH environment variable
+		// since the program was started, so set it here explicitly
+		buildContext.GOPATH = os.Getenv("GOPATH")
+	}
 
 	//r.importer = importer.New(new(importer.Config))
 	//r.importer = importer.New(&importer.Config{Build: &build.Default})
-	r.importer = importer.New(&importer.Config{Build: &buildContext})
+
+	// r.importer = importer.New(&importer.Config{Build: &buildContext})
+
+	var impcfg importer.Config
+	impcfg.Build = &buildContext
+	impcfg.TypeChecker.Error = func(err error) {
+		// FIXME: Needs to be thread-safe
+		// As of today, you can access the components of the error (token.Pos, string) as:
+		// err.(types.Error).Pos etc.
+		r.log.Log(ERROR, err.Error())
+	}
+	r.importer = importer.New(&impcfg)
+
 	pkgInfo, _, err := r.importer.LoadInitialPackages([]string{r.filename})
 	if err != nil {
 		r.log.Log(FATAL_ERROR, err.Error())

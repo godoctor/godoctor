@@ -51,22 +51,22 @@ func (r *ShortAssignRefactoring) Run() {
 				//fmt.Println("Type of selected node's RHS is ", r.pkgInfo.TypeOf(rhsExpr))
 
 				replacement := "var " + lhs.Name + " " + r.pkgInfo.TypeOf(rhsExpr).String() + " ="
-				r.editSet.Add(r.filename, OffsetLength{ startOffset, length }, replacement)
+				r.editSet.Add(r.filename, OffsetLength{startOffset, length}, replacement)
 
 				r.checkForErrors()
 				return
 
 			default:
-				r.log.Log(FATAL_ERROR, "Left-hand side is not an identifier")	
+				r.log.Log(FATAL_ERROR, "Left-hand side is not an identifier")
 			}
 		} else {
-			r.log.Log(FATAL_ERROR, "Cannot handle multiple assignment")			
+			r.log.Log(FATAL_ERROR, "Cannot handle multiple assignment")
 		}
 		return
 
 	default:
 		r.log.Log(FATAL_ERROR, "Please select a short assignment (:=) statement")
-		r.log.Log(FATAL_ERROR, "(the selected node is " + reflect.TypeOf(r.selectedNode).String() + ")")
+		r.log.Log(FATAL_ERROR, "(the selected node is "+reflect.TypeOf(r.selectedNode).String()+")")
 		return
 	}
 

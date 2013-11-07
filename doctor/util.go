@@ -4,6 +4,7 @@ package doctor
 // throughout the system.
 
 import (
+	"fmt"
 	"strconv"
 )
 
@@ -32,4 +33,9 @@ type TextSelection struct {
 	startCol  int
 	endLine   int
 	endCol    int
+}
+
+func (s *TextSelection) String() string {
+	return fmt.Sprintf("%s:%d,%d:%d,%d",
+		s.filename, s.startLine, s.startCol, s.endLine, s.endCol)
 }
