@@ -1,12 +1,18 @@
-package doctor
+// Copyright 2013 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
 
 // This file defines the Refactoring interface, the RefactoringBase struct, and
 // several methods common to refactorings based on RefactoringBase, including
 // SetSelection, GetLog, and GetResult.
 
+// Contributors: Jeff Overbey
+
+package doctor
+
 import (
+	"code.google.com/p/go.tools/go/types"
 	"code.google.com/p/go.tools/importer"
-	//"go.tools/importer"
 	"fmt"
 	"go/ast"
 	"go/build"
@@ -120,7 +126,12 @@ func (r *RefactoringBase) SetSelection(selection TextSelection) bool {
 		// FIXME: Needs to be thread-safe
 		// As of today, you can access the components of the error (token.Pos, string) as:
 		// err.(types.Error).Pos etc.
-		r.log.Log(ERROR, err.Error())
+		var message string = err.Error()
+		var pos token.Pos = err.(types.Error).Pos
+		var offset int = err.(types.Error).Fset.Position(pos).Offset
+		var filename string = err.(types.Error).Fset.File(pos).Name()
+		var length int = 0
+		r.log.LogInitial(ERROR, message, filename, offset, length)
 	}
 	r.importer = importer.New(&impcfg)
 
@@ -134,10 +145,11 @@ func (r *RefactoringBase) SetSelection(selection TextSelection) bool {
 	}
 
 	r.pkgInfo = pkgInfo[0]
-	if r.pkgInfo.Err != nil {
-		r.log.Log(FATAL_ERROR, r.pkgInfo.Err.Error())
-		return false
-	}
+	// Unnecessary since we hooked into the importer's error reporter
+	//	if r.pkgInfo.Err != nil {
+	//		r.log.Log(FATAL_ERROR, r.pkgInfo.Err.Error())
+	//		return false
+	//	}
 
 	if len(r.pkgInfo.Files) < 1 {
 		r.log.Log(FATAL_ERROR, "Package contains no files")

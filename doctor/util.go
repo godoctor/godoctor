@@ -1,7 +1,13 @@
-package doctor
+// Copyright 2013 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
 
-// This file defines miscellaneous utility methods and structs that are used
+// This file defines miscellaneous structs and utility methods that are used
 // throughout the system.
+
+// Contributors: Jeff Overbey
+
+package doctor
 
 import (
 	"fmt"
@@ -26,7 +32,8 @@ func (o *OffsetLength) String() string {
 // A TextSelection represents a selection in a text editor.  It consists of a
 // filename, the line/column where the selected text begins, and the
 // line/column where the text selection ends.  The end line and column must be
-// greater than or equal to the start line and column, respectively.
+// greater than or equal to the start line and column, respectively.  Line and
+// column numbers are 1-based.
 type TextSelection struct {
 	filename  string
 	startLine int

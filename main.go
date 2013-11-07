@@ -1,3 +1,11 @@
+// Copyright 2013 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// This file contains the command line interface for Go refactoring.
+
+// Contributors: Reed Allman, Josh Kane
+
 package main
 
 import (
@@ -14,9 +22,6 @@ import (
 var (
 	formatFlag = flag.String("format", "plain",
 		"Output in 'plain' or 'json', default: plain")
-
-	runTestsFlag = flag.Bool("runtests", false,
-		"(For internal use only)")
 
 	helpFlag = flag.Bool("h", false,
 		"Prints usage")
@@ -92,11 +97,6 @@ func main() {
 
 	if *helpFlag {
 		usage()
-	}
-
-	if *runTestsFlag {
-		doctor.RunAllTests()
-		return
 	}
 
 	//this is TBD per refactoring

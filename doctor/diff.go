@@ -1,11 +1,14 @@
-package doctor
+// Copyright 2013 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
 
-// Implementation of the greedy LCS/SES algorithm described in
+// This file contains an implementation of the greedy longest common
+// subsequence/shortest edit script (LCS/SES) algorithm described in
 // Eugene W. Myers, "An O(ND) Difference Algorithm and Its Variations"
 
-import (
-//"fmt"
-)
+// Contributors: Jeff Overbey
+
+package doctor
 
 func Diff(filename, a, b string) EditSet {
 	n := len(a)
