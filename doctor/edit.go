@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -38,11 +37,13 @@ import (
 // modified string contents.
 //
 // The String method returns a description of this EditSet (for debugging).
+//
+//TODO (reed/josh) return []byte or something for driver to work with
+//TODO (reed/josh) JSON
 type EditSet interface {
+	Edits() map[string][]edit
 	Add(file string, position OffsetLength, replacement string)
 	ApplyTo(key string, in io.Reader, out io.Writer) error
-	ApplyToAllFiles(out io.Writer) error
-	WriteToAllFiles() error
 	ApplyToFile(filename string, out io.Writer) error
 	ApplyToString(key string, s string) (string, error)
 	String() string
@@ -62,10 +63,18 @@ func NewEditSet() EditSet {
 	return &editSet{edits: make(map[string][]edit, 1)}
 }
 
+//TODO (reed)
+//Method to consider abstracting away some of the apply to
+//stuff into the driver, mainly because there's
+//no need to have 7 methods to do JSON, stdout & writing
+//
+func (e *editSet) Edits() map[string][]edit {
+	return e.edits
+}
+
 //Adds an edit to the editset, mapping to the appropriate file
 //
 func (e *editSet) Add(file string, position OffsetLength, replacement string) {
-	//TODO see if need to malloc fedits?
 	//TODO meh, kind of don't like that it's not in place, but [index][index] is bad
 	fedits := e.edits[file]
 
@@ -105,35 +114,6 @@ func (e *editSet) String() string {
 	return buffer.String()
 }
 
-//Applies all of the edits to all files
-//
-func (e *editSet) ApplyToAllFiles(out io.Writer) (err error) {
-	for file, _ := range e.edits {
-		fmt.Fprintf(out, "\n"+file+":\n\n")
-		err = e.ApplyToFile(file, out)
-	}
-	return
-}
-
-//Applies all edits to all files and writes the results over each file
-//
-func (e *editSet) WriteToAllFiles() (err error) {
-	for file, _ := range e.edits {
-		e.writeToFile(file)
-	}
-
-	return
-}
-
-func (e *editSet) writeToFile(filename string) (err error) {
-	var buf bytes.Buffer
-	if err = e.ApplyToFile(filename, &buf); err != nil {
-		return
-	}
-
-	return ioutil.WriteFile(filename, buf.Bytes(), 0)
-}
-
 //Applies all edits associated with a given filename
 //
 func (e *editSet) ApplyToFile(filename string, out io.Writer) error {
@@ -160,10 +140,10 @@ func (e *editSet) ApplyToString(key string, s string) (string, error) {
 //TODO (reed) still think this doesn't exactly work as intended?
 //Takes the key in map of edits, applies changes to given writer
 //
-func (e *editSet) ApplyTo(key string, in io.Reader, out io.Writer) error {
+func (e *editSet) ApplyTo(filename string, in io.Reader, out io.Writer) error {
 	bufin := bufio.NewReader(in)
 	bufout := bufio.NewWriter(out)
-	return e.applyTo(key, bufin, bufout)
+	return e.applyTo(filename, bufin, bufout)
 }
 
 //TODO definitely don't think this is as intended. For string reasons, mainly

@@ -31,6 +31,10 @@ func (r *RenameRefactoring) SetNewName(newName string) {
 	r.newName = newName
 }
 
+func (r *RenameRefactoring) GetParams() []string {
+	return []string{"New Name"}
+}
+
 func (r *RenameRefactoring) Configure(args []string) bool {
 	if len(args) == 1 {
 		r.SetNewName(args[0])

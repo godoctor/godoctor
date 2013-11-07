@@ -25,6 +25,10 @@ func (r *ShortAssignRefactoring) Name() string {
 	return "Short Assignment Refactoring"
 }
 
+func (r *ShortAssignRefactoring) GetParams() []string {
+	return []string{}
+}
+
 func (r *ShortAssignRefactoring) Configure(args []string) bool {
 	return true
 }
