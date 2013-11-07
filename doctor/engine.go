@@ -1,3 +1,13 @@
+// Copyright 2013 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// This file defines an API entrypoint for the refactoring engine.  It provides
+// functions that enumerate the available refactorings, and it provides a short
+// name for each refactoring (which is used by tests, among other things).
+
+// Contributors: Reed Allman, Josh Kane, Jeff Overbey
+
 package doctor
 
 import (
@@ -6,10 +16,6 @@ import (
 	"strconv"
 	"strings"
 )
-
-// Entrypoint for the refactoring engine.  This package enumerates the
-// available refactorings and provides the a short name for each refactoring
-// (which is used by tests, among other things).
 
 var refactorings map[string]Refactoring
 

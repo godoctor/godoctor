@@ -1,3 +1,9 @@
+// Copyright 2013 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// Contributors: Steffi Gnanaprakasa, Jeff Overbey
+
 package doctor
 
 import (
@@ -6,17 +12,8 @@ import (
 	"reflect"
 )
 
-// This file defines the Null refactoring, which makes no changes to a program.
-
-// A NullRefactoring makes no changes to a Go program; it is for testing only.
-// It implements the Refactoring interface.
-//
-// To run the null refactoring:
-// * Create a NullRefactoring.
-// * Invoke SetSelection to determine what file to refactor.
-// * Invoke Run to construct the EditSet.
-// * Invoke GetResult to get the resulting Log and EditSet.
-//
+// A ShortAssignmentRefactoring changes short assignment statements (n := 5)
+// into explicitly-typed variable declarations (var n int = 5).
 type ShortAssignRefactoring struct {
 	RefactoringBase
 }

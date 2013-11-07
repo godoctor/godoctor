@@ -1,15 +1,6 @@
-package doctor
-
-import (
-	"bytes"
-	"code.google.com/p/go.tools/go/types"
-	//"fmt"
-	"go/ast"
-	"go/token"
-	//"reflect"
-	"sort"
-	"strings"
-)
+// Copyright 2013 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
 
 // This file defines a Fix Imports transformation, which removes unnecessary
 // imports and adds imports (if possible) for unresolved identifiers that
@@ -23,6 +14,21 @@ import (
 //
 // This is not called "FixImportsRefactoring" since it does not technically
 // preserve behavior.
+
+// Contributors: Jeff Overbey
+
+package doctor
+
+import (
+	"bytes"
+	"code.google.com/p/go.tools/go/types"
+	//"fmt"
+	"go/ast"
+	"go/token"
+	//"reflect"
+	"sort"
+	"strings"
+)
 
 type FixImportsTransformation struct {
 	RefactoringBase
@@ -46,7 +52,7 @@ func (r *FixImportsTransformation) Run() {
 		return // SetSelection did not succeed
 	}
 
-	r.log.RemoveInitialErrors()
+	r.log.RemoveInitialEntries()
 
 	//ast.Print(r.importer.Fset, r.file)
 

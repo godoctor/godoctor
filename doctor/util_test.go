@@ -1,3 +1,9 @@
+// Copyright 2013 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// Contributors: Jeff Overbey
+
 package doctor
 
 import (
@@ -9,6 +15,8 @@ func TestOffsetLength(t *testing.T) {
 	ol := OffsetLength{offset: 5, length: 20}
 	assertEquals("offset 5, length 20", ol.String(), t)
 }
+
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 // These are utility methods used by other tests as well.  They need to be in
 // a file named something_test.go so that command line arguments used for
@@ -30,4 +38,3 @@ func assertError(result string, t *testing.T) {
 		t.Fatalf("Expected error; actual: \"%s\"", result)
 	}
 }
-
