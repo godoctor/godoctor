@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -42,10 +41,9 @@ import (
 //TODO (reed/josh) return []byte or something for driver to work with
 //TODO (reed/josh) JSON
 type EditSet interface {
+	Edits() map[string][]edit
 	Add(file string, position OffsetLength, replacement string)
 	ApplyTo(key string, in io.Reader, out io.Writer) error
-	ApplyToAllFiles(out io.Writer) error
-	WriteToAllFiles() error
 	ApplyToFile(filename string, out io.Writer) error
 	ApplyToString(key string, s string) (string, error)
 	String() string
@@ -114,39 +112,6 @@ func (e *editSet) String() string {
 		}
 	}
 	return buffer.String()
-}
-
-//Applies all of the edits to all files
-//
-func (e *editSet) ApplyToAllFiles(out io.Writer) (err error) {
-	for file, _ := range e.edits {
-		fmt.Fprintf(out, "\n"+file+":\n\n")
-		if err = e.ApplyToFile(file, out); err != nil {
-			return
-		}
-	}
-	return
-}
-
-//Applies all edits to all files and writes the results over each file
-//
-func (e *editSet) WriteToAllFiles() (err error) {
-	for file, _ := range e.edits {
-		if err = e.writeToFile(file); err != nil {
-			return
-		}
-	}
-
-	return
-}
-
-func (e *editSet) writeToFile(filename string) (err error) {
-	var buf bytes.Buffer
-	if err = e.ApplyToFile(filename, &buf); err != nil {
-		return
-	}
-
-	return ioutil.WriteFile(filename, buf.Bytes(), 0)
 }
 
 //Applies all edits associated with a given filename
