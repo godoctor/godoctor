@@ -20,21 +20,21 @@ const (
 // severity and a message.  If the filename is a nonempty string, the LogEntry
 // is associated with a particular position in the given file.
 type LogEntry struct {
-	severity Severity
-	message  string
-	filename string
-	position OffsetLength
+	Severity Severity     `json:"severity"`
+	Message  string       `json:"message"`
+	Filename string       `json:"filename"`
+	Position OffsetLength `json:"position"`
 }
 
 // A Log is used to store informational messages, warnings, and errors that
 // will be presented to the user.
 type Log struct {
-	entries []LogEntry
+	Entries []LogEntry `json:"entries"`
 }
 
 func (entry *LogEntry) String() string {
 	var buffer bytes.Buffer
-	switch entry.severity {
+	switch entry.Severity {
 	case INFO:
 		// No prefix
 	case WARNING:
@@ -44,41 +44,41 @@ func (entry *LogEntry) String() string {
 	case FATAL_ERROR:
 		buffer.WriteString("ERROR: ")
 	}
-	if entry.filename != "" {
-		buffer.WriteString(entry.filename)
+	if entry.Filename != "" {
+		buffer.WriteString(entry.Filename)
 		buffer.WriteString(", ")
-		buffer.WriteString(entry.position.String())
+		buffer.WriteString(entry.Position.String())
 		buffer.WriteString(": ")
 	}
-	buffer.WriteString(entry.message)
+	buffer.WriteString(entry.Message)
 	return buffer.String()
 }
 
 // NewLog returns a new, empty Log.
 func NewLog() *Log {
 	log := new(Log)
-	log.entries = []LogEntry{}
+	log.Entries = []LogEntry{}
 	return log
 }
 
-// Clear removes all entries from the error log.
+// Clear removes all Entries from the error log.
 func (log *Log) Clear() {
-	log.entries = []LogEntry{}
+	log.Entries = []LogEntry{}
 }
 
 // Log adds a message to the given log with the given severity.  The message
 // is not associated with any particular file.
 func (log *Log) Log(severity Severity, message string) {
-	log.entries = append(log.entries, LogEntry{
-		severity: severity,
-		message:  message,
-		filename: "",
-		position: OffsetLength{0, 0}})
+	log.Entries = append(log.Entries, LogEntry{
+		Severity: severity,
+		Message:  message,
+		Filename: "",
+		Position: OffsetLength{0, 0}})
 }
 
 func (log *Log) String() string {
 	var buffer bytes.Buffer
-	for _, entry := range log.entries {
+	for _, entry := range log.Entries {
 		buffer.WriteString(entry.String())
 		buffer.WriteString("\n")
 	}
@@ -86,8 +86,8 @@ func (log *Log) String() string {
 }
 
 func (log *Log) ContainsErrors() bool {
-	for _, entry := range log.entries {
-		if entry.severity >= ERROR {
+	for _, entry := range log.Entries {
+		if entry.Severity >= ERROR {
 			return true
 		}
 	}

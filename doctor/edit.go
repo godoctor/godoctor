@@ -80,7 +80,7 @@ func (e *editSet) Add(file string, position OffsetLength, replacement string) {
 
 	var pos int = len(fedits)
 	for i := len(fedits) - 1; i >= 0; i-- {
-		if fedits[i].offset >= position.offset {
+		if fedits[i].Offset >= position.Offset {
 			pos = i
 		} else {
 			break
@@ -128,7 +128,8 @@ func (e *editSet) ApplyToFile(filename string, out io.Writer) error {
 }
 
 //Applies all of the edits to a string, mainly for debugging
-//TODO this doesn't really work, takes s as a key to e.edits
+//TODO this doesn't really work, takes s as a key to e.edits,
+//so have to add the string w/ a key
 //
 func (e *editSet) ApplyToString(key string, s string) (string, error) {
 	var reader io.Reader = strings.NewReader(s)
@@ -137,8 +138,7 @@ func (e *editSet) ApplyToString(key string, s string) (string, error) {
 	return writer.String(), err
 }
 
-//TODO (reed) still think this doesn't exactly work as intended?
-//Takes the key in map of edits, applies changes to given writer
+//Takes the key (filename) in map of edits, applies changes to given writer
 //
 func (e *editSet) ApplyTo(filename string, in io.Reader, out io.Writer) error {
 	bufin := bufio.NewReader(in)
@@ -154,20 +154,20 @@ func (e *editSet) applyTo(key string, in *bufio.Reader, out *bufio.Writer) error
 	//all edits for a given key
 	for _, edit := range e.edits[key] {
 		// Check for negative-offset or overlapping edits
-		if edit.offset < 0 {
+		if edit.Offset < 0 {
 			return fmt.Errorf("Edit has negative offset (%d)",
-				edit.offset)
-		} else if offset > edit.offset {
+				edit.Offset)
+		} else if offset > edit.Offset {
 			return fmt.Errorf("Overlapping edit at offset %d",
-				edit.offset)
+				edit.Offset)
 		}
 		// Copy bytes preceding this edit
-		for ; offset < edit.offset; offset++ {
+		for ; offset < edit.Offset; offset++ {
 			byte, err := in.ReadByte()
 			if err == io.EOF {
 				return fmt.Errorf("Edit offset %d is beyond "+
 					"the end of the file (%d bytes)",
-					edit.offset, offset)
+					edit.Offset, offset)
 			} else if err != nil {
 				return err
 			} else {
@@ -177,7 +177,7 @@ func (e *editSet) applyTo(key string, in *bufio.Reader, out *bufio.Writer) error
 		// Write replacement
 		out.WriteString(edit.replacement)
 		// Skip bytes replaced by this edit
-		for ; offset < (edit.offset + edit.length); offset++ {
+		for ; offset < (edit.Offset + edit.Length); offset++ {
 			_, err := in.ReadByte()
 			if err != nil {
 				return err

@@ -8,6 +8,7 @@ import (
 	"go-doctor/doctor"
 	"io/ioutil"
 	"os"
+	"os/exec"
 )
 
 var (
@@ -16,6 +17,12 @@ var (
 
 	runTestsFlag = flag.Bool("runtests", false,
 		"(For internal use only)")
+
+	helpFlag = flag.Bool("h", false,
+		"Prints usage")
+
+	diffFlag = flag.Bool("d", false,
+		"Get diff of all files affected by given refactoring")
 
 	paramsFlag = flag.Bool("p", false,
 		"Get description of parameters for given refactoring")
@@ -27,29 +34,30 @@ var (
 	scopeFlag = flag.String("scope", "",
 		"Give a scope (package), e.g. -scope=code.google.com/p/go.tools/")
 
-	writeFlag = flag.Bool("w", false, "Write the refactored files in place")
+	writeFlag = flag.Bool("w", false,
+		"Write the refactored files in place")
 
 	//useful for JSON I'm thinking
-	skipLogFlag = flag.Bool("e", false, "Write results even if log, dangerous")
+	skipLogFlag = flag.Bool("e", false,
+		"Write results even if log, dangerous")
 )
 
 func usage() {
 	//TODO figure out multi line strings and get back to me
-	fmt.Errorf(`Usage of %s:
+	fmt.Printf(`Usage of %s:
   %s [<flag> ...] <file> <refactoring> <args> ...
 
   The <refactoring> may be one of:
-
-  %v
+%v
 
   The <flag> arguments are
 
-  `,
+`,
 		os.Args[0], os.Args[0],
 		//TODO yeahhhh slow down there chief
 		func() (s string) {
 			for key, _ := range doctor.GetAllRefactorings() {
-				s += key + "\n"
+				s += "\n  " + key
 			}
 			return
 		}())
@@ -76,12 +84,17 @@ func usage() {
 //-tabwidth=8: tab width
 //-w=false: write result to (source) file instead of stdout
 
-//example query: go-doctor -pos=11,8:11,8 someFile.go rename heloooooooo
+//example query: go-doctor -pos=11,8:11,8 someFile.go rename newName
+//TODO query: cat file.go | go-doctor -pos=11,8:11,8 rename newName
 func main() {
 	flag.Parse()
 	args := flag.Args()
 
-	if *runTestsFlag == true {
+	if *helpFlag {
+		usage()
+	}
+
+	if *runTestsFlag {
 		doctor.RunAllTests()
 		return
 	}
@@ -101,7 +114,7 @@ func main() {
 	var name string
 
 	//no file given (assume stdin)
-	//TODO CEPT THIS DOESN'T WORK MAN, thanks importer
+	//TODO make stdin and importer get along
 	if r != nil {
 		name = "temp"
 		args = args[1:]
@@ -142,7 +155,7 @@ func main() {
 	changes := make(map[string][]byte)
 	var buf bytes.Buffer
 
-	//write all edits out to changes[filename]contents
+	//write all edits out to changes; map[filename]contents
 	for file, _ := range es.Edits() {
 		if err := es.ApplyToFile(file, &buf); err != nil {
 			fmt.Println(err)
@@ -152,41 +165,71 @@ func main() {
 	}
 
 	if *writeFlag {
+		//write changes to their file
 		for file, change := range changes {
 			if err := ioutil.WriteFile(file, change, 0); err != nil {
 				fmt.Println(err)
 				os.Exit(2)
 			}
 		}
-	} else {
-		switch *formatFlag {
-		case "plain":
-			for file, change := range changes {
-				//TODO show file name, for pissing off the unix gurus?
-				fmt.Printf("%s:\n\n", file)
-				fmt.Printf("%s\n", change)
-			}
-		case "json":
-			//TODO figure out a better way, O(N) says so
-			//bytes <-> string not so nice
-			c := make(map[string]string)
-			for file, change := range changes {
-				c[file] = string(change[:])
-			}
-			out, err := json.MarshalIndent(struct {
-				Name    string            `json:"name"`
-				Log     *doctor.Log       `json:"log"`
-				Changes map[string]string `json:"changes"`
-			}{
-				r.Name(),
-				l,
-				c,
-			}, "", "\t")
+		return
+	}
+	//TODO (reed) learn to func?
+	if *diffFlag {
+		//compute diff for each
+		for file, change := range changes {
+			f, err := ioutil.TempFile("", "go-doctor")
 			if err != nil {
 				fmt.Println(err)
 				os.Exit(2)
 			}
-			fmt.Printf("%s\n", out)
+			//TODO make sure that we return, so this happens
+			defer os.Remove(f.Name())
+			defer f.Close()
+
+			f.Write(change)
+			diff, err := exec.Command("diff", "-u", file, f.Name()).CombinedOutput()
+			if len(diff) > 0 {
+				//diff exits with a non-zero status when the files don't match.
+				//Ignore that failure as long as we get output.
+				err = nil
+			}
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			//put diff in changes instead of just changed file
+			changes[file] = diff
 		}
+	}
+	//at this point changes either has updated files or diff data
+	switch *formatFlag {
+	case "plain":
+		for file, change := range changes {
+			//TODO show file name, for pissing off the unix gurus?
+			fmt.Printf("%s:\n\n", file)
+			fmt.Printf("%s\n", change)
+		}
+	case "json":
+		//TODO figure out a better way, O(N) says so
+		//[]byte goes to base64 string in json
+		c := make(map[string]string)
+		for file, change := range changes {
+			c[file] = string(change[:])
+		}
+		out, err := json.MarshalIndent(struct {
+			Name    string            `json:"name"`
+			Log     *doctor.Log       `json:"log"`
+			Changes map[string]string `json:"changes"`
+		}{
+			r.Name(),
+			l,
+			c,
+		}, "", "\t")
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		fmt.Printf("%s\n", out)
 	}
 }

@@ -14,13 +14,13 @@ import (
 // specified by
 //     OffsetLength{offset: 2, length: 3}
 type OffsetLength struct {
-	offset int
-	length int
+	Offset int `json:"offset"`
+	Length int `json:"length"`
 }
 
 func (o *OffsetLength) String() string {
-	return "offset " + strconv.Itoa(o.offset) +
-		", length " + strconv.Itoa(o.length)
+	return "offset " + strconv.Itoa(o.Offset) +
+		", length " + strconv.Itoa(o.Length)
 }
 
 // A TextSelection represents a selection in a text editor.  It consists of a
