@@ -14,9 +14,6 @@ var (
 	formatFlag = flag.String("format", "plain",
 		"Output in 'plain' or 'json', default: plain")
 
-	runTestsFlag = flag.Bool("runtests", false,
-		"(For internal use only)")
-
 	paramsFlag = flag.Bool("p", false,
 		"Get description of parameters for given refactoring")
 
@@ -80,11 +77,6 @@ func usage() {
 func main() {
 	flag.Parse()
 	args := flag.Args()
-
-	if *runTestsFlag == true {
-		doctor.RunAllTests()
-		return
-	}
 
 	//this is TBD per refactoring
 	if *posFlag == "" {
