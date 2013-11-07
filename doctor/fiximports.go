@@ -146,6 +146,8 @@ func (r *FixImportsTransformation) resolveSelector(ident *ast.Ident) string {
 	}
 	if len(candidates) == 1 {
 		return "\"" + candidates[0] + "\""
+	} else if len(candidates) == 0 {
+		return ""
 	} else {
 		// TODO: Could look at what methods are invoked, etc. to
 		// attempt to resolve this
