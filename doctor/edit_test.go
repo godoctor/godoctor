@@ -65,4 +65,16 @@ func TestEditApply(t *testing.T) {
 	es.Add(FILENAME, OffsetLength{4, 0}, "C")
 	es.Add(FILENAME, OffsetLength{6, 2}, "D")
 	assertEquals("01A23C45DB9", applyToString(es, input), t)
+
+	es = NewEditSet()
+	es.Add(FILENAME, OffsetLength{0, 0}, "ABC")
+	assertEquals("ABC", applyToString(es, ""), t)
+
+	es = NewEditSet()
+	es.Add(FILENAME, OffsetLength{0, 3}, "")
+	assertEquals("", applyToString(es, "ABC"), t)
+
+	es = NewEditSet()
+	es.Add(FILENAME, OffsetLength{0, 0}, "")
+	assertEquals("", applyToString(es, ""), t)
 }

@@ -71,7 +71,7 @@ func (e *editSet) Add(file string, position OffsetLength, replacement string) {
 
 	var pos int = len(fedits)
 	for i := len(fedits) - 1; i >= 0; i-- {
-		if fedits[i].offset > position.offset {
+		if fedits[i].offset >= position.offset {
 			pos = i
 		} else {
 			break

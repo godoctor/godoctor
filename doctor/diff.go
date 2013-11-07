@@ -4,37 +4,110 @@ package doctor
 // Eugene W. Myers, "An O(ND) Difference Algorithm and Its Variations"
 
 import (
-	"fmt"
+//"fmt"
 )
 
-func Diff(a, b string) EditSet {
-	result := NewEditSet()
-	// result.Add(file, OffsetLenght, replacement)
-	m := len(a)
-	n := len(b)
+func Diff(filename, a, b string) EditSet {
+	n := len(a)
+	m := len(b)
 	max := m + n
+	if n == 0 && m == 0 {
+		return NewEditSet()
+	} else if n == 0 {
+		result := NewEditSet()
+		result.Add(filename, OffsetLength{0, 0}, b)
+		return result
+	} else if m == 0 {
+		result := NewEditSet()
+		result.Add(filename, OffsetLength{0, len(a)}, "")
+		return result
+	}
+	vs := make([][]int, 0, max)
 	v := make([]int, 2*max, 2*max)
 	offset := max
 	v[offset+1] = 0
 	for d := 0; d <= max; d++ {
 		for k := -d; k <= d; k += 2 {
 			var x, y int
-			if k == -d || k != d && v[offset+k-1] < v[offset+k+1] {
-				x = v[offset+k+1]
+			var vert bool
+			if k == -d || k != d &&
+				abs(v[offset+k-1]) < abs(v[offset+k+1]) {
+				x = abs(v[offset+k+1])
+				vert = false
 			} else {
-				x = v[offset+k-1] + 1
+				x = abs(v[offset+k-1]) + 1
+				vert = true
 			}
 			y = x - k
 			for x < n && y < m && a[x] == b[y] {
 				x, y = x+1, y+1
 			}
-			v[offset+k] = x
+			if vert {
+				v[offset+k] = -x
+			} else {
+				v[offset+k] = x
+			}
 			if x >= n && y >= m {
-				// length of an SES is D
-				fmt.Println(v)
-				return result
+				// length of SES is D
+				vs = append(vs, v)
+				return constructEditSet(filename, a, b, vs)
 			}
 		}
+		v_copy := make([]int, len(v))
+		copy(v_copy, v)
+		vs = append(vs, v_copy)
 	}
 	panic("Length of SES longer than max")
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	} else {
+		return n
+	}
+}
+
+func constructEditSet(filename, a, b string, vs [][]int) EditSet {
+	n := len(a)
+	m := len(b)
+	max := m + n
+	offset := max
+	result := NewEditSet()
+	k := n - m
+	for len(vs) > 1 {
+		v := vs[len(vs)-1]
+		v_k := v[offset+k]
+		x := abs(v_k)
+		y := x - k
+
+		vs = vs[:len(vs)-1]
+		v = vs[len(vs)-1]
+		if v_k > 0 {
+			k++
+		} else {
+			k--
+		}
+		next_v_k := v[offset+k]
+		next_x := abs(next_v_k)
+		next_y := next_x - k
+
+		if v_k > 0 {
+			// Insert
+			charsToCopy := y - next_y - 1
+			insertOffset := x - charsToCopy
+			ol := OffsetLength{insertOffset, 0}
+			copyOffset := y - charsToCopy - 1
+			replaceWith := b[copyOffset : copyOffset+1]
+			result.Add(filename, ol, replaceWith)
+		} else {
+			// Delete
+			charsToCopy := x - next_x - 1
+			deleteOffset := x - charsToCopy - 1
+			ol := OffsetLength{deleteOffset, 1}
+			replaceWith := ""
+			result.Add(filename, ol, replaceWith)
+		}
+	}
+	return result
 }
