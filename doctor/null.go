@@ -29,6 +29,10 @@ func (r *NullRefactoring) Configure(args []string) bool {
 	return true
 }
 
+func (r *NullRefactoring) GetParams() []string {
+	return []string{}
+}
+
 func (r *NullRefactoring) Run() {
 	if r.selectedNode == nil {
 		r.log.Log(FATAL_ERROR, "selection cannot be null")

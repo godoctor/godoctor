@@ -65,6 +65,7 @@ type Refactoring interface {
 	SetSelection(selection TextSelection) bool
 	Configure(args []string) bool
 	Run()
+	GetParams() []string
 	GetLog() *Log
 	GetResult() (*Log, EditSet)
 }

@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"go-doctor/doctor"
+	"io/ioutil"
 	"os"
 )
 
@@ -66,7 +67,7 @@ func usage() {
 //-tabwidth=8: tab width
 //-w=false: write result to (source) file instead of stdout
 
-//example query: go-doctor -pos=testdata/rename/001-local/local1.go:11,8:11,8 rename heloooooooo
+//example query: go-doctor -pos=11,8:11,8 someFile.go rename heloooooooo
 func main() {
 	flag.Parse()
 	args := flag.Args()
@@ -86,12 +87,51 @@ func main() {
 		usage()
 	}
 
-	l, es := doctor.Query(args[1:], args[0], *posFlag, *scopeFlag)
+	r := doctor.GetRefactoring(args[1])
+	var name string
+
+	//no file given (assume stdin)
+	//TODO CEPT THIS DOESN'T WORK MAN, thanks importer
+	if r == nil {
+		f, err := ioutil.TempFile("", "go doctor")
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(2)
+		}
+		defer os.Remove(f.Name())
+		defer f.Close()
+		//write stdin to file... TODO but don't
+		input, err := ioutil.ReadAll(os.Stdin)
+		if err != nil {
+			fmt.Println("helloo there")
+		}
+		err = ioutil.WriteFile(f.Name(), input, 0)
+		if err != nil {
+			fmt.Println("here we are")
+		}
+
+		name = f.Name()
+		r = doctor.GetRefactoring(args[0])
+		args = args[1:]
+	} else {
+		//file given
+		name = args[0]
+		args = args[2:]
+	}
+
+	l, es := doctor.Query(name, args, r, *posFlag, *scopeFlag)
 	if l.ContainsErrors() && !*skipLogFlag {
 		fmt.Println(l)
 		os.Exit(1)
 	}
 
+	//TODO (reed) consider not doing the WriteTo..()
+	//and ApplyTo..() methods b/c JSON will need one
+	//and because EditSet's don't need to know by which means
+	//to edit themselves, the driver should take care of it.
+	//
+	//Just write to []byte for each file, then do things
+	//
 	if *writeFlag {
 		err := es.WriteToAllFiles()
 		if err != nil {

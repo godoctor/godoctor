@@ -42,25 +42,25 @@ func parseLineCol(linecol string) (int, int) {
 	return -1, -1
 }
 
-//pos=filename:3,6:3,9
+//pos=3,6:3,9
 func parsePositionToTextSelection(pos string) (t TextSelection, err error) {
 	args := strings.Split(pos, ":")
 
-	if len(args) < 3 {
+	if len(args) < 2 {
 		err = fmt.Errorf("invalid -pos")
 		return
 	}
 
-	sl, sc := parseLineCol(args[1])
-	el, ec := parseLineCol(args[2])
+	sl, sc := parseLineCol(args[0])
+	el, ec := parseLineCol(args[1])
 
 	if sl < 0 || sc < 0 || el < 0 || ec < 0 {
 		err = fmt.Errorf("invalid -pos line, col")
 		return
 	}
 
-	t = TextSelection{filename: args[0],
-		startLine: sl, startCol: sc, endLine: el, endCol: ec}
+	t = TextSelection{startLine: sl, startCol: sc,
+		endLine: el, endCol: ec}
 
 	return
 }
@@ -71,21 +71,18 @@ func parsePositionToTextSelection(pos string) (t TextSelection, err error) {
 //a refactoring (@op), returning the edits to be made and log.
 //For use with the CLI, but have at it.
 //
-func Query(args []string, op string, pos string, scope string) (*Log, EditSet) {
-	r := GetRefactoring(op)
-
+func Query(file string, args []string, r Refactoring, pos string, scope string) (*Log, EditSet) {
 	if r == nil {
 		fmt.Errorf("Invalid refactoring")
 		os.Exit(2)
 	}
 
 	ts, err := parsePositionToTextSelection(pos)
-
-	//TODO: ICK
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(2)
 	}
+	ts.filename = file
 
 	r.SetSelection(ts)
 	r.Configure(args)
