@@ -42,10 +42,16 @@ func assertError(result string) {
 // RunAllTests is a utility method that runs a set of refactoring tests
 // based on markers in all of the files in subdirectories of a given directory
 func RunAllTests() {
-	files, err := recursiveReadDir(".")
+	RunAllTestsInDirectory(".")
+}
+
+// RunAllTests is a utility method that runs a set of refactoring tests
+// based on markers in all of the files in subdirectories of a given directory
+func RunAllTestsInDirectory(directory string) {
+	files, err := recursiveReadDir(directory)
 	failIfError(err)
 
-	absolutePath, err := filepath.Abs(".")
+	absolutePath, err := filepath.Abs(directory)
 	failIfError(err)
 	err = os.Setenv("GOPATH", absolutePath)
 	failIfError(err)
