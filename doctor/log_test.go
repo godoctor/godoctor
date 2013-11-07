@@ -5,16 +5,16 @@ import (
 )
 
 func TestLogEntry(t *testing.T) {
-	e := LogEntry{INFO, "Message", "", OffsetLength{}}
+	e := LogEntry{false, INFO, "Message", "", OffsetLength{}}
 	assertEquals("Message", e.String(), t)
-	e = LogEntry{WARNING, "Message", "", OffsetLength{}}
+	e = LogEntry{false, WARNING, "Message", "", OffsetLength{}}
 	assertEquals("Warning: Message", e.String(), t)
-	e = LogEntry{ERROR, "Message", "", OffsetLength{}}
+	e = LogEntry{false, ERROR, "Message", "", OffsetLength{}}
 	assertEquals("Error: Message", e.String(), t)
-	e = LogEntry{FATAL_ERROR, "Message", "", OffsetLength{}}
+	e = LogEntry{false, FATAL_ERROR, "Message", "", OffsetLength{}}
 	assertEquals("ERROR: Message", e.String(), t)
 
-	e = LogEntry{WARNING, "Msg", "fn", OffsetLength{1, 2}}
+	e = LogEntry{false, WARNING, "Msg", "fn", OffsetLength{1, 2}}
 	assertEquals("Warning: fn, offset 1, length 2: Msg", e.String(), t)
 }
 

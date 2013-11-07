@@ -18,6 +18,7 @@ func init() {
 		"null":        new(NullRefactoring),
 		"rename":      new(RenameRefactoring),
 		"shortassign": new(ShortAssignRefactoring),
+		"fiximports":  new(FixImportsTransformation),
 	}
 }
 

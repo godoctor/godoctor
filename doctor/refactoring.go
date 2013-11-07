@@ -120,7 +120,7 @@ func (r *RefactoringBase) SetSelection(selection TextSelection) bool {
 		// FIXME: Needs to be thread-safe
 		// As of today, you can access the components of the error (token.Pos, string) as:
 		// err.(types.Error).Pos etc.
-		r.log.Log(ERROR, err.Error())
+		r.log.LogInitial(ERROR, err.Error())
 	}
 	r.importer = importer.New(&impcfg)
 
@@ -134,10 +134,11 @@ func (r *RefactoringBase) SetSelection(selection TextSelection) bool {
 	}
 
 	r.pkgInfo = pkgInfo[0]
-	if r.pkgInfo.Err != nil {
-		r.log.Log(FATAL_ERROR, r.pkgInfo.Err.Error())
-		return false
-	}
+	// Unnecessary since we hooked into the importer's error reporter
+	//	if r.pkgInfo.Err != nil {
+	//		r.log.Log(FATAL_ERROR, r.pkgInfo.Err.Error())
+	//		return false
+	//	}
 
 	if len(r.pkgInfo.Files) < 1 {
 		r.log.Log(FATAL_ERROR, "Package contains no files")

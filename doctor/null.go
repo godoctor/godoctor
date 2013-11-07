@@ -39,11 +39,14 @@ func (r *NullRefactoring) Run() {
 		return // SetSelection did not succeed
 	}
 
+	//ast.Print(r.importer.Fset, r.file)
+
 	// Just for example
 	//r.forEachFile(func (file *token.File, ast *ast.File) {
 	//	fmt.Println("Found file", file.Name())
 	//})
 
-	r.checkForErrors()
+	r.log.ChangeInitialErrorsToWarnings()
+	//r.checkForErrors()
 	return
 }

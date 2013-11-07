@@ -143,7 +143,7 @@ func runRefactoring(filename string, marker string, t *testing.T) {
 	rlog := r.GetLog()
 	if result == FAIL_SELECTION && !ok {
 		return // We expected SetSelection to fail -- good
-	} else if shouldPass && (!ok || rlog.ContainsErrors()) {
+	} else if shouldPass && (!ok || rlog.ContainsNonInitialErrors()) {
 		t.Logf("SetSelection produced unexpected errors")
 		t.Fatal(rlog)
 	}
@@ -152,7 +152,7 @@ func runRefactoring(filename string, marker string, t *testing.T) {
 	rlog = r.GetLog()
 	if result == FAIL_CONFIGURE && !ok {
 		return // We expected configuration to fail -- good
-	} else if shouldPass && (!ok || rlog.ContainsErrors()) {
+	} else if shouldPass && (!ok || rlog.ContainsNonInitialErrors()) {
 		t.Log("Refactoring configuration failed")
 		t.Fatal(rlog)
 	}
