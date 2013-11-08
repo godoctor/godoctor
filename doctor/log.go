@@ -37,11 +37,11 @@ const (
 // present in the input file (e.g., unresolved identifiers, unnecessary
 // imports, etc.) before the refactoring was started.
 type LogEntry struct {
+	isInitial bool
 	Severity  Severity     `json:"severity"`
 	Message   string       `json:"message"`
 	Filename  string       `json:"filename"`
 	Position  OffsetLength `json:"position"`
-	isInitial bool
 }
 
 // A Log is used to store informational messages, warnings, and errors that
