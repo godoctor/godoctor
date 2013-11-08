@@ -76,13 +76,16 @@ func (r *FixImportsTransformation) findUsedImports() map[string]string {
 	imports := map[string]string{}
 	for _, imprt := range r.file.Imports {
 		var path string = imprt.Path.Value
+		var pathNoQuotes string = strings.Trim(path, "\"")
+		var splitPath []string = strings.Split(pathNoQuotes, "/")
 		var name string = ""
 		if imprt.Name != nil {
 			name = imprt.Name.Name
 		}
 		_, foundName := packagesReferenced[name]
+		_, foundLast := packagesReferenced[splitPath[len(splitPath)-1]]
 		_, foundPkg := packagesReferenced[path]
-		if foundName || foundPkg {
+		if foundName || foundLast || foundPkg {
 			imports[path] = name
 		}
 	}
@@ -179,6 +182,16 @@ func (r *FixImportsTransformation) findReplacementRange() (OffsetLength, string)
 
 func (r *FixImportsTransformation) findFirstDeclOffset() int {
 	var pos token.Pos = r.file.Decls[0].Pos()
+	switch node := r.file.Decls[0].(type) {
+	case *ast.FuncDecl:
+		if node.Doc != nil {
+			pos = node.Doc.List[0].Pos()
+		}
+	case *ast.GenDecl:
+		if node.Doc != nil {
+			pos = node.Doc.List[0].Pos()
+		}
+	}
 	return r.importer.Fset.Position(pos).Offset
 }
 
