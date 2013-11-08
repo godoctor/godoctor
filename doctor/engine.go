@@ -84,6 +84,9 @@ func Query(file string, args []string, r Refactoring, pos string, scope string) 
 		os.Exit(2)
 	}
 
+	if pos == "" {
+		pos = "0,0:0,0"
+	}
 	ts, err := parsePositionToTextSelection(pos)
 	if err != nil {
 		fmt.Println(err)
