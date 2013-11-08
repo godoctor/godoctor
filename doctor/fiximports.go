@@ -76,7 +76,8 @@ func (r *FixImportsTransformation) findUsedImports() map[string]string {
 	imports := map[string]string{}
 	for _, imprt := range r.file.Imports {
 		var path string = imprt.Path.Value
-		var splitPath []string = strings.Split(path, "/")
+		var pathNoQuotes string = strings.Trim(path, "\"")
+		var splitPath []string = strings.Split(pathNoQuotes, "/")
 		var name string = ""
 		if imprt.Name != nil {
 			name = imprt.Name.Name
