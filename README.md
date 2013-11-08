@@ -17,6 +17,7 @@ The "go doctor"
   Where <flag> (shown with defaults) may be a combination of:
     -h=false, show usage for go-doctor
     -format=plain, show output in 'plain' or 'json', see 3.2
+    -pos="", specify a position of the format: (all ints) startLine,startCol:startLine,startCol
     -d=false, return diff of each file affected by given refactoring, see 3.2
     -p=false, return description of parameters for given refactoring, see 3.2
     -w=false, write refactored files instead of printing output
