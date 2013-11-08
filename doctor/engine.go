@@ -11,6 +11,7 @@
 package doctor
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -34,6 +35,54 @@ func GetAllRefactorings() map[string]Refactoring {
 
 func GetRefactoring(shortName string) Refactoring {
 	return refactorings[shortName]
+}
+
+//Figure out how much I like this...
+func PrintRefactoringParams(r Refactoring, format string) {
+	switch format {
+	case "plain":
+		for _, p := range r.GetParams() {
+			fmt.Println(p)
+		}
+	case "json":
+		p, err := json.MarshalIndent(struct {
+			Params []string `json:"params"`
+		}{
+			r.GetParams(),
+		}, "", "\t")
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(2)
+		}
+		fmt.Printf("%s\n", p)
+	}
+}
+
+//Figure out how much I like this...
+func PrintAllRefactorings(format string) {
+	//gotta be a better way to get all keys...
+	var names []string
+	for name, _ := range GetAllRefactorings() {
+		names = append(names, name)
+	}
+
+	switch format {
+	case "plain":
+		for _, n := range names {
+			fmt.Println(n)
+		}
+	case "json":
+		p, err := json.MarshalIndent(struct {
+			Refactorings []string `json:"refactorings"`
+		}{
+			names,
+		}, "", "\t")
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(2)
+		}
+		fmt.Printf("%s\n", p)
+	}
 }
 
 //TODO is this what util is for?
@@ -84,9 +133,6 @@ func Query(file string, args []string, r Refactoring, pos string, scope string) 
 		os.Exit(2)
 	}
 
-	if pos == "" {
-		pos = "0,0:0,0"
-	}
 	ts, err := parsePositionToTextSelection(pos)
 	if err != nil {
 		fmt.Println(err)

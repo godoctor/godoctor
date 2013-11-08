@@ -18,6 +18,7 @@ The "go doctor"
     -h=false, show usage for go-doctor
     -format=plain, show output in 'plain' or 'json', see 3.2
     -pos="", specify a position of the format: (all ints) startLine,startCol:startLine,startCol
+    -l=false, return list of all possible refactorings, see 3.2
     -d=false, return diff of each file affected by given refactoring, see 3.2
     -p=false, return description of parameters for given refactoring, see 3.2
     -w=false, write refactored files instead of printing output
@@ -48,6 +49,12 @@ Each example below will specify an example "query" to get said output
 
   Will output a new line separated description of the
   required parameters that are necessary to execute the given <refactoring>
+
+##### List (-l)
+  Example query: `go-doctor -l`
+
+  Will output a new line separated list of refactoring "shortname"'s,
+  which can be used as input for a future query as the <refactoring> arg (see 3.1)
 
 ##### Diff (-d)
   Example query: `go-doctor -d -pos=11,6:11,6 myFile.go rename newName`
@@ -104,7 +111,7 @@ Each example below will specify an example "query" to get said output
 
 ##### params, from -p
 
-  Example: `go-doctor -p rename`
+  Example: `go-doctor -p -format json rename`
 
   Output of the form:
   {
@@ -122,9 +129,25 @@ Each example below will specify an example "query" to get said output
   param is a string with a description of the required
   parameter necessary to execute a given refactoring.
 
+##### List (-l)
+  Example query: `go-doctor -l -format json`
+
+  Output of the form:
+  {
+    "refactorings: [
+      refactoring, ...
+    ]
+  }
+
+  "refactorings" is an array of all possible refactorings, in no
+  particular order.
+
+  refactoring is a string that is the "shortName" for a refactoring,
+  to be specified as the <refactoring> arg in future queries (see 3.1)
+
 ##### diff, from -d
 
-  Example: `go-doctor -d -pos=11,6:11,6 file.go rename newName`
+  Example: `go-doctor -d -format=json -pos=11,6:11,6 file.go rename newName`
 
   Output of the form:
   {
@@ -175,7 +198,7 @@ Each example below will specify an example "query" to get said output
 
 ##### Updated files (default output)
 
-  Example: `go-doctor -pos=11,6:11,6 file.go rename newName`
+  Example: `go-doctor -format=json -pos=11,6:11,6 file.go rename newName`
 
   Output of the form:
   {

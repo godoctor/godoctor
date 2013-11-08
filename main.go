@@ -29,10 +29,13 @@ var (
 	diffFlag = flag.Bool("d", false,
 		"Get diff of all files affected by given refactoring")
 
+	listFlag = flag.Bool("l", false,
+		"List all possible refactorings")
+
 	paramsFlag = flag.Bool("p", false,
 		"Get description of parameters for given refactoring")
 
-	posFlag = flag.String("pos", "",
+	posFlag = flag.String("pos", "0,0:0,0",
 		"Line, col offset usually necessary, e.g. -pos=5,11:5,11")
 
 	//TODO (reed) need to understand this happening
@@ -70,27 +73,13 @@ func usage() {
 	os.Exit(1)
 }
 
-//TODO (reed / josh) hash out the json thing
-// -d for diff files, -comments to change comments (if a thing?)
+//TODO (reed / josh)  -comments to change comments (if a thing?)
+//TODO learn to func
 //
 //TODO (reed / josh) scope (importer? wait?)
 //
-//HERE BE gofmt
-//
-//usage: gofmt [flags] [path ...]
-//-comments=true: print comments
-//-cpuprofile="": write cpu profile to this file
-//-d=false: display diffs instead of rewriting files
-//-e=false: report all errors (not just the first 10 on different lines)
-//-l=false: list files whose formatting differs from gofmt's
-//-r="": rewrite rule (e.g., 'a[b:len(a)] -> a[b:]')
-//-s=false: simplify code
-//-tabs=true: indent with tabs
-//-tabwidth=8: tab width
-//-w=false: write result to (source) file instead of stdout
-
 //example query: go-doctor -pos=11,8:11,8 someFile.go rename newName
-//TODO query: cat file.go | go-doctor -pos=11,8:11,8 rename newName
+//TODO query (stdin): cat file.go | go-doctor -pos=11,8:11,8 rename newName
 func main() {
 	flag.Parse()
 	args := flag.Args()
@@ -99,10 +88,11 @@ func main() {
 		usage()
 	}
 
-	//this is TBD per refactoring
-	if *posFlag == "" {
-		//fmt.Errorf("Error: -pos required")
-		//usage()
+	//print all possible refactorings
+	if *listFlag {
+		//TODO eh not sure I like putting this in doctor
+		doctor.PrintAllRefactorings(*formatFlag)
+		os.Exit(0)
 	}
 
 	if len(args) == 0 {
@@ -113,40 +103,28 @@ func main() {
 	r := doctor.GetRefactoring(args[0])
 	var name string
 
-	//no file given (assume stdin)
+	//no file given (assume stdin), e.g. go-doctor refactor params...
 	//TODO make stdin and importer get along
 	if r != nil {
 		name = "temp"
 		args = args[1:]
 	} else {
-		//file given
+		//file given, e.g. go-doctor file refactor params...
 		r = doctor.GetRefactoring(args[1])
 		name = args[0]
 		args = args[2:]
 	}
 
+	//just return parameters for refactoring
 	if *paramsFlag {
-		switch *formatFlag {
-		case "plain":
-			for _, p := range r.GetParams() {
-				fmt.Println(p)
-			}
-		case "json":
-			p, err := json.MarshalIndent(struct {
-				Params []string `json:"params"`
-			}{
-				r.GetParams(),
-			}, "", "\t")
-			if err != nil {
-				fmt.Println(err)
-				os.Exit(2)
-			}
-			fmt.Printf("%s\n", p)
-		}
+		doctor.PrintRefactoringParams(r, *formatFlag)
 		os.Exit(0)
 	}
 
+	//do the refactoring
 	l, es := doctor.Query(name, args, r, *posFlag, *scopeFlag)
+
+	//TODO fall through if json?
 	if l.ContainsErrors() && !*skipLogFlag {
 		fmt.Println(l)
 		os.Exit(1)
@@ -155,7 +133,7 @@ func main() {
 	changes := make(map[string][]byte)
 	var buf bytes.Buffer
 
-	//write all edits out to changes; map[filename]contents
+	//write all edits out to changes; something to work with
 	for file, _ := range es.Edits() {
 		if err := es.ApplyToFile(file, &buf); err != nil {
 			fmt.Println(err)
@@ -174,7 +152,7 @@ func main() {
 		}
 		return
 	}
-	//TODO (reed) learn to func?
+
 	if *diffFlag {
 		//compute diff for each
 		for file, change := range changes {
@@ -202,21 +180,24 @@ func main() {
 			changes[file] = diff
 		}
 	}
+
 	//at this point changes either has updated files or diff data
+	//output what we have
 	switch *formatFlag {
 	case "plain":
 		for file, change := range changes {
-			//TODO show file name, for pissing off the unix gurus?
+			//TODO show file name, piss off the unix gurus?
 			fmt.Printf("%s:\n\n", file)
 			fmt.Printf("%s\n", change)
 		}
 	case "json":
-		//TODO figure out a better way, O(N) says so
+		//TODO figure out a better way, O(N) says so.
 		//[]byte goes to base64 string in json
 		c := make(map[string]string)
 		for file, change := range changes {
 			c[file] = string(change[:])
 		}
+
 		out, err := json.MarshalIndent(struct {
 			Name    string            `json:"name"`
 			Log     *doctor.Log       `json:"log"`
@@ -226,6 +207,7 @@ func main() {
 			l,
 			c,
 		}, "", "\t")
+
 		if err != nil {
 			fmt.Println(err)
 			return
