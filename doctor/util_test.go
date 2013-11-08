@@ -12,7 +12,7 @@ import (
 )
 
 func TestOffsetLength(t *testing.T) {
-	ol := OffsetLength{offset: 5, length: 20}
+	ol := OffsetLength{Offset: 5, Length: 20}
 	assertEquals("offset 5, length 20", ol.String(), t)
 }
 
