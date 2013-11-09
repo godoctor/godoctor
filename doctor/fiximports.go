@@ -56,24 +56,25 @@ func (r *FixImportsTransformation) Run() {
 
 	//ast.Print(r.importer.Fset, r.file)
 
-	imports := r.findUsedImports()
+	imports, unusedImports := r.classifyExistingImports()
 
 	for _, ident := range r.file.Unresolved {
-		resolved := r.resolve(ident)
-		if resolved != "" {
-			imports[resolved] = ""
+		resolvedPath, resolvedName := r.resolve(ident, unusedImports)
+		if resolvedPath != "" {
+			imports[resolvedPath] = resolvedName
 		}
 	}
 
 	r.fixImports(imports)
 }
 
-func (r *FixImportsTransformation) findUsedImports() map[string]string {
+func (r *FixImportsTransformation) classifyExistingImports() (map[string]string, map[string]string) {
 	// Determine which package names are actually referenced
 	packagesReferenced := r.collectReferencedPackages()
 
 	// Collect all existing imports, omitted unreferenced packages
 	imports := map[string]string{}
+	unusedImports := map[string]string{}
 	for _, imprt := range r.file.Imports {
 		var path string = imprt.Path.Value
 		var pathNoQuotes string = strings.Trim(path, "\"")
@@ -87,10 +88,12 @@ func (r *FixImportsTransformation) findUsedImports() map[string]string {
 		_, foundPkg := packagesReferenced[path]
 		if foundName || foundLast || foundPkg {
 			imports[path] = name
+		} else {
+			unusedImports[path] = name
 		}
 	}
 
-	return imports
+	return imports, unusedImports
 }
 
 func (r *FixImportsTransformation) collectReferencedPackages() map[string]string {
@@ -113,12 +116,12 @@ func (r *FixImportsTransformation) collectReferencedPackages() map[string]string
 	return packagesReferenced
 }
 
-func (r *FixImportsTransformation) resolve(ident *ast.Ident) string {
+func (r *FixImportsTransformation) resolve(ident *ast.Ident, unusedImports map[string]string) (string, string) {
 	if r.isIdentInLHSOfSelectorExpr(ident) {
-		return r.resolveSelector(ident)
+		return r.resolveSelector(ident, unusedImports)
 	} else {
 		r.log.Log(ERROR, "Unable to resolve "+ident.Name)
-		return ""
+		return "", ""
 	}
 }
 
@@ -138,7 +141,25 @@ func (r *FixImportsTransformation) isIdentInLHSOfSelectorExpr(ident *ast.Ident) 
 	return result
 }
 
-func (r *FixImportsTransformation) resolveSelector(ident *ast.Ident) string {
+func (r *FixImportsTransformation) resolveSelector(ident *ast.Ident, unusedImports map[string]string) (string, string) {
+	// If the selector matches an existing import that has no references,
+	// assume this is a reference to that package and the importer just
+	// failed to load the package (e.g., GOPATH is wrong or something)
+	for path, name := range unusedImports {
+		var pathNoQuotes string = strings.Trim(path, "\"")
+		var splitPath []string = strings.Split(pathNoQuotes, "/")
+		var lastComponent string = splitPath[len(splitPath)-1]
+		//fmt.Println("RESOLVING", ident.Name)
+		//fmt.Println("pathNoQuotes", pathNoQuotes)
+		//fmt.Println("lastComponent", lastComponent)
+		//fmt.Println("name", name)
+		if name == ident.Name || name == "" && lastComponent == ident.Name {
+			return path, name
+		}
+	}
+
+	// Otherwise, see if the selector matches the name of one of the
+	// packages in the Go library
 	var candidates []string = []string{}
 	for _, pkg := range goLibraryPackages {
 		components := strings.Split(pkg, "/")
@@ -148,9 +169,9 @@ func (r *FixImportsTransformation) resolveSelector(ident *ast.Ident) string {
 		}
 	}
 	if len(candidates) == 1 {
-		return "\"" + candidates[0] + "\""
+		return "\"" + candidates[0] + "\"", ""
 	} else if len(candidates) == 0 {
-		return ""
+		return "", ""
 	} else {
 		// TODO: Could look at what methods are invoked, etc. to
 		// attempt to resolve this
@@ -162,7 +183,7 @@ func (r *FixImportsTransformation) resolveSelector(ident *ast.Ident) string {
 			message.WriteString("    " + candidate + "\n")
 		}
 		r.log.Log(ERROR, message.String())
-		return ""
+		return "", ""
 	}
 }
 
