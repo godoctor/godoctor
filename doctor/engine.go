@@ -122,6 +122,9 @@ func parsePositionToTextSelection(pos string) (t TextSelection, err error) {
 }
 
 //TODO (reed / josh) scope here?
+//TODO (jeff) I'm fairly sure I used scope wrong here...?
+// Anyway I think we need to know which file the main function is in,
+// so I made that the second arg to SetSelection -- confirm with Alan
 //
 //This will do all of the configuration and execution for
 //a refactoring (@op), returning the edits to be made and log.
@@ -140,7 +143,7 @@ func Query(file string, args []string, r Refactoring, pos string, scope string) 
 	}
 	ts.filename = file
 
-	r.SetSelection(ts)
+	r.SetSelection(ts, scope)
 	r.Configure(args)
 	r.Run()
 	return r.GetResult()

@@ -64,6 +64,8 @@ const FAIL_SELECTION = "fail-selection"
 const FAIL_CONFIGURE = "fail-configure"
 const FAIL = "fail"
 
+const MAIN_DOT_GO = "main.go"
+
 var filterFlag = flag.String("filter", "", "Only tests from directories containing this substring will be run")
 
 const directory = "../testdata/"
@@ -181,8 +183,8 @@ func runRefactoring(filename string, marker string, t *testing.T) {
 	//relativePath := filepath.Join(cwd, filename)
 	fmt.Println(name, selection.String())
 
-	if filename == "main.go" {
-		cmd := exec.Command("go", "run", "main.go")
+	if filename == MAIN_DOT_GO {
+		cmd := exec.Command("go", "run", MAIN_DOT_GO)
 		_, err := cmd.Output()
 		if err != nil {
 			t.Logf("go run main.go failed:")
@@ -190,7 +192,18 @@ func runRefactoring(filename string, marker string, t *testing.T) {
 		}
 	}
 
-	ok := r.SetSelection(selection)
+	mainFile := ""
+	if _, err := os.Stat(MAIN_DOT_GO); err == nil {
+		mainFile = MAIN_DOT_GO
+	} else {
+		if os.IsNotExist(err) {
+			// file does not exist
+		} else {
+			t.Fatal(err)
+		}
+	}
+
+	ok := r.SetSelection(selection, mainFile)
 	rlog := r.GetLog()
 	if result == FAIL_SELECTION && !ok {
 		return // We expected SetSelection to fail -- good
