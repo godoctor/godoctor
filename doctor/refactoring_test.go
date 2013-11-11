@@ -109,7 +109,7 @@ func runAllTestsInDirectory(directory string, t *testing.T) {
 	err = os.Setenv("GOPATH", absolutePath)
 	failIfError(err, t)
 
-	runTestsInFiles(files, t)
+	runTestsInFiles(directory, files, t)
 }
 
 // Assumes no duplication or circularity due to symbolic links
@@ -146,7 +146,7 @@ func failIfError(err error, t *testing.T) {
 	}
 }
 
-func runTestsInFiles(files []string, t *testing.T) {
+func runTestsInFiles(directory string, files []string, t *testing.T) {
 	markers := make(map[string][]string)
 	for _, path := range files {
 		if strings.HasSuffix(path, ".go") {
@@ -162,12 +162,12 @@ func runTestsInFiles(files []string, t *testing.T) {
 
 	for path, markersInFile := range markers {
 		for _, marker := range markersInFile {
-			runRefactoring(path, marker, t)
+			runRefactoring(directory, path, marker, t)
 		}
 	}
 }
 
-func runRefactoring(filename string, marker string, t *testing.T) {
+func runRefactoring(directory string, filename string, marker string, t *testing.T) {
 	refac, selection, remainder, result := splitMarker(filename, marker, t)
 
 	r := GetRefactoring(refac)
@@ -192,12 +192,10 @@ func runRefactoring(filename string, marker string, t *testing.T) {
 		}
 	}
 
-	mainFile := ""
-	if _, err := os.Stat(MAIN_DOT_GO); err == nil {
-		mainFile = MAIN_DOT_GO
-	} else {
+	mainFile := filepath.Join(directory, MAIN_DOT_GO)
+	if _, err := os.Stat(mainFile); err != nil {
 		if os.IsNotExist(err) {
-			// file does not exist
+			mainFile = ""
 		} else {
 			t.Fatal(err)
 		}
