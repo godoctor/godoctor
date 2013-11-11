@@ -143,7 +143,7 @@ func main() {
 	}
 
 	if *writeFlag {
-		//write changes to their file
+		//write changes to their file and exit
 		for file, change := range changes {
 			if err := ioutil.WriteFile(file, change, 0); err != nil {
 				fmt.Println(err)
