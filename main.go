@@ -13,7 +13,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"go-doctor/doctor"
+	"golang-refactoring.org/go-doctor.git/doctor"
 	"io/ioutil"
 	"os"
 	"os/exec"
