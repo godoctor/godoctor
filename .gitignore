@@ -3,3 +3,5 @@
 tags
 go-doctor
 doctor/doctor.test
+*.swp
+*~

@@ -140,15 +140,15 @@ func (r *RefactoringBase) SetSelection(selection TextSelection, mainFile string)
 	var pkgInfo []*importer.PackageInfo
 	var err error
 	if mainFile != "" {
-		pkgInfo, _, err = r.importer.LoadInitialPackages([]string{mainFile})
+		pkgInfo, _, err = r.importer.LoadInitialPackages([]string{r.filename, mainFile})
 	} else {
 		pkgInfo, _, err = r.importer.LoadInitialPackages([]string{r.filename})
 	}
 	if err != nil {
 		r.log.Log(FATAL_ERROR, err.Error())
 		return false
-	} else if len(pkgInfo) != 1 {
-		r.log.Log(FATAL_ERROR, "Analysis error: unable to import package")
+	} else if len(pkgInfo) < 1 {
+		r.log.Log(FATAL_ERROR, "Analysis error: unable to import package(s)")
 		return false
 	}
 
@@ -164,9 +164,15 @@ func (r *RefactoringBase) SetSelection(selection TextSelection, mainFile string)
 		return false
 	}
 
-	r.file = r.pkgInfo.Files[0]
+	r.file = nil
+	for _, file := range r.pkgInfo.Files {
+		if r.importer.Fset.Position(file.Pos()).Filename == selection.filename {
+			r.file = file
+			break;
+		}
+	}
 	if r.file == nil {
-		r.log.Log(FATAL_ERROR, "Unable to parse "+selection.filename)
+		r.log.Log(FATAL_ERROR, "Unable to parse " + selection.filename)
 		return false
 	}
 
