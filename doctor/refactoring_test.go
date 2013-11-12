@@ -64,6 +64,8 @@ const FAIL_SELECTION = "fail-selection"
 const FAIL_CONFIGURE = "fail-configure"
 const FAIL = "fail"
 
+const MAIN_DOT_GO = "main.go"
+
 var filterFlag = flag.String("filter", "", "Only tests from directories containing this substring will be run")
 
 const directory = "../testdata/"
@@ -107,7 +109,7 @@ func runAllTestsInDirectory(directory string, t *testing.T) {
 	err = os.Setenv("GOPATH", absolutePath)
 	failIfError(err, t)
 
-	runTestsInFiles(files, t)
+	runTestsInFiles(directory, files, t)
 }
 
 // Assumes no duplication or circularity due to symbolic links
@@ -144,7 +146,7 @@ func failIfError(err error, t *testing.T) {
 	}
 }
 
-func runTestsInFiles(files []string, t *testing.T) {
+func runTestsInFiles(directory string, files []string, t *testing.T) {
 	markers := make(map[string][]string)
 	for _, path := range files {
 		if strings.HasSuffix(path, ".go") {
@@ -160,12 +162,12 @@ func runTestsInFiles(files []string, t *testing.T) {
 
 	for path, markersInFile := range markers {
 		for _, marker := range markersInFile {
-			runRefactoring(path, marker, t)
+			runRefactoring(directory, path, marker, t)
 		}
 	}
 }
 
-func runRefactoring(filename string, marker string, t *testing.T) {
+func runRefactoring(directory string, filename string, marker string, t *testing.T) {
 	refac, selection, remainder, result := splitMarker(filename, marker, t)
 
 	r := GetRefactoring(refac)
@@ -181,8 +183,8 @@ func runRefactoring(filename string, marker string, t *testing.T) {
 	//relativePath := filepath.Join(cwd, filename)
 	fmt.Println(name, selection.String())
 
-	if filename == "main.go" {
-		cmd := exec.Command("go", "run", "main.go")
+	if filename == MAIN_DOT_GO {
+		cmd := exec.Command("go", "run", MAIN_DOT_GO)
 		_, err := cmd.Output()
 		if err != nil {
 			t.Logf("go run main.go failed:")
@@ -190,7 +192,15 @@ func runRefactoring(filename string, marker string, t *testing.T) {
 		}
 	}
 
-	ok := r.SetSelection(selection)
+	mainFile := filepath.Join(directory, MAIN_DOT_GO)
+	if !exists(mainFile, t) {
+		mainFile = filepath.Join(filepath.Join(directory, "src"), MAIN_DOT_GO)
+		if !exists(mainFile, t) {
+			mainFile = ""
+		}
+	}
+
+	ok := r.SetSelection(selection, mainFile)
 	rlog := r.GetLog()
 	if result == FAIL_SELECTION && !ok {
 		return // We expected SetSelection to fail -- good
@@ -222,6 +232,19 @@ func runRefactoring(filename string, marker string, t *testing.T) {
 	}
 	if shouldPass {
 		checkResult(filename, output.String(), t)
+	}
+}
+
+func exists(filename string, t *testing.T) bool {
+	if _, err := os.Stat(filename); err == nil {
+		return true
+	} else {
+		if os.IsNotExist(err) {
+			return false
+		} else {
+			t.Fatal(err)
+			return false
+		}
 	}
 }
 

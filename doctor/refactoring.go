@@ -21,7 +21,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	//"path/filepath"
 )
 
 // The Refactoring interface provides the methods common to all refactorings.
@@ -68,7 +67,7 @@ import (
 // may be empty, since it may not be possible to perform the refactoring.
 type Refactoring interface {
 	Name() string
-	SetSelection(selection TextSelection) bool
+	SetSelection(selection TextSelection, mainFile string) bool
 	Configure(args []string) bool
 	Run()
 	GetParams() []string
@@ -90,8 +89,11 @@ type RefactoringBase struct {
 
 // Configures a refactoring by indicating the filename in which text is
 // selected and the beginning and end of the selected region.  Internally,
-// this configures all of the fields in the RefactoringBase struct.
-func (r *RefactoringBase) SetSelection(selection TextSelection) bool {
+// this configures all of the fields in the RefactoringBase struct.  If
+// nonempty, mainFile denotes the file containing the program entrypoint
+// (main function), which may be different from the file containing the
+// text selection.
+func (r *RefactoringBase) SetSelection(selection TextSelection, mainFile string) bool {
 	r.log = NewLog()
 
 	r.filename = selection.filename
@@ -135,7 +137,13 @@ func (r *RefactoringBase) SetSelection(selection TextSelection) bool {
 	}
 	r.importer = importer.New(&impcfg)
 
-	pkgInfo, _, err := r.importer.LoadInitialPackages([]string{r.filename})
+	var pkgInfo []*importer.PackageInfo
+	var err error
+	if mainFile != "" {
+		pkgInfo, _, err = r.importer.LoadInitialPackages([]string{mainFile})
+	} else {
+		pkgInfo, _, err = r.importer.LoadInitialPackages([]string{r.filename})
+	}
 	if err != nil {
 		r.log.Log(FATAL_ERROR, err.Error())
 		return false
