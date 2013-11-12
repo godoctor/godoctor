@@ -58,9 +58,7 @@ func PrintRefactoringParams(r Refactoring, format string) {
 	}
 }
 
-//Figure out how much I like this...
 func PrintAllRefactorings(format string) {
-	//gotta be a better way to get all keys...
 	var names []string
 	for name, _ := range GetAllRefactorings() {
 		names = append(names, name)
@@ -85,7 +83,6 @@ func PrintAllRefactorings(format string) {
 	}
 }
 
-//TODO is this what util is for?
 //e.g. 302,6
 func parseLineCol(linecol string) (int, int) {
 	lc := strings.Split(linecol, ",")
