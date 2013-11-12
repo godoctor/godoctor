@@ -193,11 +193,10 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 	}
 
 	mainFile := filepath.Join(directory, MAIN_DOT_GO)
-	if _, err := os.Stat(mainFile); err != nil {
-		if os.IsNotExist(err) {
+	if !exists(mainFile, t) {
+		mainFile = filepath.Join(filepath.Join(directory, "src"), MAIN_DOT_GO)
+		if !exists(mainFile, t) {
 			mainFile = ""
-		} else {
-			t.Fatal(err)
 		}
 	}
 
@@ -233,6 +232,19 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 	}
 	if shouldPass {
 		checkResult(filename, output.String(), t)
+	}
+}
+
+func exists(filename string, t *testing.T) bool {
+	if _, err := os.Stat(filename); err == nil {
+		return true
+	} else {
+		if os.IsNotExist(err) {
+			return false
+		} else {
+			t.Fatal(err)
+			return false
+		}
 	}
 }
 
