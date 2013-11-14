@@ -13,7 +13,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"golang-refactoring.org/go-doctor.git/doctor"
+	"golang-refactoring.org/go-doctor/doctor"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -64,7 +64,7 @@ func usage() {
 		os.Args[0], os.Args[0],
 		//TODO yeahhhh slow down there chief
 		func() (s string) {
-			for key, _ := range doctor.GetAllRefactorings() {
+			for key, _ := range doctor.AllRefactorings() {
 				s += "\n  " + key
 			}
 			return
@@ -122,7 +122,12 @@ func main() {
 	}
 
 	//do the refactoring
-	l, es := doctor.Query(name, args, r, *posFlag, *scopeFlag)
+	l, es, err := doctor.Query(name, args, r, *posFlag, *scopeFlag)
+
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 
 	//TODO fall through if json?
 	if l.ContainsErrors() && !*skipLogFlag {

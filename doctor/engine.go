@@ -29,7 +29,7 @@ func init() {
 	}
 }
 
-func GetAllRefactorings() map[string]Refactoring {
+func AllRefactorings() map[string]Refactoring {
 	return refactorings
 }
 
@@ -60,7 +60,7 @@ func PrintRefactoringParams(r Refactoring, format string) {
 
 func PrintAllRefactorings(format string) {
 	var names []string
-	for name, _ := range GetAllRefactorings() {
+	for name, _ := range AllRefactorings() {
 		names = append(names, name)
 	}
 
@@ -127,21 +127,22 @@ func parsePositionToTextSelection(pos string) (t TextSelection, err error) {
 //a refactoring (@op), returning the edits to be made and log.
 //For use with the CLI, but have at it.
 //
-func Query(file string, args []string, r Refactoring, pos string, scope string) (*Log, EditSet) {
+func Query(file string, args []string, r Refactoring, pos string, scope string) (*Log, EditSet, error) {
 	if r == nil {
-		fmt.Errorf("Invalid refactoring")
-		os.Exit(2)
+		return nil, nil, fmt.Errorf("Invalid refactoring")
 	}
 
 	ts, err := parsePositionToTextSelection(pos)
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(2)
+		return nil, nil, err
 	}
 	ts.filename = file
 
+	// TODO these 3 all return bool, but get checked in log. Not sure if
+	// need a change here or not. Maybe move this entire function to main.go
 	r.SetSelection(ts, scope)
 	r.Configure(args)
 	r.Run()
-	return r.GetResult()
+	e, l := r.GetResult()
+	return e, l, nil
 }

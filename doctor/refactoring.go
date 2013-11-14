@@ -168,11 +168,11 @@ func (r *RefactoringBase) SetSelection(selection TextSelection, mainFile string)
 	for _, file := range r.pkgInfo.Files {
 		if r.importer.Fset.Position(file.Pos()).Filename == selection.filename {
 			r.file = file
-			break;
+			break
 		}
 	}
 	if r.file == nil {
-		r.log.Log(FATAL_ERROR, "Unable to parse " + selection.filename)
+		r.log.Log(FATAL_ERROR, "Unable to parse "+selection.filename)
 		return false
 	}
 

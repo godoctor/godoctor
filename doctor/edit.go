@@ -46,8 +46,6 @@ import (
 //
 // The String method returns a description of this EditSet (for debugging).
 //
-//TODO (reed/josh) return []byte or something for driver to work with
-//TODO (reed/josh) JSON
 type EditSet interface {
 	Edits() map[string][]edit
 	Add(file string, position OffsetLength, replacement string)
@@ -63,6 +61,7 @@ type edit struct {
 }
 
 type editSet struct {
+	//where [key] is generally a file name, see Add
 	edits map[string][]edit
 }
 
@@ -155,6 +154,7 @@ func (e *editSet) ApplyTo(filename string, in io.Reader, out io.Writer) error {
 }
 
 //TODO definitely don't think this is as intended. For string reasons, mainly
+//@key is generally a filename, but can be any key given to map e.edits.
 func (e *editSet) applyTo(key string, in *bufio.Reader, out *bufio.Writer) error {
 	defer out.Flush()
 	var offset int = 0
@@ -163,17 +163,17 @@ func (e *editSet) applyTo(key string, in *bufio.Reader, out *bufio.Writer) error
 	for _, edit := range e.edits[key] {
 		// Check for negative-offset or overlapping edits
 		if edit.Offset < 0 {
-			return fmt.Errorf("Edit has negative offset (%d)",
+			return fmt.Errorf("edit has negative offset (%d)",
 				edit.Offset)
 		} else if offset > edit.Offset {
-			return fmt.Errorf("Overlapping edit at offset %d",
+			return fmt.Errorf("overlapping edit at offset %d",
 				edit.Offset)
 		}
 		// Copy bytes preceding this edit
 		for ; offset < edit.Offset; offset++ {
 			byte, err := in.ReadByte()
 			if err == io.EOF {
-				return fmt.Errorf("Edit offset %d is beyond "+
+				return fmt.Errorf("edit offset %d is beyond "+
 					"the end of the file (%d bytes)",
 					edit.Offset, offset)
 			} else if err != nil {
