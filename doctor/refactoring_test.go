@@ -265,8 +265,37 @@ func checkResult(filename string, actualOutput string, t *testing.T) {
 		fmt.Println("vvvvvvvvvvvvv")
 		fmt.Println(actualOutput)
 		fmt.Println("^^^^^^^^^^^^^")
+		lenExpected, lenActual := len(expectedOutput), len(actualOutput)
+		if lenExpected != lenActual {
+			fmt.Printf("Length of expected output is %d; length of actual output is %d\n",
+				lenExpected, lenActual)
+			minLen := lenExpected
+			if lenActual < minLen {
+				minLen = lenActual
+			}
+			for i := 0; i < minLen; i++ {
+				if expectedOutput[i] != actualOutput[i] {
+					fmt.Printf("Strings differ at index %d\n", i)
+					fmt.Printf("Substrings starting at that index are:\n")
+					fmt.Printf("Expected: [%s]\n", describe(expectedOutput[i:]))
+					fmt.Printf("Actual: [%s]\n", describe(actualOutput[i:]))
+					break
+				}
+			}
+		}
 		t.Fatalf("Refactoring test failed - %s", filename)
 	}
+}
+
+func describe(s string) string {
+	// FIXME: Jeff: Handle other non-printing characters
+	if len(s) > 10 {
+		s = s[:10]
+	}
+	s = strings.Replace(s, "\n", "\\n", -1)
+	s = strings.Replace(s, "\r", "\\r", -1)
+	s = strings.Replace(s, "\t", "\\t", -1)
+	return s
 }
 
 func splitMarker(filename string, marker string, t *testing.T) (refac string, selection TextSelection, remainder []string, result string) {
