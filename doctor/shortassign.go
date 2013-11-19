@@ -52,7 +52,7 @@ func (r *ShortAssignRefactoring) Run() {
 				//fmt.Println("Type of selected node's RHS is ", r.pkgInfo.TypeOf(rhsExpr))
 
 				replacement := "var " + lhs.Name + " " + r.pkgInfo.TypeOf(rhsExpr).String() + " ="
-				r.editSet.Add(r.filename, OffsetLength{startOffset, length}, replacement)
+				r.editSet[r.filename].Add(OffsetLength{startOffset, length}, replacement)
 
 				r.checkForErrors()
 				return

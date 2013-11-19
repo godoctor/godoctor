@@ -44,7 +44,6 @@
 package doctor
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
 	"go/parser"
@@ -219,19 +218,20 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 	}
 
 	r.Run()
-	rlog, edits := r.GetResult()
+	rlog, editSets := r.GetResult()
 	if shouldPass && rlog.ContainsErrors() {
 		t.Log(rlog)
 		t.Fatalf("Refactoring produced unexpected errors")
 	}
 
-	var output bytes.Buffer
-	err := edits.ApplyToFile(filename, &output)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if shouldPass {
-		checkResult(filename, output.String(), t)
+	for filename, edits := range editSets {
+		output, err := ApplyToFile(edits, filename)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if shouldPass {
+			checkResult(filename, string(output), t)
+		}
 	}
 }
 

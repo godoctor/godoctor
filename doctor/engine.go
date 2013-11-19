@@ -127,7 +127,7 @@ func parsePositionToTextSelection(pos string) (t TextSelection, err error) {
 //a refactoring (@op), returning the edits to be made and log.
 //For use with the CLI, but have at it.
 //
-func Query(file string, args []string, r Refactoring, pos string, scope string) (*Log, EditSet, error) {
+func Query(file string, args []string, r Refactoring, pos string, scope string) (*Log, map[string]EditSet, error) {
 	if r == nil {
 		return nil, nil, fmt.Errorf("Invalid refactoring")
 	}

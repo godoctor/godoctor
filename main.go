@@ -136,15 +136,13 @@ func main() {
 	}
 
 	changes := make(map[string][]byte)
-	var buf bytes.Buffer
 
 	//write all edits out to changes; something to work with
-	for file, _ := range es.Edits() {
-		if err := es.ApplyToFile(file, &buf); err != nil {
+	for file, _ := range es {
+		if changes[file], err := ApplyToFile(es, file, &buf); err != nil {
 			fmt.Println(err)
 			os.Exit(2)
 		}
-		changes[file] = buf.Bytes()
 	}
 
 	if *writeFlag {

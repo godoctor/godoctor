@@ -15,8 +15,8 @@ import (
 var rng *rand.Rand = rand.New(rand.NewSource(99))
 
 func testDiff(a, b string, t *testing.T) {
-	diff := Diff("-", strings.Split(a, ""), strings.Split(b, ""))
-	actual, err := diff.ApplyToString("-", a)
+	diff := Diff(strings.Split(a, ""), strings.Split(b, ""))
+	actual, err := ApplyToString(diff, a)
 	failIfError(err, t)
 	expected := b
 	assertEquals(expected, actual, t)

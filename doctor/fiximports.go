@@ -190,7 +190,7 @@ func (r *FixImportsTransformation) resolveSelector(ident *ast.Ident, unusedImpor
 func (r *FixImportsTransformation) fixImports(imports map[string]string) {
 	replaceRange, suffix := r.findReplacementRange()
 	replacement := r.constructNewImportStatement(imports) + suffix
-	r.editSet.Add(r.filename, replaceRange, replacement)
+	r.editSet[r.filename].Add(replaceRange, replacement)
 }
 
 func (r *FixImportsTransformation) findReplacementRange() (OffsetLength, string) {

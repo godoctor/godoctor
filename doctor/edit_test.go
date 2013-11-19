@@ -11,10 +11,8 @@ import (
 	"testing"
 )
 
-const FILENAME = "-"
-
 func applyToString(e EditSet, s string) string {
-	result, err := e.ApplyToString(FILENAME, s)
+	result, err := ApplyToString(e, s)
 	if err != nil {
 		return "ERROR: " + err.Error()
 	} else {
@@ -26,13 +24,12 @@ func TestEditString(t *testing.T) {
 	es := NewEditSet()
 	assertEquals("", es.String(), t)
 
-	es.Add(FILENAME, OffsetLength{5, 6}, "x")
-	es.Add(FILENAME, OffsetLength{1, 2}, "y")
-	es.Add(FILENAME, OffsetLength{3, 4}, "z")
-	assertEquals(`Edits for -:
-    Replace offset 1, length 2 with "y"
-    Replace offset 3, length 4 with "z"
-    Replace offset 5, length 6 with "x"
+	es.Add(OffsetLength{5, 6}, "x")
+	es.Add(OffsetLength{1, 2}, "y")
+	es.Add(OffsetLength{3, 4}, "z")
+	assertEquals(`Replace offset 1, length 2 with "y"
+Replace offset 3, length 4 with "z"
+Replace offset 5, length 6 with "x"
 `, es.String(), t)
 }
 
@@ -43,47 +40,47 @@ func TestEditApply(t *testing.T) {
 	assertEquals(input, applyToString(es, input), t)
 
 	es = NewEditSet()
-	es.Add(FILENAME, OffsetLength{0, 0}, "AAA")
+	es.Add(OffsetLength{0, 0}, "AAA")
 	assertEquals("AAA0123456789", applyToString(es, input), t)
 
 	es = NewEditSet()
-	es.Add(FILENAME, OffsetLength{0, 2}, "AAA")
+	es.Add(OffsetLength{0, 2}, "AAA")
 	assertEquals("AAA23456789", applyToString(es, input), t)
 
 	es = NewEditSet()
-	es.Add(FILENAME, OffsetLength{3, 2}, "")
+	es.Add(OffsetLength{3, 2}, "")
 	assertEquals("01256789", applyToString(es, input), t)
 
 	es = NewEditSet()
-	es.Add(FILENAME, OffsetLength{8, 3}, "")
+	es.Add(OffsetLength{8, 3}, "")
 	assertError(applyToString(es, input), t)
 
 	es = NewEditSet()
-	err := es.Add(FILENAME, OffsetLength{-1, 3}, "")
+	err := es.Add(OffsetLength{-1, 3}, "")
 	assertTrue(err != nil, t)
 	//assertError(applyToString(es, input), t)
 
 	es = NewEditSet()
-	es.Add(FILENAME, OffsetLength{12, 3}, "")
+	es.Add(OffsetLength{12, 3}, "")
 	assertError(applyToString(es, input), t)
 
 	es = NewEditSet()
-	es.Add(FILENAME, OffsetLength{2, 0}, "A")
-	es.Add(FILENAME, OffsetLength{8, 1}, "B")
-	es.Add(FILENAME, OffsetLength{4, 0}, "C")
-	es.Add(FILENAME, OffsetLength{6, 2}, "D")
+	es.Add(OffsetLength{2, 0}, "A")
+	es.Add(OffsetLength{8, 1}, "B")
+	es.Add(OffsetLength{4, 0}, "C")
+	es.Add(OffsetLength{6, 2}, "D")
 	assertEquals("01A23C45DB9", applyToString(es, input), t)
 
 	es = NewEditSet()
-	es.Add(FILENAME, OffsetLength{0, 0}, "ABC")
+	es.Add(OffsetLength{0, 0}, "ABC")
 	assertEquals("ABC", applyToString(es, ""), t)
 
 	es = NewEditSet()
-	es.Add(FILENAME, OffsetLength{0, 3}, "")
+	es.Add(OffsetLength{0, 3}, "")
 	assertEquals("", applyToString(es, "ABC"), t)
 
 	es = NewEditSet()
-	es.Add(FILENAME, OffsetLength{0, 0}, "")
+	es.Add(OffsetLength{0, 0}, "")
 	assertEquals("", applyToString(es, ""), t)
 }
 
@@ -121,13 +118,13 @@ func TestCreatePatch(t *testing.T) {
 	s := "Line1....\nLine2....\nLine3....\nLine4"
 
 	es := NewEditSet()
-	p, err := es.CreatePatch(FILENAME, strings.NewReader(s))
+	p, err := es.CreatePatch("filename", strings.NewReader(s))
 	assertTrue(err == nil, t)
 	assertTrue(len(p.hunks) == 0, t)
 
 	es = NewEditSet()
-	es.Add(FILENAME, OffsetLength{0, 0}, "AAA")
-	p, err = es.CreatePatch(FILENAME, strings.NewReader(s))
+	es.Add(OffsetLength{0, 0}, "AAA")
+	p, err = es.CreatePatch("filename", strings.NewReader(s))
 	assertTrue(err == nil, t)
 	assertTrue(len(p.hunks) == 1, t)
 	assertTrue(p.hunks[0].startOffset == 0, t)
@@ -136,8 +133,8 @@ func TestCreatePatch(t *testing.T) {
 		p.hunks[0].hunk.String(), t)
 
 	es = NewEditSet()
-	es.Add(FILENAME, OffsetLength{0, 2}, "AAA")
-	p, err = es.CreatePatch(FILENAME, strings.NewReader(s))
+	es.Add(OffsetLength{0, 2}, "AAA")
+	p, err = es.CreatePatch("filename", strings.NewReader(s))
 	assertTrue(err == nil, t)
 	assertTrue(len(p.hunks) == 1, t)
 	assertTrue(p.hunks[0].startOffset == 0, t)
@@ -146,8 +143,8 @@ func TestCreatePatch(t *testing.T) {
 		p.hunks[0].hunk.String(), t)
 
 	es = NewEditSet()
-	es.Add(FILENAME, OffsetLength{2, 5}, "AAA")
-	p, err = es.CreatePatch(FILENAME, strings.NewReader(s))
+	es.Add(OffsetLength{2, 5}, "AAA")
+	p, err = es.CreatePatch("filename", strings.NewReader(s))
 	assertTrue(err == nil, t)
 	assertTrue(len(p.hunks) == 1, t)
 	assertTrue(p.hunks[0].startOffset == 0, t)
@@ -156,8 +153,8 @@ func TestCreatePatch(t *testing.T) {
 		p.hunks[0].hunk.String(), t)
 
 	es = NewEditSet()
-	es.Add(FILENAME, OffsetLength{2, 15}, "AAA")
-	p, err = es.CreatePatch(FILENAME, strings.NewReader(s))
+	es.Add(OffsetLength{2, 15}, "AAA")
+	p, err = es.CreatePatch("filename", strings.NewReader(s))
 	assertTrue(err == nil, t)
 	assertTrue(len(p.hunks) == 1, t)
 	assertTrue(p.hunks[0].startOffset == 0, t)
@@ -168,9 +165,9 @@ func TestCreatePatch(t *testing.T) {
 	// Line n starts at offset (n-1)*5
 	s2 := "1...\n2...\n3...\n4...\n5...\n6...\n7...\n8...\n9...\n0...\n"
 	es = NewEditSet()
-	es.Add(FILENAME, OffsetLength{20, 2}, "5555\n5!")
-	es.Add(FILENAME, OffsetLength{40, 0}, "CCC")
-	p, err = es.CreatePatch(FILENAME, strings.NewReader(s2))
+	es.Add(OffsetLength{20, 2}, "5555\n5!")
+	es.Add(OffsetLength{40, 0}, "CCC")
+	p, err = es.CreatePatch("filename", strings.NewReader(s2))
 	assertTrue(err == nil, t)
 	assertTrue(len(p.hunks) == 1, t)
 	assertTrue(p.hunks[0].startOffset == 5, t)
@@ -180,9 +177,9 @@ func TestCreatePatch(t *testing.T) {
 	assertTrue(len(p.hunks[0].edits) == 2, t)
 
 	es = NewEditSet()
-	es.Add(FILENAME, OffsetLength{0, 0}, "A")
-	es.Add(FILENAME, OffsetLength{36, 0}, "B")
-	p, err = es.CreatePatch(FILENAME, strings.NewReader(s2))
+	es.Add(OffsetLength{0, 0}, "A")
+	es.Add(OffsetLength{36, 0}, "B")
+	p, err = es.CreatePatch("filename", strings.NewReader(s2))
 	assertTrue(err == nil, t)
 	assertTrue(len(p.hunks) == 2, t)
 	assertTrue(p.hunks[0].startOffset == 0, t)
@@ -232,8 +229,8 @@ Line 10`
  Line 8
  Line 9
  Line 10`
-	edits := Diff("test.txt", strings.SplitAfter(a, "\n"), strings.SplitAfter(b, "\n"))
-	s, _ := edits.ApplyToString("test.txt", a)
+	edits := Diff(strings.SplitAfter(a, "\n"), strings.SplitAfter(b, "\n"))
+	s, _ := ApplyToString(edits, a)
 	assertEquals(b, s, t)
 	patch, _ := edits.CreatePatch("test.txt", strings.NewReader(a))
 	assertEquals(expected, patch.String(), t)

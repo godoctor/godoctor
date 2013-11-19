@@ -23,8 +23,8 @@ import (
 // To run the null refactoring:
 // * Create a NullRefactoring object.
 // * Invoke SetSelection to determine what file to refactor.
-// * Invoke Run to construct the EditSet.
-// * Invoke GetResult to get the resulting Log and EditSet.
+// * Invoke Run to construct the EditSets.
+// * Invoke GetResult to get the resulting Log and EditSets.
 type NullRefactoring struct {
 	RefactoringBase
 }

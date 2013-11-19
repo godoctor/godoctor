@@ -37,7 +37,7 @@ import (
 // deletion, i.e., its length is the length of the current line and its
 // replacement text is the empty string, or (2) an addition, i.e., its length
 // is 0 and its replacement text is a single line to insert.
-func Diff(filename string, a []string, b []string) EditSet {
+func Diff(a []string, b []string) EditSet {
 	n := len(a)
 	m := len(b)
 	max := m + n
@@ -45,11 +45,11 @@ func Diff(filename string, a []string, b []string) EditSet {
 		return NewEditSet()
 	} else if n == 0 {
 		result := NewEditSet()
-		result.Add(filename, OffsetLength{0, 0}, strings.Join(b, ""))
+		result.Add(OffsetLength{0, 0}, strings.Join(b, ""))
 		return result
 	} else if m == 0 {
 		result := NewEditSet()
-		result.Add(filename, OffsetLength{0, len(strings.Join(a, ""))}, "")
+		result.Add(OffsetLength{0, len(strings.Join(a, ""))}, "")
 		return result
 	}
 	vs := make([][]int, 0, max)
@@ -80,7 +80,7 @@ func Diff(filename string, a []string, b []string) EditSet {
 			if x >= n && y >= m {
 				// length of SES is D
 				vs = append(vs, v)
-				return constructEditSet(filename, a, b, vs)
+				return constructEditSet(a, b, vs)
 			}
 		}
 		v_copy := make([]int, len(v))
@@ -102,7 +102,7 @@ func abs(n int) int {
 // ConstructEditSet is a utility method invoked by Diff upon completion.  It
 // uses the matrix vs (computed by Diff) to compute a sequence of deletions and
 // additions.
-func constructEditSet(filename string, a []string, b []string, vs [][]int) EditSet {
+func constructEditSet(a []string, b []string, vs [][]int) EditSet {
 	n := len(a)
 	m := len(b)
 	max := m + n
@@ -133,7 +133,7 @@ func constructEditSet(filename string, a []string, b []string, vs [][]int) EditS
 			ol := OffsetLength{offsetOfString(insertOffset, a), 0}
 			copyOffset := y - charsToCopy - 1
 			replaceWith := b[copyOffset : copyOffset+1]
-			result.Add(filename, ol, strings.Join(replaceWith, ""))
+			result.Add(ol, strings.Join(replaceWith, ""))
 		} else {
 			// Delete
 			charsToCopy := x - next_x - 1
@@ -142,7 +142,7 @@ func constructEditSet(filename string, a []string, b []string, vs [][]int) EditS
 				offsetOfString(deleteOffset, a),
 				len(a[deleteOffset])}
 			replaceWith := ""
-			result.Add(filename, ol, replaceWith)
+			result.Add(ol, replaceWith)
 		}
 	}
 	return result
@@ -175,29 +175,12 @@ type Patch struct {
 }
 
 // FIXME(jeff) produce correct output when no edits are applied
-// FIXME(jeff) produce multi-file patches
-// with one file, this doesn't quite match the intent of the EditSet interface
-
-func (p *Patch) Edits() map[string][]edit {
-	edits := []edit{}
-	for _, hunk := range p.hunks {
-		edits = append(edits, hunk.edits...)
-	}
-	return map[string][]edit{p.filename: edits}
-}
 
 func (p *Patch) Add(string, OffsetLength, string) error {
 	return errors.New("Add cannot be called on Patch (read-only)")
 }
-func (p *Patch) ApplyTo(key string, in io.Reader, out io.Writer) error {
-	panic("Not implemented")
-}
 
-func (p *Patch) ApplyToFile(filename string, out io.Writer) error {
-	panic("Not implemented")
-}
-
-func (p *Patch) ApplyToString(key string, s string) (string, error) {
+func (p *Patch) ApplyTo(in io.Reader, out io.Writer) error {
 	panic("Not implemented")
 }
 
@@ -235,14 +218,11 @@ func (p *Patch) Write(out io.Writer) error {
 
 // WriteUnifiedDiffHunk writes a single hunk in unified diff format.
 func writeUnifiedDiffHunk(h *hunk, outputLineOffset int, out io.Writer) (int, error) {
-	es := editSet{edits: map[string][]edit{"": h.edits}}
-	var newTextBuffer bytes.Buffer
 	hunk := h.hunk.String()
-	err := es.ApplyTo("", strings.NewReader(hunk), &newTextBuffer)
+	newText, err := ApplyToString(&editSet{edits: h.edits}, hunk)
 	if err != nil {
 		return 0, err
 	}
-	newText := newTextBuffer.String()
 
 	origLines := strings.SplitAfter(hunk, "\n")
 	newLines := strings.SplitAfter(newText, "\n")
@@ -253,11 +233,11 @@ func writeUnifiedDiffHunk(h *hunk, outputLineOffset int, out io.Writer) (int, er
 		return 0, err
 	}
 
-	diff := Diff("", origLines, newLines)
+	diff := Diff(origLines, newLines)
 	var sesIter *editIter
 	switch ses := diff.(type) {
 	case *editSet:
-		sesIter = ses.newEditIter("")
+		sesIter = ses.newEditIter()
 	default:
 		panic("Unreachable")
 	}
@@ -427,8 +407,8 @@ type editIter struct {
 }
 
 // Creates a new editIter with the first edit in the given file marked.
-func (e *editSet) newEditIter(filename string) *editIter {
-	return &editIter{e.edits[filename], 0}
+func (e *editSet) newEditIter() *editIter {
+	return &editIter{e.edits, 0}
 }
 
 // Edit returns the edit currently under the mark, or nil if no edits remain.
@@ -447,8 +427,8 @@ func (e *editIter) moveToNextEdit() {
 
 // The CreatePatch method on editSet delegates to this method, which creates
 // a Patch from an editSet.
-func createPatch(e *editSet, key string, in io.Reader) (result *Patch, err error) {
-	result = &Patch{filename: key}
+func createPatch(e *editSet, filename string, in io.Reader) (result *Patch, err error) {
+	result = &Patch{filename: filename}
 
 	if len(e.edits) == 0 {
 		return
@@ -461,7 +441,7 @@ func createPatch(e *editSet, key string, in io.Reader) (result *Patch, err error
 	)
 
 	reader := newLineRdr(in)
-	editIter := e.newEditIter(key)
+	editIter := e.newEditIter()
 	curState := HUNK_NOT_STARTED
 	var hunk *hunk = nil
 	var trailingCtxLines int

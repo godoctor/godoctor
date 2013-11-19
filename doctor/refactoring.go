@@ -33,7 +33,8 @@ import (
 //        any arguments.  For example, for the Rename refactoring, you must
 //        specify a new name for the entity being renamed.
 //     3. Invoke Run.
-//     4. Invoke GetResult to get the resulting Log and EditSet.
+//     4. Invoke GetResult to get the resulting Log and the EditSet for each
+//        file.
 //
 // Name returns a human-readable name for the refactoring, properly capitalized
 // (e.g., "Rename" or "Extract Function").  Every refactoring should have a
@@ -60,11 +61,12 @@ import (
 //
 // Informational message, errors, and warnings are logged so that they can be
 // displayed to the user.  This log can be obtained by invoking the GetLog
-// method, or it can be obtained along with the resulting EditSet by invoking
+// method, or it can be obtained along with the resulting EditSets by invoking
 // the GetResult method.
 //
-// If the log contains errors (log.ContainsErrors()), the resulting EditSet
-// may be empty, since it may not be possible to perform the refactoring.
+// If the log contains errors (log.ContainsErrors()), the resulting map of
+// EditSets may be empty or incomplete, since it may not be possible to perform
+// the refactoring.
 type Refactoring interface {
 	Name() string
 	SetSelection(selection TextSelection, mainFile string) bool
@@ -72,7 +74,7 @@ type Refactoring interface {
 	Run()
 	GetParams() []string
 	GetLog() *Log
-	GetResult() (*Log, EditSet)
+	GetResult() (*Log, map[string]EditSet)
 }
 
 type RefactoringBase struct {
@@ -84,7 +86,7 @@ type RefactoringBase struct {
 	selectionEnd   token.Pos
 	selectedNode   ast.Node
 	log            *Log
-	editSet        EditSet
+	editSet        map[string]EditSet
 }
 
 // Configures a refactoring by indicating the filename in which text is
@@ -183,7 +185,7 @@ func (r *RefactoringBase) SetSelection(selection TextSelection, mainFile string)
 		r.selectionStart, r.selectionEnd)
 	r.selectedNode = nodes[0]
 
-	r.editSet = NewEditSet()
+	r.editSet = map[string]EditSet{selection.filename: NewEditSet()}
 	return true
 }
 
@@ -237,7 +239,7 @@ func (r *RefactoringBase) checkForErrors() {
 	}
 	sourceFromFile := string(contents)
 
-	string, err := r.editSet.ApplyToString(r.filename, sourceFromFile)
+	string, err := ApplyToString(r.editSet[r.filename], sourceFromFile)
 	if err != nil {
 		r.log.Log(ERROR, "Transformation produced invalid EditSet: "+
 			err.Error())
@@ -267,7 +269,7 @@ func (r *RefactoringBase) GetLog() *Log {
 	return r.log
 }
 
-func (r *RefactoringBase) GetResult() (*Log, EditSet) {
+func (r *RefactoringBase) GetResult() (*Log, map[string]EditSet) {
 	return r.log, r.editSet
 }
 
