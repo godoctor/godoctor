@@ -216,9 +216,25 @@ This is line 7.5
 Line 8
 Line 9
 Line 10`
+	expected := `--- test.txt
++++ test.txt
+@@ -1,10 +1,10 @@
+-Line 1
+ Line 2
+ Line 3
+ Line 4
+ Line 5
+-Line 6
+-Line 7
++Line 6 has changed
++Line 7 has also changed
++This is line 7.5
+ Line 8
+ Line 9
+ Line 10`
 	edits := Diff("test.txt", strings.SplitAfter(a, "\n"), strings.SplitAfter(b, "\n"))
-	//t.Error(edits)
 	s, _ := edits.ApplyToString("test.txt", a)
 	assertEquals(b, s, t)
-	//t.Error(edits.CreatePatch("test.txt", strings.NewReader(a)))
+	patch, _ := edits.CreatePatch("test.txt", strings.NewReader(a))
+	assertEquals(expected, patch.String(), t)
 }
