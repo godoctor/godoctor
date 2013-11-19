@@ -7,6 +7,7 @@
 package doctor
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -116,37 +117,6 @@ func TestLineRdr(t *testing.T) {
 	assertEquals("Line4....\n", r.leadingCtxLines[2], t)
 }
 
-//func TestHunk(t *testing.T) {
-//	// Line2 starts at offset 10, Line3 at 20, etc.
-//	s := "Line1....\nLine2....\nLine3....\nLine4"
-//
-//	lr := newLineReader(strings.NewReader(s))
-//	assertTrue(lr.scanToNextLine(), t)
-//	h := newHunk(lr)
-//	assertTrue(h.startOffset == 0, t)
-//	assertTrue(h.startLine == 1, t)
-//	assertEquals("Line1....\n", h.hunk.String(), t)
-//
-//	lr = newLineReader(strings.NewReader(s))
-//	assertTrue(lr.scanToNextLine(), t)
-//	h = newHunk(lr)
-//	assertTrue(lr.scanToNextLine(), t)
-//	h.bufferThroughLineContaining(lr.lineOffset, lr)
-//	assertTrue(h.startOffset == 0, t)
-//	assertTrue(h.startLine == 1, t)
-//	assertEquals("Line1....\nLine2....\n", h.hunk.String(), t)
-//
-//	lr = newLineReader(strings.NewReader(s))
-//	_, err := lr.skipToLineContainingOffset(23)
-//	assertTrue(err == nil, t)
-//	h = newHunk(lr)
-//	assertTrue(lr.scanToNextLine(), t)
-//	h.bufferThroughLineContaining(lr.lineOffset, lr)
-//	assertTrue(h.startOffset == 20, t)
-//	assertTrue(h.startLine == 3, t)
-//	assertEquals("Line3....\nLine4", h.hunk.String(), t)
-//}
-
 func TestCreatePatch(t *testing.T) {
 	// Line2 starts at offset 10, Line3 at 20, etc.
 	s := "Line1....\nLine2....\nLine3....\nLine4"
@@ -214,6 +184,7 @@ func TestCreatePatch(t *testing.T) {
 	es.Add(FILENAME, OffsetLength{0, 0}, "A")
 	es.Add(FILENAME, OffsetLength{36, 0}, "B")
 	p, err = es.CreatePatch(FILENAME, strings.NewReader(s2))
+	fmt.Println(p)
 	assertTrue(err == nil, t)
 	assertTrue(len(p.hunks) == 2, t)
 	assertTrue(p.hunks[0].startOffset == 0, t)
@@ -224,4 +195,32 @@ func TestCreatePatch(t *testing.T) {
 	assertTrue(p.hunks[1].startLine == 5, t)
 	assertTrue(p.hunks[1].numLines == 6, t)
 	assertTrue(len(p.hunks[1].edits) == 1, t)
+}
+
+func TestUnifiedDiff(t *testing.T) {
+	a := `Line 1
+Line 2
+Line 3
+Line 4
+Line 5
+Line 6
+Line 7
+Line 8
+Line 9
+Line 10`
+	b := `Line 2
+Line 3
+Line 4
+Line 5
+Line 6 has changed
+Line 7 has also changed
+This is line 7.5
+Line 8
+Line 9
+Line 10`
+	edits := Diff("test.txt", a, b)
+	t.Error(edits)
+	s, _ := edits.ApplyToString("test.txt", a)
+	assertEquals(b, s, t)
+	t.Error(edits.CreatePatch("test.txt", strings.NewReader(a)))
 }

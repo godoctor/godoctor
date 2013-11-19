@@ -542,6 +542,16 @@ func (l *lineRdr) offsetPastEnd() int {
 	return l.lineOffset + len(l.line)
 }
 
+// Returns true iff the given edit adds characters at the beginning of this line
+// without modifying or deleting any characters in the line.
+func (l *lineRdr) editAddsToStart(e *edit) bool {
+	if e == nil {
+		return false
+	} else {
+		return e.Offset == l.lineOffset && e.Length == 0
+	}
+}
+
 // Returns true iff the given edit adds characters to, modifies, or deletes
 // characters from the line that was most recently read.
 func (l *lineRdr) currentLineIsAffectedBy(e *edit) bool {
@@ -550,6 +560,16 @@ func (l *lineRdr) currentLineIsAffectedBy(e *edit) bool {
 	} else {
 		return e.Offset < l.offsetPastEnd() &&
 			e.OffsetPastEnd() >= l.lineOffset
+	}
+}
+
+// Returns true iff the given edit adds characters to, modifies, or deletes
+// characters from the line following the line that was most recently read.
+func (l *lineRdr) nextLineIsAffectedBy(e *edit) bool {
+	if e == nil {
+		return false
+	} else {
+		return e.OffsetPastEnd() >= l.offsetPastEnd()
 	}
 }
 
@@ -621,25 +641,47 @@ func (e *editSet) CreatePatch(key string, in io.Reader) (result *Patch, err erro
 		case HUNK_NOT_STARTED:
 			if reader.currentLineIsAffectedBy(editIter.edit()) {
 				hunk = startHunk(reader)
-				curState = ADDING_TO_HUNK
+				last := addAllEditsOnCurrentLine(hunk, reader, editIter)
+				if reader.nextLineIsAffectedBy(last) {
+					curState = ADDING_TO_HUNK
+				} else {
+					if reader.editAddsToStart(last) {
+						trailingCtxLines = 1
+					} else {
+						trailingCtxLines = 0
+					}
+					curState = EDIT_ADDED_TO_HUNK
+				}
 			} else {
 				curState = HUNK_NOT_STARTED
 			}
 		case ADDING_TO_HUNK:
 			hunk.addLine(reader.line)
-			if reader.currentLineIsAffectedBy(editIter.edit()) {
+			last := addAllEditsOnCurrentLine(hunk, reader, editIter)
+			if reader.nextLineIsAffectedBy(last) {
 				curState = ADDING_TO_HUNK
 			} else {
-				hunk.addEdit(editIter.edit())
-				trailingCtxLines = 1
-				editIter.moveToNextEdit()
+				if reader.editAddsToStart(last) {
+					trailingCtxLines = 1
+				} else {
+					trailingCtxLines = 0
+				}
 				curState = EDIT_ADDED_TO_HUNK
 			}
-
 		case EDIT_ADDED_TO_HUNK:
 			hunk.addLine(reader.line)
 			if reader.currentLineIsAffectedBy(editIter.edit()) {
-				curState = ADDING_TO_HUNK
+				last := addAllEditsOnCurrentLine(hunk, reader, editIter)
+				if reader.nextLineIsAffectedBy(last) {
+					curState = ADDING_TO_HUNK
+				} else {
+					if reader.editAddsToStart(last) {
+						trailingCtxLines = 1
+					} else {
+						trailingCtxLines = 0
+					}
+					curState = EDIT_ADDED_TO_HUNK
+				}
 			} else {
 				trailingCtxLines++
 				if trailingCtxLines < 2*num_ctx_lines {
@@ -657,7 +699,7 @@ func (e *editSet) CreatePatch(key string, in io.Reader) (result *Patch, err erro
 			hunk.addLine(reader.line)
 		}
 		if curState == ADDING_TO_HUNK {
-			hunk.addEdit(editIter.edit())
+			addAllEditsOnCurrentLine(hunk, reader, editIter)
 		}
 		result.add(hunk)
 	}
@@ -665,4 +707,18 @@ func (e *editSet) CreatePatch(key string, in io.Reader) (result *Patch, err erro
 		err = nil
 	}
 	return
+}
+
+func addAllEditsOnCurrentLine(hunk *hunk, reader *lineRdr, editIter *editIter) *edit {
+	var lastEdit *edit = editIter.edit()
+	for reader.currentLineIsAffectedBy(editIter.edit()) {
+		if reader.nextLineIsAffectedBy(editIter.edit()) {
+			return lastEdit
+		} else {
+			lastEdit = editIter.edit()
+			hunk.addEdit(editIter.edit())
+			editIter.moveToNextEdit()
+		}
+	}
+	return lastEdit
 }
