@@ -24,6 +24,10 @@ type OffsetLength struct {
 	Length int `json:"length"`
 }
 
+func (o *OffsetLength) OffsetPastEnd() int {
+	return o.Offset + o.Length
+}
+
 func (o *OffsetLength) String() string {
 	return "offset " + strconv.Itoa(o.Offset) +
 		", length " + strconv.Itoa(o.Length)

@@ -7,6 +7,7 @@
 package doctor
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -58,8 +59,9 @@ func TestEditApply(t *testing.T) {
 	assertError(applyToString(es, input), t)
 
 	es = NewEditSet()
-	es.Add(FILENAME, OffsetLength{-1, 3}, "")
-	assertError(applyToString(es, input), t)
+	err := es.Add(FILENAME, OffsetLength{-1, 3}, "")
+	assertTrue(err != nil, t)
+	//assertError(applyToString(es, input), t)
 
 	es = NewEditSet()
 	es.Add(FILENAME, OffsetLength{12, 3}, "")
@@ -83,4 +85,143 @@ func TestEditApply(t *testing.T) {
 	es = NewEditSet()
 	es.Add(FILENAME, OffsetLength{0, 0}, "")
 	assertEquals("", applyToString(es, ""), t)
+}
+
+func TestLineRdr(t *testing.T) {
+	// Line2 starts at offset 10, Line3 at 20, etc.
+	s := "Line1....\nLine2....\nLine3....\nLine4....\nLine5"
+	r := newLineRdr(strings.NewReader(s))
+
+	r.readLine()
+	assertEquals("Line1....\n", r.line, t)
+	assertTrue(r.lineOffset == 0, t)
+	assertTrue(r.lineNum == 1, t)
+	assertTrue(len(r.leadingCtxLines) == 0, t)
+
+	r.readLine()
+	assertEquals("Line2....\n", r.line, t)
+	assertTrue(r.lineOffset == 10, t)
+	assertTrue(r.lineNum == 2, t)
+	assertTrue(len(r.leadingCtxLines) == 1, t)
+
+	r.readLine()
+	r.readLine()
+	r.readLine()
+	assertEquals("Line5", r.line, t)
+	assertTrue(r.lineOffset == 40, t)
+	assertTrue(r.lineNum == 5, t)
+	assertTrue(len(r.leadingCtxLines) == num_ctx_lines, t)
+	assertEquals("Line2....\n", r.leadingCtxLines[0], t)
+	assertEquals("Line3....\n", r.leadingCtxLines[1], t)
+	assertEquals("Line4....\n", r.leadingCtxLines[2], t)
+}
+
+//func TestHunk(t *testing.T) {
+//	// Line2 starts at offset 10, Line3 at 20, etc.
+//	s := "Line1....\nLine2....\nLine3....\nLine4"
+//
+//	lr := newLineReader(strings.NewReader(s))
+//	assertTrue(lr.scanToNextLine(), t)
+//	h := newHunk(lr)
+//	assertTrue(h.startOffset == 0, t)
+//	assertTrue(h.startLine == 1, t)
+//	assertEquals("Line1....\n", h.hunk.String(), t)
+//
+//	lr = newLineReader(strings.NewReader(s))
+//	assertTrue(lr.scanToNextLine(), t)
+//	h = newHunk(lr)
+//	assertTrue(lr.scanToNextLine(), t)
+//	h.bufferThroughLineContaining(lr.lineOffset, lr)
+//	assertTrue(h.startOffset == 0, t)
+//	assertTrue(h.startLine == 1, t)
+//	assertEquals("Line1....\nLine2....\n", h.hunk.String(), t)
+//
+//	lr = newLineReader(strings.NewReader(s))
+//	_, err := lr.skipToLineContainingOffset(23)
+//	assertTrue(err == nil, t)
+//	h = newHunk(lr)
+//	assertTrue(lr.scanToNextLine(), t)
+//	h.bufferThroughLineContaining(lr.lineOffset, lr)
+//	assertTrue(h.startOffset == 20, t)
+//	assertTrue(h.startLine == 3, t)
+//	assertEquals("Line3....\nLine4", h.hunk.String(), t)
+//}
+
+func TestCreatePatch(t *testing.T) {
+	// Line2 starts at offset 10, Line3 at 20, etc.
+	s := "Line1....\nLine2....\nLine3....\nLine4"
+
+	es := NewEditSet()
+	p, err := es.CreatePatch(FILENAME, strings.NewReader(s))
+	assertTrue(err == nil, t)
+	assertTrue(len(p.hunks) == 0, t)
+
+	es = NewEditSet()
+	es.Add(FILENAME, OffsetLength{0, 0}, "AAA")
+	p, err = es.CreatePatch(FILENAME, strings.NewReader(s))
+	assertTrue(err == nil, t)
+	assertTrue(len(p.hunks) == 1, t)
+	assertTrue(p.hunks[0].startOffset == 0, t)
+	assertTrue(p.hunks[0].startLine == 1, t)
+	assertEquals("Line1....\nLine2....\nLine3....\nLine4",
+		p.hunks[0].hunk.String(), t)
+
+	es = NewEditSet()
+	es.Add(FILENAME, OffsetLength{0, 2}, "AAA")
+	p, err = es.CreatePatch(FILENAME, strings.NewReader(s))
+	assertTrue(err == nil, t)
+	assertTrue(len(p.hunks) == 1, t)
+	assertTrue(p.hunks[0].startOffset == 0, t)
+	assertTrue(p.hunks[0].startLine == 1, t)
+	assertEquals("Line1....\nLine2....\nLine3....\nLine4",
+		p.hunks[0].hunk.String(), t)
+
+	es = NewEditSet()
+	es.Add(FILENAME, OffsetLength{2, 5}, "AAA")
+	p, err = es.CreatePatch(FILENAME, strings.NewReader(s))
+	assertTrue(err == nil, t)
+	assertTrue(len(p.hunks) == 1, t)
+	assertTrue(p.hunks[0].startOffset == 0, t)
+	assertTrue(p.hunks[0].startLine == 1, t)
+	assertEquals("Line1....\nLine2....\nLine3....\nLine4",
+		p.hunks[0].hunk.String(), t)
+
+	es = NewEditSet()
+	es.Add(FILENAME, OffsetLength{2, 15}, "AAA")
+	p, err = es.CreatePatch(FILENAME, strings.NewReader(s))
+	assertTrue(err == nil, t)
+	assertTrue(len(p.hunks) == 1, t)
+	assertTrue(p.hunks[0].startOffset == 0, t)
+	assertTrue(p.hunks[0].startLine == 1, t)
+	assertEquals("Line1....\nLine2....\nLine3....\nLine4",
+		p.hunks[0].hunk.String(), t)
+
+	// Line n starts at offset (n-1)*5
+	s2 := "1...\n2...\n3...\n4...\n5...\n6...\n7...\n8...\n9...\n0...\n"
+	es = NewEditSet()
+	es.Add(FILENAME, OffsetLength{20, 2}, "5555\n5!")
+	es.Add(FILENAME, OffsetLength{40, 0}, "CCC")
+	p, err = es.CreatePatch(FILENAME, strings.NewReader(s2))
+	assertTrue(err == nil, t)
+	assertTrue(len(p.hunks) == 1, t)
+	assertTrue(p.hunks[0].startOffset == 5, t)
+	assertTrue(p.hunks[0].startLine == 2, t)
+	assertTrue(p.hunks[0].numLines == 9, t)
+	assertEquals("2...\n3...\n4...\n5...\n6...\n7...\n8...\n9...\n0...\n", p.hunks[0].hunk.String(), t)
+	assertTrue(len(p.hunks[0].edits) == 2, t)
+
+	es = NewEditSet()
+	es.Add(FILENAME, OffsetLength{0, 0}, "A")
+	es.Add(FILENAME, OffsetLength{36, 0}, "B")
+	p, err = es.CreatePatch(FILENAME, strings.NewReader(s2))
+	assertTrue(err == nil, t)
+	assertTrue(len(p.hunks) == 2, t)
+	assertTrue(p.hunks[0].startOffset == 0, t)
+	assertTrue(p.hunks[0].startLine == 1, t)
+	assertTrue(p.hunks[0].numLines >= 4, t) // Actually 7
+	assertTrue(len(p.hunks[0].edits) == 1, t)
+	assertTrue(p.hunks[1].startOffset == 20, t)
+	assertTrue(p.hunks[1].startLine == 5, t)
+	assertTrue(p.hunks[1].numLines == 6, t)
+	assertTrue(len(p.hunks[1].edits) == 1, t)
 }

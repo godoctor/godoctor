@@ -7,6 +7,9 @@
 package doctor
 
 import (
+	"fmt"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -23,11 +26,24 @@ func TestOffsetLength(t *testing.T) {
 // testing do not get compiled into the main driver (TODO maybe there's another
 // way around that?), and this seemed like a reasonable place for them...
 
+func fatalf(t *testing.T, format string, args ...interface{}) {
+	_, file, line, ok := runtime.Caller(2)
+	if ok {
+		var msg string
+		if len(args) == 0 {
+			msg = format
+		} else {
+			msg = fmt.Sprintf(format, args...)
+		}
+		t.Fatalf("from %s:%d: %s", filepath.Base(file), line, msg)
+	}
+}
+
 // assertEquals is a utility method for unit tests that marks a function as
 // having failed if expected != actual
 func assertEquals(expected string, actual string, t *testing.T) {
 	if expected != actual {
-		t.Fatalf("Expected: %s Actual: %s", expected, actual)
+		fatalf(t, "Expected: %s Actual: %s", expected, actual)
 	}
 }
 
@@ -35,6 +51,22 @@ func assertEquals(expected string, actual string, t *testing.T) {
 // having failed if the given string does not begin with "ERROR: "
 func assertError(result string, t *testing.T) {
 	if !strings.HasPrefix(result, "ERROR: ") {
-		t.Fatalf("Expected error; actual: \"%s\"", result)
+		fatalf(t, "Expected error; actual: \"%s\"", result)
+	}
+}
+
+// assertTrue is a utility method for unit tests that marks a function as
+// having succeeded iff the supplied value is true
+func assertTrue(value bool, t *testing.T) {
+	if value != true {
+		fatalf(t, "assertTrue failed")
+	}
+}
+
+// assertFalse is a utility method for unit tests that marks a function as
+// having succeeded iff the supplied value is true
+func assertFalse(value bool, t *testing.T) {
+	if value != false {
+		fatalf(t, "assertFalse failed")
 	}
 }
