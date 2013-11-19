@@ -22,7 +22,7 @@ import (
 
 var (
 	formatFlag = flag.String("format", "plain",
-		"Output in 'plain' or 'json', default: plain")
+		"Output in 'plain' or 'json'")
 
 	helpFlag = flag.Bool("h", false,
 		"Prints usage")
@@ -52,9 +52,9 @@ var (
 )
 
 func usage() {
-	//TODO figure out multi line strings and get back to me
-	fmt.Printf(`Usage of %s:
-  %s [<flag> ...] <file> <refactoring> <args> ...
+	fmt.Printf(
+		`Usage of `+os.Args[0]+`:
+  `+os.Args[0]+` [<flag> ...] <file> <refactoring> <args> ...
 
   The <refactoring> may be one of:
 %v
@@ -62,8 +62,6 @@ func usage() {
   The <flag> arguments are
 
 `,
-		os.Args[0], os.Args[0],
-		//TODO yeahhhh slow down there chief
 		func() (s string) {
 			for key, _ := range doctor.AllRefactorings() {
 				s += "\n  " + key
@@ -71,13 +69,17 @@ func usage() {
 			return
 		}())
 	flag.PrintDefaults()
-	os.Exit(1)
+	fmt.Printf(`
+  <args> are <refactoring> specific and must be provided in order
+  for a <refactoring to occur. To see the <args> for a <refactoring> do:
+
+  ` + os.Args[0] + ` -p <refactoring>`)
+	fmt.Println()
 }
 
 //TODO (reed / josh)  -comments to change comments (if a thing?)
-//TODO learn to func
-//
 //TODO (reed / josh) scope (importer? wait?)
+//TODO (reed) handle errors better (JSON-wise, especially, not log stuff)
 //
 //example query: go-doctor -pos=11,8:11,8 someFile.go rename newName
 //TODO query (stdin): cat file.go | go-doctor -pos=11,8:11,8 rename newName
@@ -87,56 +89,55 @@ func main() {
 
 	if *helpFlag {
 		usage()
+		os.Exit(0)
 	}
 
-	//print all possible refactorings
 	if *listFlag {
-		//TODO eh not sure I like putting this in doctor
 		printAllRefactorings(*formatFlag)
 		os.Exit(0)
 	}
 
 	if len(args) == 0 {
-		fmt.Errorf("Error: Refactoring required")
 		usage()
+		os.Exit(1)
 	}
 
 	r := doctor.GetRefactoring(args[0])
-	var name string
+	var filename string
 
 	//no file given (assume stdin), e.g. go-doctor refactor params...
 	//TODO make stdin and importer get along
-	if r != nil {
-		name = "temp"
+	if r != nil && len(args) > 0 {
+		filename = "temp"
 		args = args[1:]
 	} else {
 		//file given, e.g. go-doctor file refactor params...
 		r = doctor.GetRefactoring(args[1])
-		name = args[0]
+		filename = args[0]
 		args = args[2:]
 	}
 
-	//just return parameters for refactoring
 	if *paramsFlag {
-		printRefactoringParams(r, *formatFlag)
+		printRefactoringParams(*formatFlag, r)
 		os.Exit(0)
 	}
 
 	//do the refactoring
-	l, es, err := query(name, args, r, *posFlag, *scopeFlag)
+	l, es, err := query(filename, args, r, *posFlag, *scopeFlag)
 
+	//TODO what to do about errors in JSON? default reply wrapper?
+	//since these aren't really "log" errors
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	//TODO fall through if json?
-	if l.ContainsErrors() && !*skipLogFlag {
-		fmt.Println(l)
-		os.Exit(1)
-	}
-
 	changes := make(map[string][]byte)
+
+	if l.ContainsErrors() && !*skipLogFlag {
+		printResults(*formatFlag, r.Name(), l, changes)
+		os.Exit(0)
+	}
 
 	//write all edits out to changes; something to work with
 	for file, _ := range es {
@@ -186,9 +187,13 @@ func main() {
 		}
 	}
 
-	//at this point changes either has updated files or diff data
-	//output what we have
-	switch *formatFlag {
+	//At this point changes either has updated files or diff data
+	//so output what we have.
+	printResults(*formatFlag, r.Name(), l, changes)
+}
+
+func printResults(format, refactoring string, log *doctor.Log, changes map[string][]byte) {
+	switch format {
 	case "plain":
 		for file, change := range changes {
 			//TODO show file name, piss off the unix gurus?
@@ -208,8 +213,8 @@ func main() {
 			Log     *doctor.Log       `json:"log"`
 			Changes map[string]string `json:"changes"`
 		}{
-			r.Name(),
-			l,
+			refactoring,
+			log,
 			c,
 		}, "", "\t")
 
@@ -221,12 +226,13 @@ func main() {
 	}
 }
 
-//Figure out how much I like this...
-func printRefactoringParams(r doctor.Refactoring, format string) {
+func printRefactoringParams(format string, r doctor.Refactoring) {
 	switch format {
 	case "plain":
-		for _, p := range r.GetParams() {
-			fmt.Println(p)
+		if r != nil {
+			for _, p := range r.GetParams() {
+				fmt.Println(p)
+			}
 		}
 	case "json":
 		p, err := json.MarshalIndent(struct {
