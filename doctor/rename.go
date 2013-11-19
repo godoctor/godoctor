@@ -3,7 +3,7 @@ package doctor
 // This file defines the Rename refactoring.
 
 import (
-	"fmt"
+	//"fmt"
 	"go/ast"
 	"strings"
 	"unicode"
@@ -18,8 +18,8 @@ import (
 // * Create a RenameRefactoring.
 // * Invoke SetSelection to determine what identifier to rename.
 // * Invoke SetNewName to set the new name for the identifier.
-// * Invoke Run to construct the EditSet.
-// * Invoke GetResult to get the resulting Log and EditSet.
+// * Invoke Run to construct the EditSets.
+// * Invoke GetResult to get the resulting Log and EditSets.
 //
 type RenameRefactoring struct {
 	RefactoringBase
@@ -72,17 +72,17 @@ func (r *RenameRefactoring) Run() {
 				//TODO make a call to find if method
 				//r.FindIfMethod(identname)
 
-				//fmt.Println("function is  exportable")	
+				//fmt.Println("function is  exportable")
 				r.findOccurrencesofFunction(ident)
 
 			} else {
 
 				// fmt.Println("function is not exportable")
-				//for now treat it same as local variable 
+				//for now treat it same as local variable
 
 				for _, occurrence := range r.findOccurrences(ident) {
 					//TODO add edits to all files in same pkg
-					r.editSet.Add(r.filename, occurrence, r.newName)
+					r.editSet[r.filename].Add(occurrence, r.newName)
 				}
 
 			}
@@ -92,7 +92,7 @@ func (r *RenameRefactoring) Run() {
 			for _, occurrence := range r.findOccurrences(ident) {
 				//TODO NOT HARD CODED FILENAME (reed)
 				//iterate over files from a "fileSet"? importer? IDK my BFF Jill
-				r.editSet.Add(r.filename, occurrence, r.newName)
+				r.editSet[r.filename].Add(occurrence, r.newName)
 				// fmt.Println("this is the  selected filename",r.filename)
 			}
 
@@ -150,7 +150,7 @@ func (r *RenameRefactoring) findIfFunctionName(identname string) bool {
 
 					if thisIdent.Name.Name == identname {
 
-						fmt.Println("selected identifier is  name of a function")
+						//fmt.Println("selected identifier is  name of a function")
 
 						isafunction = true
 
@@ -182,9 +182,9 @@ func (r *RenameRefactoring) IsFunctionExportable(funcname string) bool {
 }
 
 //TODO Reddy: does not work as intended with pakcages
-//     importer is loaded with duplicates Need to verify after avoiding that       
+//     importer is loaded with duplicates Need to verify after avoiding that
 
-//Finds the references of function name from all files 
+//Finds the references of function name from all files
 //Adds all the references to editSet
 
 func (r *RenameRefactoring) findOccurrencesofFunction(ident *ast.Ident) {
@@ -199,7 +199,7 @@ func (r *RenameRefactoring) findOccurrencesofFunction(ident *ast.Ident) {
 
 		for _, file := range r.pkgInfo.Files {
 
-			fmt.Println("FILENAME:", r.importer.Fset.Position(file.Pos()).Filename)
+			//fmt.Println("FILENAME:", r.importer.Fset.Position(file.Pos()).Filename)
 
 			ast.Inspect(file, func(n ast.Node) bool {
 				switch thisIdent := n.(type) {
@@ -209,9 +209,9 @@ func (r *RenameRefactoring) findOccurrencesofFunction(ident *ast.Ident) {
 						length := utf8.RuneCountInString(thisIdent.Name)
 						offsetlength := OffsetLength{offset, length}
 						filename := r.importer.Fset.Position(file.Pos()).Filename
-						r.editSet.Add(filename, offsetlength, r.newName)
-						fmt.Println("filename ", filename, "edit", offsetlength, "newname", r.newName)
-						//fmt.Println("filename where edits are applied",filename)					
+						r.editSet[filename].Add(offsetlength, r.newName)
+						//fmt.Println("filename ", filename, "edit", offsetlength, "newname", r.newName)
+						//fmt.Println("filename where edits are applied",filename)
 					}
 
 				}
