@@ -10,7 +10,11 @@
 
 package doctor
 
-func Diff(filename, a, b string) EditSet {
+import (
+	"bytes"
+)
+
+func Diff(filename string, a []string, b []string) EditSet {
 	n := len(a)
 	m := len(b)
 	max := m + n
@@ -18,11 +22,11 @@ func Diff(filename, a, b string) EditSet {
 		return NewEditSet()
 	} else if n == 0 {
 		result := NewEditSet()
-		result.Add(filename, OffsetLength{0, 0}, b)
+		result.Add(filename, OffsetLength{0, 0}, concat(b))
 		return result
 	} else if m == 0 {
 		result := NewEditSet()
-		result.Add(filename, OffsetLength{0, len(a)}, "")
+		result.Add(filename, OffsetLength{0, len(concat(a))}, "")
 		return result
 	}
 	vs := make([][]int, 0, max)
@@ -63,6 +67,14 @@ func Diff(filename, a, b string) EditSet {
 	panic("Length of SES longer than max")
 }
 
+func concat(ss []string) string {
+	var result bytes.Buffer
+	for _, s := range ss {
+		result.WriteString(s)
+	}
+	return result.String()
+}
+
 func abs(n int) int {
 	if n < 0 {
 		return -n
@@ -71,7 +83,7 @@ func abs(n int) int {
 	}
 }
 
-func constructEditSet(filename, a, b string, vs [][]int) EditSet {
+func constructEditSet(filename string, a []string, b []string, vs [][]int) EditSet {
 	n := len(a)
 	m := len(b)
 	max := m + n
@@ -99,18 +111,28 @@ func constructEditSet(filename, a, b string, vs [][]int) EditSet {
 			// Insert
 			charsToCopy := y - next_y - 1
 			insertOffset := x - charsToCopy
-			ol := OffsetLength{insertOffset, 0}
+			ol := OffsetLength{offsetOfString(insertOffset, a), 0}
 			copyOffset := y - charsToCopy - 1
 			replaceWith := b[copyOffset : copyOffset+1]
-			result.Add(filename, ol, replaceWith)
+			result.Add(filename, ol, concat(replaceWith))
 		} else {
 			// Delete
 			charsToCopy := x - next_x - 1
 			deleteOffset := x - charsToCopy - 1
-			ol := OffsetLength{deleteOffset, 1}
+			ol := OffsetLength{
+				offsetOfString(deleteOffset, a),
+				len(a[deleteOffset])}
 			replaceWith := ""
 			result.Add(filename, ol, replaceWith)
 		}
+	}
+	return result
+}
+
+func offsetOfString(index int, ss []string) int {
+	result := 0
+	for i := 0; i < index; i++ {
+		result += len(ss[i])
 	}
 	return result
 }

@@ -7,7 +7,6 @@
 package doctor
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 )
@@ -184,7 +183,6 @@ func TestCreatePatch(t *testing.T) {
 	es.Add(FILENAME, OffsetLength{0, 0}, "A")
 	es.Add(FILENAME, OffsetLength{36, 0}, "B")
 	p, err = es.CreatePatch(FILENAME, strings.NewReader(s2))
-	fmt.Println(p)
 	assertTrue(err == nil, t)
 	assertTrue(len(p.hunks) == 2, t)
 	assertTrue(p.hunks[0].startOffset == 0, t)
@@ -218,9 +216,9 @@ This is line 7.5
 Line 8
 Line 9
 Line 10`
-	edits := Diff("test.txt", a, b)
-	t.Error(edits)
+	edits := Diff("test.txt", strings.SplitAfter(a, "\n"), strings.SplitAfter(b, "\n"))
+	//t.Error(edits)
 	s, _ := edits.ApplyToString("test.txt", a)
 	assertEquals(b, s, t)
-	t.Error(edits.CreatePatch("test.txt", strings.NewReader(a)))
+	//t.Error(edits.CreatePatch("test.txt", strings.NewReader(a)))
 }
