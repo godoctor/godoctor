@@ -28,7 +28,15 @@ import (
 // deletions necessary to change a into b.  Typically, both a and b will be
 // slices containing \n-terminated lines of a larger string, although it is
 // also possible compute character-by-character diffs by splitting a string on
-// UTF-8 boundaries.  The resulting edits are keyed by the given filename.
+// UTF-8 boundaries.  The resulting edits are keyed by the given filename, and
+// the resulting EditSet is constructed so that it can be applied to the string
+// strings.Join(a, "").
+//
+// Every edit in the resulting EditSet starts at an offset corresponding to the
+// first character on a line.  Every edit in the EditSet is either (1) a
+// deletion, i.e., its length is the length of the current line and its
+// replacement text is the empty string, or (2) an addition, i.e., its length
+// is 0 and its replacement text is a single line to insert.
 func Diff(filename string, a []string, b []string) EditSet {
 	n := len(a)
 	m := len(b)
@@ -37,11 +45,11 @@ func Diff(filename string, a []string, b []string) EditSet {
 		return NewEditSet()
 	} else if n == 0 {
 		result := NewEditSet()
-		result.Add(filename, OffsetLength{0, 0}, concat(b))
+		result.Add(filename, OffsetLength{0, 0}, strings.Join(b, ""))
 		return result
 	} else if m == 0 {
 		result := NewEditSet()
-		result.Add(filename, OffsetLength{0, len(concat(a))}, "")
+		result.Add(filename, OffsetLength{0, len(strings.Join(a, ""))}, "")
 		return result
 	}
 	vs := make([][]int, 0, max)
@@ -79,17 +87,10 @@ func Diff(filename string, a []string, b []string) EditSet {
 		copy(v_copy, v)
 		vs = append(vs, v_copy)
 	}
-	panic("Length of SES longer than max")
+	panic("Length of SES longer than max (impossible)")
 }
 
-func concat(ss []string) string {
-	var result bytes.Buffer
-	for _, s := range ss {
-		result.WriteString(s)
-	}
-	return result.String()
-}
-
+// Abs returns the absolute value of an integer
 func abs(n int) int {
 	if n < 0 {
 		return -n
@@ -98,6 +99,9 @@ func abs(n int) int {
 	}
 }
 
+// ConstructEditSet is a utility method invoked by Diff upon completion.  It
+// uses the matrix vs (computed by Diff) to compute a sequence of deletions and
+// additions.
 func constructEditSet(filename string, a []string, b []string, vs [][]int) EditSet {
 	n := len(a)
 	m := len(b)
@@ -129,7 +133,7 @@ func constructEditSet(filename string, a []string, b []string, vs [][]int) EditS
 			ol := OffsetLength{offsetOfString(insertOffset, a), 0}
 			copyOffset := y - charsToCopy - 1
 			replaceWith := b[copyOffset : copyOffset+1]
-			result.Add(filename, ol, concat(replaceWith))
+			result.Add(filename, ol, strings.Join(replaceWith, ""))
 		} else {
 			// Delete
 			charsToCopy := x - next_x - 1
@@ -144,6 +148,8 @@ func constructEditSet(filename string, a []string, b []string, vs [][]int) EditS
 	return result
 }
 
+// OffsetOfString returns the byte offset of the substring ss[index] in the
+// string strings.Join(ss, "")
 func offsetOfString(index int, ss []string) int {
 	result := 0
 	for i := 0; i < index; i++ {
@@ -439,7 +445,9 @@ func (e *editIter) moveToNextEdit() {
 	e.nextIndex++
 }
 
-func (e *editSet) CreatePatch(key string, in io.Reader) (result *Patch, err error) {
+// The CreatePatch method on editSet delegates to this method, which creates
+// a Patch from an editSet.
+func createPatch(e *editSet, key string, in io.Reader) (result *Patch, err error) {
 	result = &Patch{filename: key}
 
 	if len(e.edits) == 0 {
@@ -463,7 +471,7 @@ func (e *editSet) CreatePatch(key string, in io.Reader) (result *Patch, err erro
 		case HUNK_NOT_STARTED:
 			if reader.currentLineIsAffectedBy(editIter.edit()) {
 				hunk = startHunk(reader)
-				last := addAllEditsOnCurrentLine(hunk, reader, editIter)
+				last := addAllEditsOnCurLine(hunk, reader, editIter)
 				if reader.nextLineIsAffectedBy(last) {
 					curState = ADDING_TO_HUNK
 				} else {
@@ -479,7 +487,7 @@ func (e *editSet) CreatePatch(key string, in io.Reader) (result *Patch, err erro
 			}
 		case ADDING_TO_HUNK:
 			hunk.addLine(reader.line)
-			last := addAllEditsOnCurrentLine(hunk, reader, editIter)
+			last := addAllEditsOnCurLine(hunk, reader, editIter)
 			if reader.nextLineIsAffectedBy(last) {
 				curState = ADDING_TO_HUNK
 			} else {
@@ -493,7 +501,7 @@ func (e *editSet) CreatePatch(key string, in io.Reader) (result *Patch, err erro
 		case EDIT_ADDED_TO_HUNK:
 			hunk.addLine(reader.line)
 			if reader.currentLineIsAffectedBy(editIter.edit()) {
-				last := addAllEditsOnCurrentLine(hunk, reader, editIter)
+				last := addAllEditsOnCurLine(hunk, reader, editIter)
 				if reader.nextLineIsAffectedBy(last) {
 					curState = ADDING_TO_HUNK
 				} else {
@@ -521,7 +529,7 @@ func (e *editSet) CreatePatch(key string, in io.Reader) (result *Patch, err erro
 			hunk.addLine(reader.line)
 		}
 		if curState == ADDING_TO_HUNK {
-			addAllEditsOnCurrentLine(hunk, reader, editIter)
+			addAllEditsOnCurLine(hunk, reader, editIter)
 		}
 		result.add(hunk)
 	}
@@ -531,7 +539,7 @@ func (e *editSet) CreatePatch(key string, in io.Reader) (result *Patch, err erro
 	return
 }
 
-func addAllEditsOnCurrentLine(hunk *hunk, reader *lineRdr, editIter *editIter) *edit {
+func addAllEditsOnCurLine(hunk *hunk, reader *lineRdr, editIter *editIter) *edit {
 	var lastEdit *edit = editIter.edit()
 	for reader.currentLineIsAffectedBy(editIter.edit()) {
 		if reader.nextLineIsAffectedBy(editIter.edit()) {

@@ -217,3 +217,7 @@ func (e *editSet) applyTo(key string, in *bufio.Reader, out *bufio.Writer) error
 	}
 	return nil
 }
+
+func (e *editSet) CreatePatch(key string, in io.Reader) (result *Patch, err error) {
+	return createPatch(e, key, in)
+}
