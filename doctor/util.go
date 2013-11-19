@@ -39,14 +39,14 @@ func (o *OffsetLength) String() string {
 // greater than or equal to the start line and column, respectively.  Line and
 // column numbers are 1-based.
 type TextSelection struct {
-	filename  string
-	startLine int
-	startCol  int
-	endLine   int
-	endCol    int
+	Filename  string
+	StartLine int
+	StartCol  int
+	EndLine   int
+	EndCol    int
 }
 
 func (s *TextSelection) String() string {
 	return fmt.Sprintf("%s:%d,%d:%d,%d",
-		s.filename, s.startLine, s.startCol, s.endLine, s.endCol)
+		s.Filename, s.StartLine, s.StartCol, s.EndLine, s.EndCol)
 }

@@ -9,7 +9,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -17,6 +16,8 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"strconv"
+	"strings"
 )
 
 var (
@@ -91,7 +92,7 @@ func main() {
 	//print all possible refactorings
 	if *listFlag {
 		//TODO eh not sure I like putting this in doctor
-		doctor.PrintAllRefactorings(*formatFlag)
+		printAllRefactorings(*formatFlag)
 		os.Exit(0)
 	}
 
@@ -117,12 +118,12 @@ func main() {
 
 	//just return parameters for refactoring
 	if *paramsFlag {
-		doctor.PrintRefactoringParams(r, *formatFlag)
+		printRefactoringParams(r, *formatFlag)
 		os.Exit(0)
 	}
 
 	//do the refactoring
-	l, es, err := doctor.Query(name, args, r, *posFlag, *scopeFlag)
+	l, es, err := query(name, args, r, *posFlag, *scopeFlag)
 
 	if err != nil {
 		fmt.Println(err)
@@ -139,7 +140,8 @@ func main() {
 
 	//write all edits out to changes; something to work with
 	for file, _ := range es {
-		if changes[file], err := ApplyToFile(es, file, &buf); err != nil {
+		changes[file], err = doctor.ApplyToFile(es[file], file)
+		if err != nil {
 			fmt.Println(err)
 			os.Exit(2)
 		}
@@ -217,4 +219,114 @@ func main() {
 		}
 		fmt.Printf("%s\n", out)
 	}
+}
+
+//Figure out how much I like this...
+func printRefactoringParams(r doctor.Refactoring, format string) {
+	switch format {
+	case "plain":
+		for _, p := range r.GetParams() {
+			fmt.Println(p)
+		}
+	case "json":
+		p, err := json.MarshalIndent(struct {
+			Params []string `json:"params"`
+		}{
+			r.GetParams(),
+		}, "", "\t")
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(2)
+		}
+		fmt.Printf("%s\n", p)
+	}
+}
+
+func printAllRefactorings(format string) {
+	var names []string
+	for name, _ := range doctor.AllRefactorings() {
+		names = append(names, name)
+	}
+
+	switch format {
+	case "plain":
+		for _, n := range names {
+			fmt.Println(n)
+		}
+	case "json":
+		p, err := json.MarshalIndent(struct {
+			Refactorings []string `json:"refactorings"`
+		}{
+			names,
+		}, "", "\t")
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(2)
+		}
+		fmt.Printf("%s\n", p)
+	}
+}
+
+//e.g. 302,6
+func parseLineCol(linecol string) (int, int) {
+	lc := strings.Split(linecol, ",")
+	if l, err := strconv.ParseInt(lc[0], 10, 32); err == nil {
+		if c, err := strconv.ParseInt(lc[1], 10, 32); err == nil {
+			return int(l), int(c)
+		}
+	}
+
+	return -1, -1
+}
+
+//pos=3,6:3,9
+func parsePositionToTextSelection(pos string) (t doctor.TextSelection, err error) {
+	args := strings.Split(pos, ":")
+
+	if len(args) < 2 {
+		err = fmt.Errorf("invalid -pos")
+		return
+	}
+
+	sl, sc := parseLineCol(args[0])
+	el, ec := parseLineCol(args[1])
+
+	if sl < 0 || sc < 0 || el < 0 || ec < 0 {
+		err = fmt.Errorf("invalid -pos line, col")
+		return
+	}
+
+	t = doctor.TextSelection{StartLine: sl, StartCol: sc,
+		EndLine: el, EndCol: ec}
+
+	return
+}
+
+//TODO (reed / josh) scope here?
+//TODO (jeff) I'm fairly sure I used scope wrong here...?
+// Anyway I think we need to know which file the main function is in,
+// so I made that the second arg to SetSelection -- confirm with Alan
+//
+//This will do all of the configuration and execution for
+//a refactoring (@op), returning the edits to be made and log.
+//For use with the CLI, but have at it.
+//
+func query(file string, args []string, r doctor.Refactoring, pos string, scope string) (*doctor.Log, map[string]doctor.EditSet, error) {
+	if r == nil {
+		return nil, nil, fmt.Errorf("Invalid refactoring")
+	}
+
+	ts, err := parsePositionToTextSelection(pos)
+	if err != nil {
+		return nil, nil, err
+	}
+	ts.Filename = file
+
+	// TODO these 3 all return bool, but get checked in log. Not sure if
+	// need a change here or not. Maybe move this entire function to main.go
+	r.SetSelection(ts, scope)
+	r.Configure(args)
+	r.Run()
+	e, l := r.GetResult()
+	return e, l, nil
 }

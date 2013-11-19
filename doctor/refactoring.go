@@ -23,6 +23,31 @@ import (
 	"os"
 )
 
+// All available refactorings, keyed by a unique, one-short, all-lowercase name
+var refactorings map[string]Refactoring
+
+func init() {
+	refactorings = map[string]Refactoring{
+		"null":        new(NullRefactoring),
+		"rename":      new(RenameRefactoring),
+		"shortassign": new(ShortAssignRefactoring),
+		"fiximports":  new(FixImportsTransformation),
+	}
+}
+
+// AllRefactorings returns all of the transformations that can be performed.
+// The keys of the returned map are short, single-word, all-lowercase names
+// (rename, fiximports, etc.); the values implement the Refactoring interface.
+func AllRefactorings() map[string]Refactoring {
+	return refactorings
+}
+
+// GetRefactoring returns a Refactoring keyed by the given short name.  The
+// short name must be one of the keys in the map returned by AllRefactorings.
+func GetRefactoring(shortName string) Refactoring {
+	return refactorings[shortName]
+}
+
 // The Refactoring interface provides the methods common to all refactorings.
 //
 // The protocol for invoking a refactoring is:
@@ -98,7 +123,7 @@ type RefactoringBase struct {
 func (r *RefactoringBase) SetSelection(selection TextSelection, mainFile string) bool {
 	r.log = NewLog()
 
-	r.filename = selection.filename
+	r.filename = selection.Filename
 	//filename, err := filepath.Abs(selection.filename)
 	//if err != nil {
 	//	r.log.Log(FATAL_ERROR, err.Error())
@@ -168,24 +193,24 @@ func (r *RefactoringBase) SetSelection(selection TextSelection, mainFile string)
 
 	r.file = nil
 	for _, file := range r.pkgInfo.Files {
-		if r.importer.Fset.Position(file.Pos()).Filename == selection.filename {
+		if r.importer.Fset.Position(file.Pos()).Filename == selection.Filename {
 			r.file = file
 			break
 		}
 	}
 	if r.file == nil {
-		r.log.Log(FATAL_ERROR, "Unable to parse "+selection.filename)
+		r.log.Log(FATAL_ERROR, "Unable to parse "+selection.Filename)
 		return false
 	}
 
-	r.selectionStart = r.lineColToPos(selection.startLine, selection.startCol)
-	r.selectionEnd = r.lineColToPos(selection.endLine, selection.endCol)
+	r.selectionStart = r.lineColToPos(selection.StartLine, selection.StartCol)
+	r.selectionEnd = r.lineColToPos(selection.EndLine, selection.EndCol)
 
 	nodes, _ := importer.PathEnclosingInterval(r.file,
 		r.selectionStart, r.selectionEnd)
 	r.selectedNode = nodes[0]
 
-	r.editSet = map[string]EditSet{selection.filename: NewEditSet()}
+	r.editSet = map[string]EditSet{selection.Filename: NewEditSet()}
 	return true
 }
 
