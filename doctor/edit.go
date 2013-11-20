@@ -16,6 +16,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -130,38 +131,34 @@ func (e *editSet) applyTo(in *bufio.Reader, out *bufio.Writer) error {
 	var offset int = 0
 	for _, edit := range e.edits {
 		// Copy bytes preceding this edit
-		for ; offset < edit.Offset; offset++ {
-			byte, err := in.ReadByte()
-			if err == io.EOF {
-				return fmt.Errorf("edit offset %d is beyond "+
-					"the end of the file (%d bytes)",
-					edit.Offset, offset)
-			} else if err != nil {
-				return err
-			} else {
-				out.WriteByte(byte)
-			}
+		var bytesToWrite int64 = int64(edit.Offset - offset)
+		bytesWritten, err := io.CopyN(out, in, bytesToWrite)
+		offset += int(bytesWritten)
+		if bytesWritten < bytesToWrite {
+			return fmt.Errorf("edit offset %d is beyond "+
+				"the end of the file (%d bytes)",
+				edit.Offset, offset)
+		} else if err != nil {
+			return err
 		}
 		// Write replacement
 		out.WriteString(edit.replacement)
 		// Skip bytes replaced by this edit
-		for ; offset < (edit.Offset + edit.Length); offset++ {
-			_, err := in.ReadByte()
-			if err != nil {
-				return err
-			}
+		bytesToWrite = int64((edit.Offset + edit.Length) - offset)
+		bytesWritten, err = io.CopyN(ioutil.Discard, in, bytesToWrite)
+		offset += int(bytesWritten)
+		if bytesWritten < bytesToWrite {
+			return fmt.Errorf("edit offset %d is beyond "+
+				"the end of the file (%d bytes)",
+				edit.Offset, offset)
+		} else if err != nil {
+			return err
 		}
 	}
 	// Copy remaining bytes until end of file
-	for {
-		byte, err := in.ReadByte()
-		if err == io.EOF {
-			return nil
-		} else if err != nil {
-			return err
-		} else {
-			out.WriteByte(byte)
-		}
+	_, err := io.Copy(out, in)
+	if err != nil {
+		return err
 	}
 	return nil
 }
