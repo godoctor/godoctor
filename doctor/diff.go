@@ -24,6 +24,8 @@ import (
 	"strings"
 )
 
+/* -=-=- Myers Diff Algorithm Implementation -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
+
 // Diff creates an EditSet containing the minimum number of line additions and
 // deletions necessary to change a into b.  Typically, both a and b will be
 // slices containing \n-terminated lines of a larger string, although it is
@@ -37,19 +39,34 @@ import (
 // deletion, i.e., its length is the length of the current line and its
 // replacement text is the empty string, or (2) an addition, i.e., its length
 // is 0 and its replacement text is a single line to insert.
+//
+// The implementation follows the pseudocode in Myers' paper (cited above)
+// fairly closely.
 func Diff(a []string, b []string) EditSet {
+	return diff(a, b)
+}
+
+// Internal implementation of Diff.  Returns an editSet (which includes non-API
+// methods like newEditIter) rather than an EditSet (which is API).
+func diff(a []string, b []string) *editSet {
 	n := len(a)
 	m := len(b)
 	max := m + n
 	if n == 0 && m == 0 {
-		return NewEditSet()
+		return &editSet{}
 	} else if n == 0 {
-		result := NewEditSet()
-		result.Add(OffsetLength{0, 0}, strings.Join(b, ""))
+		result := &editSet{}
+		replacement := strings.Join(b, "")
+		if replacement != "" {
+			result.Add(OffsetLength{0, 0}, replacement)
+		}
 		return result
 	} else if m == 0 {
-		result := NewEditSet()
-		result.Add(OffsetLength{0, len(strings.Join(a, ""))}, "")
+		result := &editSet{}
+		length := len(strings.Join(a, ""))
+		if length > 0 {
+			result.Add(OffsetLength{0, length}, "")
+		}
 		return result
 	}
 	vs := make([][]int, 0, max)
@@ -87,7 +104,7 @@ func Diff(a []string, b []string) EditSet {
 		copy(v_copy, v)
 		vs = append(vs, v_copy)
 	}
-	panic("Length of SES longer than max (impossible)")
+	panic("Length of SES longer than max (internal error)")
 }
 
 // Abs returns the absolute value of an integer
@@ -102,12 +119,12 @@ func abs(n int) int {
 // ConstructEditSet is a utility method invoked by Diff upon completion.  It
 // uses the matrix vs (computed by Diff) to compute a sequence of deletions and
 // additions.
-func constructEditSet(a []string, b []string, vs [][]int) EditSet {
+func constructEditSet(a []string, b []string, vs [][]int) *editSet {
 	n := len(a)
 	m := len(b)
 	max := m + n
 	offset := max
-	result := NewEditSet()
+	result := &editSet{}
 	k := n - m
 	for len(vs) > 1 {
 		v := vs[len(vs)-1]
@@ -133,7 +150,10 @@ func constructEditSet(a []string, b []string, vs [][]int) EditSet {
 			ol := OffsetLength{offsetOfString(insertOffset, a), 0}
 			copyOffset := y - charsToCopy - 1
 			replaceWith := b[copyOffset : copyOffset+1]
-			result.Add(ol, strings.Join(replaceWith, ""))
+			replacement := strings.Join(replaceWith, "")
+			if len(replacement) > 0 {
+				result.Add(ol, replacement)
+			}
 		} else {
 			// Delete
 			charsToCopy := x - next_x - 1
@@ -142,7 +162,9 @@ func constructEditSet(a []string, b []string, vs [][]int) EditSet {
 				offsetOfString(deleteOffset, a),
 				len(a[deleteOffset])}
 			replaceWith := ""
-			result.Add(ol, replaceWith)
+			if ol.Length > 0 {
+				result.Add(ol, replaceWith)
+			}
 		}
 	}
 	return result
@@ -158,7 +180,7 @@ func offsetOfString(index int, ss []string) int {
 	return result
 }
 
-// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+/* -=-=- Unified Diff Support =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 
 // Number of leading/trailing context lines in a unified diff
 const num_ctx_lines int = 3
@@ -174,9 +196,7 @@ type Patch struct {
 	hunks    []*hunk
 }
 
-// FIXME(jeff) produce correct output when no edits are applied
-
-func (p *Patch) Add(string, OffsetLength, string) error {
+func (p *Patch) Add(OffsetLength, string) error {
 	return errors.New("Add cannot be called on Patch (read-only)")
 }
 
@@ -184,7 +204,7 @@ func (p *Patch) ApplyTo(in io.Reader, out io.Writer) error {
 	panic("Not implemented")
 }
 
-func (p *Patch) CreatePatch(key string, in io.Reader) (*Patch, error) {
+func (p *Patch) CreatePatch(filename string, in io.Reader) (*Patch, error) {
 	return p, nil
 }
 
@@ -204,67 +224,151 @@ func (p *Patch) add(hunk *hunk) {
 func (p *Patch) Write(out io.Writer) error {
 	writer := bufio.NewWriter(out)
 	defer writer.Flush()
-	fmt.Fprintf(writer, "--- %s\n+++ %s\n", p.filename, p.filename)
-	lineOffset := 0
-	for _, hunk := range p.hunks {
-		adjust, err := writeUnifiedDiffHunk(hunk, lineOffset, writer)
-		if err != nil {
-			return err
+	if len(p.hunks) > 0 {
+		fmt.Fprintf(writer, "--- %s\n+++ %s\n", p.filename, p.filename)
+		lineOffset := 0
+		for _, hunk := range p.hunks {
+			adjust, err := writeDiffHunk(hunk, lineOffset, writer)
+			if err != nil {
+				return err
+			}
+			lineOffset += adjust
 		}
-		lineOffset += adjust
 	}
 	return nil
 }
 
-// WriteUnifiedDiffHunk writes a single hunk in unified diff format.
-func writeUnifiedDiffHunk(h *hunk, outputLineOffset int, out io.Writer) (int, error) {
-	hunk := h.hunk.String()
-	newText, err := ApplyToString(&editSet{edits: h.edits}, hunk)
+// WriteUnifiedDiffHunk writes a single hunk in unified diff format.  If the
+// edits in that hunk add lines, it returns the number of lines added; if the
+// edits delete lines, it returns a negative number indicating the number of
+// lines deleted (0 - number of lines deleted).  If the edits in the hunk do
+// not change the number of lines, returns 0.
+func writeDiffHunk(h *hunk, outputLineOffset int, out io.Writer) (int, error) {
+	// Determine the lines in this hunk before and after applying edits
+	origLines, newLines, err := computeLines(h)
 	if err != nil {
 		return 0, err
 	}
 
-	origLines := strings.SplitAfter(hunk, "\n")
-	newLines := strings.SplitAfter(newText, "\n")
-
+	// Write the unified diff header
+	numOrigLines := lenWithoutLastIfEmpty(origLines)
+	numNewLines := lenWithoutLastIfEmpty(newLines)
 	if _, err = fmt.Fprintf(out, "@@ -%d,%d +%d,%d @@\n",
-		h.startLine, len(origLines),
-		h.startLine+outputLineOffset, len(newLines)); err != nil {
+		h.startLine, numOrigLines,
+		h.startLine+outputLineOffset, numNewLines); err != nil {
 		return 0, err
 	}
 
-	diff := Diff(origLines, newLines)
-	var sesIter *editIter
-	switch ses := diff.(type) {
-	case *editSet:
-		sesIter = ses.newEditIter()
-	default:
-		panic("Unreachable")
-	}
+	// Create an iterator that will traverse deletions and additions
+	it := diff(origLines, newLines).newEditIter()
 
+	// For each line in the original file, add one or more lines to the
+	// unified diff output
 	offset := 0
 	for i, line := range origLines {
-		if sesIter.edit() == nil || sesIter.edit().Offset > offset {
-			fmt.Fprintf(out, " %s", origLines[i])
+		if it.edit() == nil || it.edit().Offset > offset {
+			// This line was not affected by any edits
+			if i < len(origLines)-1 || line != "" {
+				fmt.Fprintf(out, " %s", origLines[i])
+			}
 		} else {
+			// This line was deleted (and possibly replaced by a
+			// different line), or one or more lines were inserted
+			// before this line
 			deleted := false
-			for sesIter.edit() != nil && sesIter.edit().Offset == offset {
-				edit := sesIter.edit()
+			for it.edit() != nil && it.edit().Offset == offset ||
+				it.edit() != nil && i == len(origLines)-1 {
+				edit := it.edit()
 				if edit.Length > 0 {
-					fmt.Fprintf(out, "-%s", origLines[i])
+					// Delete line
+					line := origLines[i]
+					fmt.Fprintf(out, "-%s", line)
+					if !strings.HasSuffix(line, "\n") {
+						fmt.Fprintf(out, "\n"+
+							"\\ No newline at "+
+							"end of file\n")
+					}
 					deleted = true
-				} else {
-					fmt.Fprintf(out, "+%s", edit.replacement)
+				} else if edit.replacement != "" {
+					// Insert line
+					repl := edit.replacement
+					fmt.Fprintf(out, "+%s", repl)
+					if !strings.HasSuffix(repl, "\n") {
+						fmt.Fprintf(out, "\n"+
+							"\\ No newline at "+
+							"end of file\n")
+					}
+
 				}
-				sesIter.moveToNextEdit()
+				it.moveToNextEdit()
 			}
 			if !deleted {
-				fmt.Fprintf(out, " %s", origLines[i])
+				if i < len(origLines)-1 || line != "" {
+					fmt.Fprintf(out, " %s", origLines[i])
+				}
 			}
 		}
 		offset += len(line)
 	}
-	return len(newLines) - len(origLines), nil
+	return numNewLines - numOrigLines, nil
+}
+
+// If the last string in the slice is the empty string, returns len(ss)-1;
+// otherwise, returns len(ss).
+func lenWithoutLastIfEmpty(ss []string) int {
+	if len(ss) > 0 && ss[len(ss)-1] == "" {
+		return len(ss) - 1
+	} else {
+		return len(ss)
+	}
+}
+
+// ComputeLines computes the text that will result from applying the edits in
+// this hunk, then returns both the original text and the new text split into
+// lines on \n boundaries.  It returns a non-nil error if the edits in the hunk
+// cannot be applied.
+func computeLines(h *hunk) (origLines []string, newLines []string, err error) {
+	hunk := h.hunk.String()
+	newText, err := ApplyToString(&editSet{edits: h.edits}, hunk)
+	if err != nil {
+		return
+	}
+
+	origLines = strings.SplitAfter(hunk, "\n")
+	newLines = strings.SplitAfter(newText, "\n")
+
+	numOrig, numNew := len(origLines), len(newLines)
+	trailingCtxLines := 0
+	for i := 0; i < min(numOrig, numNew); i++ {
+		if origLines[numOrig-i-1] == newLines[numNew-i-1] {
+			trailingCtxLines++
+		} else {
+			break
+		}
+	}
+	linesToRemove := max(trailingCtxLines-num_ctx_lines, 0)
+
+	origLines = origLines[:numOrig-linesToRemove]
+	newLines = newLines[:numNew-linesToRemove]
+	return
+}
+
+// Min returns the minimum of two integers.
+func min(m, n int) int {
+	if m < n {
+		return m
+	} else {
+		return n
+	}
+}
+
+// Max returns the maximum of two integers.
+func max(m, n int) int {
+	if m > n {
+		return m
+	} else {
+		return n
+	}
 }
 
 // A hunk represents a single hunk in a unified diff.  A hunk consists of all
@@ -275,7 +379,7 @@ func writeUnifiedDiffHunk(h *hunk, outputLineOffset int, out io.Writer) (int, er
 // in the same hunk.
 type hunk struct {
 	startOffset int          // Offset of this hunk in the original file
-	startLine   int          // 1-based line number of this hunk in the orig file
+	startLine   int          // 1-based line number of this hunk
 	numLines    int          // Number of lines modified by this hunk
 	hunk        bytes.Buffer // Affected bytes from the original file
 	edits       []edit       // Edits to be applied to hunk
@@ -365,6 +469,8 @@ func (l *lineRdr) editAddsToStart(e *edit) bool {
 func (l *lineRdr) currentLineIsAffectedBy(e *edit) bool {
 	if e == nil {
 		return false
+	} else if l.err == io.EOF {
+		return e.OffsetPastEnd() >= l.lineOffset
 	} else {
 		return e.Offset < l.offsetPastEnd() &&
 			e.OffsetPastEnd() >= l.lineOffset
@@ -376,8 +482,10 @@ func (l *lineRdr) currentLineIsAffectedBy(e *edit) bool {
 func (l *lineRdr) nextLineIsAffectedBy(e *edit) bool {
 	if e == nil {
 		return false
+	} else if l.err == io.EOF {
+		return false
 	} else {
-		return e.OffsetPastEnd() >= l.offsetPastEnd()
+		return e.OffsetPastEnd() > l.offsetPastEnd()
 	}
 }
 
@@ -434,100 +542,76 @@ func createPatch(e *editSet, filename string, in io.Reader) (result *Patch, err 
 		return
 	}
 
-	const (
-		HUNK_NOT_STARTED int = iota
-		ADDING_TO_HUNK
-		EDIT_ADDED_TO_HUNK
-	)
+	reader := newLineRdr(in) // Reads lines from the original file
+	it := e.newEditIter()    // Traverses edits (in order)
+	var hunk *hunk = nil     // Current hunk being added to
+	var trailingCtxLines int // Number of unchanged lines at end of hunk
 
-	reader := newLineRdr(in)
-	editIter := e.newEditIter()
-	curState := HUNK_NOT_STARTED
-	var hunk *hunk = nil
-	var trailingCtxLines int
-
-	for err = reader.readLine(); err == nil; err = reader.readLine() {
-		switch curState {
-		case HUNK_NOT_STARTED:
-			if reader.currentLineIsAffectedBy(editIter.edit()) {
+	// Iterate through each line, adding lines to a hunk if they are
+	// affected by an edit or at most 2*num_ctx_lines+1 following an edit;
+	// add edits to the hunk whenever the last offset affected by that edit
+	// is on the current line
+	for err = reader.readLine(); err == nil || err == io.EOF; err = reader.readLine() {
+		if hunk == nil {
+			// No hunk has been started, so start one as soon as
+			// we find a line that is changed
+			if reader.currentLineIsAffectedBy(it.edit()) {
 				hunk = startHunk(reader)
-				last := addAllEditsOnCurLine(hunk, reader, editIter)
-				if reader.nextLineIsAffectedBy(last) {
-					curState = ADDING_TO_HUNK
-				} else {
+				last := addEditsOnCurLine(hunk, reader, it)
+				if !reader.nextLineIsAffectedBy(last) {
 					if reader.editAddsToStart(last) {
 						trailingCtxLines = 1
 					} else {
 						trailingCtxLines = 0
 					}
-					curState = EDIT_ADDED_TO_HUNK
 				}
-			} else {
-				curState = HUNK_NOT_STARTED
 			}
-		case ADDING_TO_HUNK:
+		} else {
+			// A hunk has been started; add the current line, and
+			// terminate the hunk after the maximum number of
+			// trailing context lines have been added
 			hunk.addLine(reader.line)
-			last := addAllEditsOnCurLine(hunk, reader, editIter)
-			if reader.nextLineIsAffectedBy(last) {
-				curState = ADDING_TO_HUNK
-			} else {
-				if reader.editAddsToStart(last) {
-					trailingCtxLines = 1
-				} else {
-					trailingCtxLines = 0
-				}
-				curState = EDIT_ADDED_TO_HUNK
-			}
-		case EDIT_ADDED_TO_HUNK:
-			hunk.addLine(reader.line)
-			if reader.currentLineIsAffectedBy(editIter.edit()) {
-				last := addAllEditsOnCurLine(hunk, reader, editIter)
-				if reader.nextLineIsAffectedBy(last) {
-					curState = ADDING_TO_HUNK
-				} else {
+			if reader.currentLineIsAffectedBy(it.edit()) {
+				last := addEditsOnCurLine(hunk, reader, it)
+				if !reader.nextLineIsAffectedBy(last) {
 					if reader.editAddsToStart(last) {
 						trailingCtxLines = 1
 					} else {
 						trailingCtxLines = 0
 					}
-					curState = EDIT_ADDED_TO_HUNK
 				}
 			} else {
 				trailingCtxLines++
-				if trailingCtxLines < 2*num_ctx_lines {
-					curState = EDIT_ADDED_TO_HUNK
-				} else {
+				if trailingCtxLines > 2*num_ctx_lines {
 					result.add(hunk)
 					hunk = nil
-					curState = HUNK_NOT_STARTED
 				}
 			}
 		}
+		if err == io.EOF {
+			break
+		}
 	}
-	if curState == ADDING_TO_HUNK || curState == EDIT_ADDED_TO_HUNK {
-		if reader.line != "" {
-			hunk.addLine(reader.line)
-		}
-		if curState == ADDING_TO_HUNK {
-			addAllEditsOnCurLine(hunk, reader, editIter)
-		}
+	if hunk != nil {
 		result.add(hunk)
 	}
-	if err == io.EOF {
-		err = nil
-	}
+	err = nil
 	return
 }
 
-func addAllEditsOnCurLine(hunk *hunk, reader *lineRdr, editIter *editIter) *edit {
-	var lastEdit *edit = editIter.edit()
-	for reader.currentLineIsAffectedBy(editIter.edit()) {
-		if reader.nextLineIsAffectedBy(editIter.edit()) {
+// Beginning with the current edit marked by the iterator it, adds that edit
+// to the hunk as well as all subsequent edits whose last affected offset
+// is on the current line.  Returns the last edit added to the hunk, or if
+// no edits were added, the current edit marked by the iterator.
+func addEditsOnCurLine(hunk *hunk, reader *lineRdr, it *editIter) *edit {
+	var lastEdit *edit = it.edit()
+	for reader.currentLineIsAffectedBy(it.edit()) {
+		if reader.nextLineIsAffectedBy(it.edit()) {
 			return lastEdit
 		} else {
-			lastEdit = editIter.edit()
-			hunk.addEdit(editIter.edit())
-			editIter.moveToNextEdit()
+			lastEdit = it.edit()
+			hunk.addEdit(it.edit())
+			it.moveToNextEdit()
 		}
 	}
 	return lastEdit
