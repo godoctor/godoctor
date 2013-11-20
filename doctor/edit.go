@@ -22,34 +22,35 @@ import (
 	"syscall"
 )
 
-// An EditSet is a collection of changes to be made to a text file.  Each
-// edit is comprised of an offset, a length, and a replacement string.
+// An EditSet is a collection of changes to be made to a text file.  Each edit
+// is comprised of an offset, a length, and a replacement string.
 //
-// The EditSet is populated by invoking the Add method.  Each edit replaces 0
-// or more characters at a given offset with a given string.  Characters can be
-// inserted by using a position with length 0; characters can be deleted by
-// using "" for the replacement string.
+// Each edit replaces 0 or more characters at a given offset with a given
+// string.  Characters can be inserted by using a position with length 0;
+// characters can be deleted by using "" for the replacement string.
 //
-// Edits can be applied by invoking one of the ApplyTo methods.
-//
-// ApplyTo reads a stream of characters from the given io.Reader, applying the
-// edits in the EditSet to the stream and writing the result to the given
-// io.Writer.
-//
-// ApplyToFile applies the edits in the EditSet to the given file, writing the
-// result to the given io.Writer.
-//
-// ApplyToString is intended for testing purposes only.  It applies the edits
-// in the EditSet to a given string, returning the resulting string; or if an
-// error occurs, a description of the error is returned, rather than the
-// modified string contents.
-//
-// The String method returns a description of this EditSet (for debugging).
-//
+// Edits are added to an EditSet via the Add method, and the edits in an
+// EditSet can be applied to an input by invoking the ApplyTo method or
+// one of the utility functions ApplyToString, ApplyToFile, or ApplyToReader.
 type EditSet interface {
+	// Add inserts an edit into this editSet, returning an error if the
+	// edit has a negative offset or overlaps an edit previously added to
+	// this EditSet.  If the EditSet is read-only (e.g., Patch implements
+	// EditSet but cannot be modified), an error will always be returned.
 	Add(position OffsetLength, replacement string) error
+
+	// ApplyTo reads from the given reader, applying the edits in this
+	// editSet as it reads, and writes the output to the given writer.
+	// It returns an error if there are edits with offsets beyond the end
+	// of the input or some other error occurs, such as an I/O error.
 	ApplyTo(in io.Reader, out io.Writer) error
-	CreatePatch(filename string, in io.Reader) (*Patch, error)
+
+	// CreatePatch creates a Patch from this EditSet.  A Patch is itself
+	// an EditSet -- it can be applied using ApplyTo -- or it can be output
+	// as a unified diff by invoking the Patch's Write method.
+	CreatePatch(in io.Reader) (*Patch, error)
+
+	// String returns a human-readable description of this EditSet.
 	String() string
 }
 
@@ -78,7 +79,6 @@ func (e *edit) RelativeToOffset(offset int) edit {
 		e.replacement}
 }
 
-// Add inserts an edit into this editSet.
 func (e *editSet) Add(position OffsetLength, replacement string) error {
 	// Check for negative-offset or overlapping edits
 	if position.Offset < 0 {
@@ -119,8 +119,6 @@ func (e *editSet) String() string {
 	return buffer.String()
 }
 
-// ApplyTo reads from the given reader, applying the edits in this editSet and
-// writing the output to the given writer
 func (e *editSet) ApplyTo(in io.Reader, out io.Writer) error {
 	bufin := bufio.NewReader(in)
 	bufout := bufio.NewWriter(out)
@@ -168,12 +166,12 @@ func (e *editSet) applyTo(in *bufio.Reader, out *bufio.Writer) error {
 	return nil
 }
 
-// CreatePatch creates a Patch from this editSet.  The patch is labeled with
-// the given filename.
-func (e *editSet) CreatePatch(filename string, in io.Reader) (result *Patch, err error) {
-	return createPatch(e, filename, in)
+func (e *editSet) CreatePatch(in io.Reader) (result *Patch, err error) {
+	return createPatch(e, in)
 }
 
+// ApplyToFile reads bytes from a file, applying the edits in an EditSet and
+// returning the result as a slice of bytes.
 func ApplyToFile(es EditSet, filename string) ([]byte, error) {
 	file, err := os.OpenFile(filename, syscall.O_RDWR, 0666)
 	if err != nil {
@@ -185,11 +183,15 @@ func ApplyToFile(es EditSet, filename string) ([]byte, error) {
 	return ApplyToReader(es, file)
 }
 
+// ApplyToFile reads bytes from a string, applying the edits in an EditSet and
+// returning the result as a string.
 func ApplyToString(es EditSet, s string) (string, error) {
 	bs, err := ApplyToReader(es, strings.NewReader(s))
 	return string(bs), err
 }
 
+// ApplyToReader reads bytes from an io.Reader, applying the edits in an
+// EditSet and returning the result as a slice of bytes.
 func ApplyToReader(es EditSet, in io.Reader) ([]byte, error) {
 	var buf bytes.Buffer
 	err := es.ApplyTo(in, &buf)

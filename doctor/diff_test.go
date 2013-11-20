@@ -82,13 +82,13 @@ func TestCreatePatch(t *testing.T) {
 	s := "Line1....\nLine2....\nLine3....\nLine4"
 
 	es := NewEditSet()
-	p, err := es.CreatePatch("filename", strings.NewReader(s))
+	p, err := es.CreatePatch(strings.NewReader(s))
 	assertTrue(err == nil, t)
 	assertTrue(len(p.hunks) == 0, t)
 
 	es = NewEditSet()
 	es.Add(OffsetLength{0, 0}, "AAA")
-	p, err = es.CreatePatch("filename", strings.NewReader(s))
+	p, err = es.CreatePatch(strings.NewReader(s))
 	assertTrue(err == nil, t)
 	assertTrue(len(p.hunks) == 1, t)
 	assertTrue(p.hunks[0].startOffset == 0, t)
@@ -98,7 +98,7 @@ func TestCreatePatch(t *testing.T) {
 
 	es = NewEditSet()
 	es.Add(OffsetLength{0, 2}, "AAA")
-	p, err = es.CreatePatch("filename", strings.NewReader(s))
+	p, err = es.CreatePatch(strings.NewReader(s))
 	assertTrue(err == nil, t)
 	assertTrue(len(p.hunks) == 1, t)
 	assertTrue(p.hunks[0].startOffset == 0, t)
@@ -108,7 +108,7 @@ func TestCreatePatch(t *testing.T) {
 
 	es = NewEditSet()
 	es.Add(OffsetLength{2, 5}, "AAA")
-	p, err = es.CreatePatch("filename", strings.NewReader(s))
+	p, err = es.CreatePatch(strings.NewReader(s))
 	assertTrue(err == nil, t)
 	assertTrue(len(p.hunks) == 1, t)
 	assertTrue(p.hunks[0].startOffset == 0, t)
@@ -118,7 +118,7 @@ func TestCreatePatch(t *testing.T) {
 
 	es = NewEditSet()
 	es.Add(OffsetLength{2, 15}, "AAA")
-	p, err = es.CreatePatch("filename", strings.NewReader(s))
+	p, err = es.CreatePatch(strings.NewReader(s))
 	assertTrue(err == nil, t)
 	assertTrue(len(p.hunks) == 1, t)
 	assertTrue(p.hunks[0].startOffset == 0, t)
@@ -131,7 +131,7 @@ func TestCreatePatch(t *testing.T) {
 	es = NewEditSet()
 	es.Add(OffsetLength{20, 2}, "5555\n5!")
 	es.Add(OffsetLength{40, 0}, "CCC")
-	p, err = es.CreatePatch("filename", strings.NewReader(s2))
+	p, err = es.CreatePatch(strings.NewReader(s2))
 	assertTrue(err == nil, t)
 	assertTrue(len(p.hunks) == 1, t)
 	assertTrue(p.hunks[0].startOffset == 5, t)
@@ -143,7 +143,7 @@ func TestCreatePatch(t *testing.T) {
 	es = NewEditSet()
 	es.Add(OffsetLength{0, 0}, "A")
 	es.Add(OffsetLength{36, 0}, "B")
-	p, err = es.CreatePatch("filename", strings.NewReader(s2))
+	p, err = es.CreatePatch(strings.NewReader(s2))
 	assertTrue(err == nil, t)
 	assertTrue(len(p.hunks) == 2, t)
 	assertTrue(p.hunks[0].startOffset == 0, t)
@@ -160,7 +160,7 @@ func testUnifiedDiff(a string, b string, expected string, t *testing.T) {
 	edits := Diff(strings.SplitAfter(a, "\n"), strings.SplitAfter(b, "\n"))
 	s, _ := ApplyToString(edits, a)
 	assertEquals(b, s, t)
-	patch, _ := edits.CreatePatch("test.txt", strings.NewReader(a))
+	patch, _ := edits.CreatePatch(strings.NewReader(a))
 	assertEquals(expected, patch.String(), t)
 }
 
@@ -185,8 +185,8 @@ This is line 7.5
 Line 8
 Line 9
 Line 10`
-	expected := `--- test.txt
-+++ test.txt
+	expected := `--- filename
++++ filename
 @@ -1,10 +1,10 @@
 -Line 1
  Line 2
@@ -212,8 +212,8 @@ Line 3
 	b := `Line 1
 Line 2
 Line 33`
-	expected := `--- test.txt
-+++ test.txt
+	expected := `--- filename
++++ filename
 @@ -1,3 +1,3 @@
  Line 1
  Line 2
@@ -231,8 +231,8 @@ Line 3`
 	b := `Line 1
 Line 2
 Line 33`
-	expected := `--- test.txt
-+++ test.txt
+	expected := `--- filename
++++ filename
 @@ -1,3 +1,3 @@
  Line 1
  Line 2
@@ -276,8 +276,8 @@ Line 9
 Line 9.5
 Line 9.75
 Line 10`
-	expected := `--- test.txt
-+++ test.txt
+	expected := `--- filename
++++ filename
 @@ -1,5 +1,4 @@
  Line 1
 -Line 2
@@ -338,8 +338,8 @@ Line 18
 Line 19
 Line 20
 `
-	expected := `--- test.txt
-+++ test.txt
+	expected := `--- filename
++++ filename
 @@ -1,20 +1,19 @@
  Line 1
 -Line 2
@@ -412,8 +412,8 @@ Line 18
 Line 19
 Line 20
 `
-	expected := `--- test.txt
-+++ test.txt
+	expected := `--- filename
++++ filename
 @@ -1,9 +1,8 @@
  Line 1
 -Line 2

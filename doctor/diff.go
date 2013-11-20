@@ -30,9 +30,8 @@ import (
 // deletions necessary to change a into b.  Typically, both a and b will be
 // slices containing \n-terminated lines of a larger string, although it is
 // also possible compute character-by-character diffs by splitting a string on
-// UTF-8 boundaries.  The resulting edits are keyed by the given filename, and
-// the resulting EditSet is constructed so that it can be applied to the string
-// strings.Join(a, "").
+// UTF-8 boundaries.  The resulting EditSet is constructed so that it can be
+// applied to the string produced by strings.Join(a, "").
 //
 // Every edit in the resulting EditSet starts at an offset corresponding to the
 // first character on a line.  Every edit in the EditSet is either (1) a
@@ -210,7 +209,7 @@ func (p *Patch) CreatePatch(filename string, in io.Reader) (*Patch, error) {
 
 func (p *Patch) String() string {
 	var result bytes.Buffer
-	p.Write(&result)
+	p.Write("filename", "filename", &result)
 	return result.String()
 }
 
@@ -220,12 +219,13 @@ func (p *Patch) add(hunk *hunk) {
 	p.hunks = append(p.hunks, hunk)
 }
 
-// Write writes a unified diff to the given io.Writer.
-func (p *Patch) Write(out io.Writer) error {
+// Write writes a unified diff to the given io.Writer.  The given filenames
+// are used in the diff output.
+func (p *Patch) Write(origFile string, newFile string, out io.Writer) error {
 	writer := bufio.NewWriter(out)
 	defer writer.Flush()
 	if len(p.hunks) > 0 {
-		fmt.Fprintf(writer, "--- %s\n+++ %s\n", p.filename, p.filename)
+		fmt.Fprintf(writer, "--- %s\n+++ %s\n", origFile, newFile)
 		lineOffset := 0
 		for _, hunk := range p.hunks {
 			adjust, err := writeDiffHunk(hunk, lineOffset, writer)
@@ -535,8 +535,8 @@ func (e *editIter) moveToNextEdit() {
 
 // The CreatePatch method on editSet delegates to this method, which creates
 // a Patch from an editSet.
-func createPatch(e *editSet, filename string, in io.Reader) (result *Patch, err error) {
-	result = &Patch{filename: filename}
+func createPatch(e *editSet, in io.Reader) (result *Patch, err error) {
+	result = &Patch{}
 
 	if len(e.edits) == 0 {
 		return
