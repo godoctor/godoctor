@@ -142,6 +142,7 @@ func (r *RefactoringBase) SetSelection(selection TextSelection, mainFile string)
 		// The test runner may change the GOPATH environment variable
 		// since the program was started, so set it here explicitly
 		buildContext.GOPATH = os.Getenv("GOPATH")
+		//fmt.Println("GOPATH is ",GOPATH)
 	}
 
 	//r.importer = importer.New(new(importer.Config))
@@ -167,9 +168,22 @@ func (r *RefactoringBase) SetSelection(selection TextSelection, mainFile string)
 	var pkgInfo []*importer.PackageInfo
 	var err error
 	if mainFile != "" {
-		pkgInfo, _, err = r.importer.LoadInitialPackages([]string{r.filename, mainFile})
+		if r.filename != mainFile {
+			fmt.Println("two files packages are loaded")
+			pkgInfo, _, err = r.importer.LoadInitialPackages([]string{r.filename, mainFile})
+		} else {
+			fmt.Println("only one files packages are  loaded")
+			pkgInfo, _, err = r.importer.LoadInitialPackages([]string{r.filename})
+			fmt.Println("length of pkginfo", len(pkgInfo))
+			fmt.Println("r.filename", r.filename)
+		}
 	} else {
-		pkgInfo, _, err = r.importer.LoadInitialPackages([]string{r.filename})
+
+		fmt.Println("r.filename", r.filename)
+		//pkgInfo, _, err = r.importer.LoadInitialPackages([]string{r.filename})
+		// try giving import path as argument??
+		pkgInfo, _, err = r.importer.LoadInitialPackages([]string{"mypackage"})
+
 	}
 	if err != nil {
 		r.log.Log(FATAL_ERROR, err.Error())
@@ -185,7 +199,7 @@ func (r *RefactoringBase) SetSelection(selection TextSelection, mainFile string)
 	//		r.log.Log(FATAL_ERROR, r.pkgInfo.Err.Error())
 	//		return false
 	//	}
-
+	fmt.Println("files", r.pkgInfo.Files)
 	if len(r.pkgInfo.Files) < 1 {
 		r.log.Log(FATAL_ERROR, "Package contains no files")
 		return false
@@ -193,10 +207,10 @@ func (r *RefactoringBase) SetSelection(selection TextSelection, mainFile string)
 
 	r.file = nil
 	for _, file := range r.pkgInfo.Files {
-		if r.importer.Fset.Position(file.Pos()).Filename == selection.Filename {
-			r.file = file
-			break
-		}
+		//if r.importer.Fset.Position(file.Pos()).Filename == selection.filename {
+		r.file = file
+		break
+		//}
 	}
 	if r.file == nil {
 		r.log.Log(FATAL_ERROR, "Unable to parse "+selection.Filename)
