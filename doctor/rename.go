@@ -108,31 +108,6 @@ func (r *RenameRefactoring) Run() {
 	}
 }
 
-// Finds all of the references in an AST to a single declaration
-func (r *RenameRefactoring) findOccurrences(ident *ast.Ident) []OffsetLength {
-	decl := r.pkgInfo.ObjectOf(ident)
-	if decl == nil {
-		r.log.Log(FATAL_ERROR, "Unable to find declaration")
-		return []OffsetLength{}
-	}
-
-	//result := make([]OffsetLength, 0, 0)
-	var result []OffsetLength
-	ast.Inspect(r.file, func(n ast.Node) bool {
-		switch thisIdent := n.(type) {
-		case *ast.Ident:
-			if r.pkgInfo.ObjectOf(thisIdent) == decl {
-				offset := r.importer.Fset.Position(thisIdent.NamePos).Offset
-				length := utf8.RuneCountInString(thisIdent.Name)
-				result = append(result, OffsetLength{offset, length})
-			}
-		}
-
-		return true
-	})
-	return result
-}
-
 //TODO:reddy make search more efficient
 //find if selected identifier is name of a funciton
 

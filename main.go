@@ -80,6 +80,7 @@ func usage() {
 //TODO (reed / josh)  -comments to change comments (if a thing?)
 //TODO (reed / josh) scope (importer? wait?)
 //TODO (reed) handle errors better (JSON-wise, especially, not log stuff)
+//TODO (reed) take byte offsets AND line:col
 //
 //example query: go-doctor -pos=11,8:11,8 someFile.go rename newName
 //TODO query (stdin): cat file.go | go-doctor -pos=11,8:11,8 rename newName
