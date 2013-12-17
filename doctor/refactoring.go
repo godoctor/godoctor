@@ -38,12 +38,15 @@ func init() {
 // AllRefactorings returns all of the transformations that can be performed.
 // The keys of the returned map are short, single-word, all-lowercase names
 // (rename, fiximports, etc.); the values implement the Refactoring interface.
+// The returned map should be treated as immutable; if it is modified, the
+// results are undefined.
 func AllRefactorings() map[string]Refactoring {
 	return refactorings
 }
 
 // GetRefactoring returns a Refactoring keyed by the given short name.  The
-// short name must be one of the keys in the map returned by AllRefactorings.
+// short name must be one of the keys in the map returned by AllRefactorings;
+// if it is not, GetRefactoring returns nil.
 func GetRefactoring(shortName string) Refactoring {
 	return refactorings[shortName]
 }
