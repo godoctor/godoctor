@@ -178,15 +178,15 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 	name := r.Name()
 
 	cwd, _ := os.Getwd()
-	cwd = filepath.Base(cwd)
-	//relativePath := filepath.Join(cwd, filename)
-	fmt.Println(name, selection.String())
+	absPath, _ := filepath.Abs(filename)
+	relativePath, _ := filepath.Rel(cwd, absPath)
+	fmt.Println(name, relativePath, selection.ShortString())
 
 	if filename == MAIN_DOT_GO {
 		cmd := exec.Command("go", "run", MAIN_DOT_GO)
 		_, err := cmd.Output()
 		if err != nil {
-			t.Logf("go run main.go failed:")
+			t.Logf("go run %s failed:", MAIN_DOT_GO)
 			t.Fatal(err)
 		}
 	}
@@ -195,8 +195,13 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 	if !exists(mainFile, t) {
 		mainFile = filepath.Join(filepath.Join(directory, "src"), MAIN_DOT_GO)
 		if !exists(mainFile, t) {
-			mainFile = ""
+			mainFile = filename
 		}
+	}
+
+	mainFile, err := filepath.Abs(mainFile)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	ok := r.SetSelection(selection, mainFile)
@@ -299,6 +304,10 @@ func describe(s string) string {
 }
 
 func splitMarker(filename string, marker string, t *testing.T) (refac string, selection TextSelection, remainder []string, result string) {
+	filename, err := filepath.Abs(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
 	fields := strings.Split(marker, ",")
 	if len(fields) < 6 {
 		t.Fatalf("Marker is invalid (must contain >= 5 fields): %s", marker)

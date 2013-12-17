@@ -50,3 +50,8 @@ func (s *TextSelection) String() string {
 	return fmt.Sprintf("%s:%d,%d:%d,%d",
 		s.Filename, s.StartLine, s.StartCol, s.EndLine, s.EndCol)
 }
+
+func (s *TextSelection) ShortString() string {
+	return fmt.Sprintf("%d,%d:%d,%d",
+		s.StartLine, s.StartCol, s.EndLine, s.EndCol)
+}

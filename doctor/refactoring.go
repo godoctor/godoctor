@@ -11,6 +11,7 @@
 package doctor
 
 import (
+	"code.google.com/p/go.tools/astutil"
 	"code.google.com/p/go.tools/go/types"
 	"code.google.com/p/go.tools/importer"
 	"fmt"
@@ -21,6 +22,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 )
 
 // All available refactorings, keyed by a unique, one-short, all-lowercase name
@@ -38,15 +40,12 @@ func init() {
 // AllRefactorings returns all of the transformations that can be performed.
 // The keys of the returned map are short, single-word, all-lowercase names
 // (rename, fiximports, etc.); the values implement the Refactoring interface.
-// The returned map should be treated as immutable; if it is modified, the
-// results are undefined.
 func AllRefactorings() map[string]Refactoring {
 	return refactorings
 }
 
 // GetRefactoring returns a Refactoring keyed by the given short name.  The
-// short name must be one of the keys in the map returned by AllRefactorings;
-// if it is not, GetRefactoring returns nil.
+// short name must be one of the keys in the map returned by AllRefactorings.
 func GetRefactoring(shortName string) Refactoring {
 	return refactorings[shortName]
 }
@@ -168,62 +167,25 @@ func (r *RefactoringBase) SetSelection(selection TextSelection, mainFile string)
 	}
 	r.importer = importer.New(&impcfg)
 
-	var pkgInfo []*importer.PackageInfo
-	var err error
-	if mainFile != "" {
-		if r.filename != mainFile {
-			fmt.Println("two files packages are loaded")
-			pkgInfo, _, err = r.importer.LoadInitialPackages([]string{r.filename, mainFile})
-		} else {
-			fmt.Println("only one files packages are  loaded")
-			pkgInfo, _, err = r.importer.LoadInitialPackages([]string{r.filename})
-			fmt.Println("length of pkginfo", len(pkgInfo))
-			fmt.Println("r.filename", r.filename)
-		}
-	} else {
-
-		fmt.Println("r.filename", r.filename)
-		//pkgInfo, _, err = r.importer.LoadInitialPackages([]string{r.filename})
-		// try giving import path as argument??
-		pkgInfo, _, err = r.importer.LoadInitialPackages([]string{"mypackage"})
-
-	}
-	if err != nil {
-		r.log.Log(FATAL_ERROR, err.Error())
-		return false
-	} else if len(pkgInfo) < 1 {
+	pkgInfo, err := r.loadPackages(mainFile)
+	if len(pkgInfo) < 1 {
 		r.log.Log(FATAL_ERROR, "Analysis error: unable to import package(s)")
+		if err != nil {
+			r.log.Log(FATAL_ERROR, err.Error())
+		}
 		return false
-	}
-
-	r.pkgInfo = pkgInfo[0]
-	// Unnecessary since we hooked into the importer's error reporter
-	//	if r.pkgInfo.Err != nil {
-	//		r.log.Log(FATAL_ERROR, r.pkgInfo.Err.Error())
-	//		return false
-	//	}
-	fmt.Println("files", r.pkgInfo.Files)
-	if len(r.pkgInfo.Files) < 1 {
-		r.log.Log(FATAL_ERROR, "Package contains no files")
-		return false
-	}
-
-	r.file = nil
-	for _, file := range r.pkgInfo.Files {
-		//if r.importer.Fset.Position(file.Pos()).Filename == selection.filename {
-		r.file = file
-		break
-		//}
-	}
-	if r.file == nil {
+	} else if r.pkgInfo == nil || r.file == nil {
 		r.log.Log(FATAL_ERROR, "Unable to parse "+selection.Filename)
+		if err != nil {
+			r.log.Log(FATAL_ERROR, err.Error())
+		}
 		return false
 	}
 
 	r.selectionStart = r.lineColToPos(selection.StartLine, selection.StartCol)
 	r.selectionEnd = r.lineColToPos(selection.EndLine, selection.EndCol)
 
-	nodes, _ := importer.PathEnclosingInterval(r.file,
+	nodes, _ := astutil.PathEnclosingInterval(r.file,
 		r.selectionStart, r.selectionEnd)
 	r.selectedNode = nodes[0]
 
@@ -247,6 +209,67 @@ func (r *RefactoringBase) SetSelection(selection TextSelection, mainFile string)
 //	}
 //	return fs[0]
 //}
+
+func (r *RefactoringBase) loadPackages(mainFile string) (
+	pkgInfo []*importer.PackageInfo, err error) {
+	if mainFile != "" {
+		pkgInfo, _, err = r.importer.LoadInitialPackages(
+			[]string{mainFile})
+	}
+
+	var wasAlreadyLoaded bool
+	r.pkgInfo, r.file, wasAlreadyLoaded, err = r.ensureIsLoaded(r.filename)
+	if !wasAlreadyLoaded {
+		pkgInfo = append(pkgInfo, r.pkgInfo)
+	}
+
+	return pkgInfo, err
+}
+
+func (r *RefactoringBase) ensureIsLoaded(filename string) (pkgInfo *importer.PackageInfo, file *ast.File, wasAlreadyLoaded bool, err error) {
+
+	// If the importer already loaded this file, do not load it again
+	pkgInfo, file = r.getFileFromImporter(filename)
+	if pkgInfo != nil && file != nil {
+		return pkgInfo, file, true, nil
+	}
+
+	// Determine this file's package and load the package if possible
+	pkg, err := r.determinePackage(r.filename)
+	if err != nil || pkg == "" || pkg == "main" {
+		_, err = r.importer.LoadPackage(r.filename)
+	} else {
+		_, err = r.importer.LoadPackage(pkg)
+	}
+
+	pkgInfo, file = r.getFileFromImporter(filename)
+	return pkgInfo, file, false, err
+}
+
+func (r *RefactoringBase) getFileFromImporter(filename string) (*importer.PackageInfo, *ast.File) {
+	absFilename, _ := filepath.Abs(filename)
+	for _, pkgInfo := range r.importer.AllPackages() {
+		for _, f := range pkgInfo.Files {
+			thisFile := r.importer.Fset.Position(f.Pos()).Filename
+			if thisFile == filename || thisFile == absFilename {
+				return pkgInfo, f
+			}
+		}
+	}
+	return nil, nil
+}
+
+func (r *RefactoringBase) determinePackage(filename string) (string, error) {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, filename, nil, parser.PackageClauseOnly)
+	if err != nil {
+		return "", err
+	}
+	if f.Name == nil {
+		return "", nil
+	}
+	return f.Name.Name, nil
+}
 
 // Converts a line/column position (where the first character in a file is at
 // line 1, column 1) into a token.Pos
