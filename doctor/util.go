@@ -77,7 +77,7 @@ func digraphClosure(digraph [][]int) [][]int {
 				scc(w)
 				lowlink[v] = min(lowlink[v], lowlink[w])
 			} else if contains(stack, w) {
-				lowlink[v] = min(lowlink[v], lowlink[w])
+				lowlink[v] = min(lowlink[v], index[w])
 			}
 			result[v] = union(result[v], result[w])
 		}
