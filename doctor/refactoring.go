@@ -23,6 +23,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"unicode/utf8"
 )
 
 // All available refactorings, keyed by a unique, one-short, all-lowercase name
@@ -191,6 +192,48 @@ func (r *RefactoringBase) SetSelection(selection TextSelection, mainFile string)
 
 	r.editSet = map[string]EditSet{selection.Filename: NewEditSet()}
 	return true
+}
+
+// Finds all of the references in an AST to a single declaration
+//@all = all Packages or just this Package
+func (r *RefactoringBase) findOccurrences(all bool, ident *ast.Ident) map[string][]OffsetLength {
+
+	//filenames to offsets
+	result := make(map[string][]OffsetLength)
+
+	decl := r.pkgInfo.ObjectOf(ident)
+	if decl == nil {
+		r.log.Log(FATAL_ERROR, "Unable to find declaration")
+		return nil
+	}
+
+	var pkgs []*importer.PackageInfo
+	if all {
+		for _, pkgInfo := range r.importer.AllPackages() {
+			pkgs = append(pkgs, pkgInfo)
+		}
+	} else {
+		pkgs = append(pkgs, r.pkgInfo)
+	}
+
+	for _, pkgInfo := range pkgs {
+		for _, f := range pkgInfo.Files {
+			//inspect each file in package for identifier
+			ast.Inspect(f, func(n ast.Node) bool {
+				switch thisIdent := n.(type) {
+				case *ast.Ident:
+					if r.pkgInfo.ObjectOf(thisIdent) == decl {
+						offset := r.importer.Fset.Position(thisIdent.NamePos).Offset
+						length := utf8.RuneCountInString(thisIdent.Name)
+						filename := r.importer.Fset.Position(f.Pos()).Filename
+						result[filename] = append(result[filename], OffsetLength{offset, length})
+					}
+				}
+				return true
+			})
+		}
+	}
+	return result
 }
 
 //// Parses the given file, logging errors to the given log, and returning both
