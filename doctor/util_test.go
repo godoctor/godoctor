@@ -19,6 +19,44 @@ func TestOffsetLength(t *testing.T) {
 	assertEquals("offset 5, length 20", ol.String(), t)
 }
 
+func TestUnionContains(t *testing.T) {
+	set1 := []int{1, 2, 3}
+	//	set2 := []int{3, 1, 4}
+	//	set3 := []int{5}
+	//	set4 := []int{}
+	//	assertEquals([]int{1, 2, 3, 4}, union(set1, set2))
+	//	assertEquals([]int{1, 2, 3, 5}, union(set1, set3))
+	//	assertEquals(set3, union(set3, set4))
+	assertFalse(contains(set1, 0), t)
+	assertTrue(contains(set1, 1), t)
+	assertTrue(contains(set1, 2), t)
+	assertTrue(contains(set1, 3), t)
+	assertFalse(contains(set1, 4), t)
+}
+
+func TestGraphClosure(t *testing.T) {
+	// 0 --> 1
+	// |     ^
+	// v     |  _
+	// 3 <-- 2 <_|
+	// |
+	// v
+	// 4
+	// |
+	// v
+	// 5
+	graph1 := [][]int{
+		[]int{1, 3},
+		[]int{},
+		[]int{1, 2, 3},
+		[]int{4},
+		[]int{5},
+		[]int{}}
+	expected := "[[0 1 3 4 5] [1] [2 1 3 4 5] [3 4 5] [4 5] [5]]"
+	actual := fmt.Sprintf("%v", digraphClosure(graph1))
+	assertEquals(expected, actual, t)
+}
+
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 // These are utility methods used by other tests as well.  They need to be in

@@ -377,3 +377,37 @@ func (r *RefactoringBase) findFile(tfile *token.File, f func(file *token.File, a
 	}
 	log.Fatalf("Unable to find file %s in importer.AllPackages()", filename)
 }
+
+func closure(sourceType types.Type, allTypes []types.Type) []types.Type {
+	adj := digraphClosure(implementsGraph(allTypes))
+	for i, t := range allTypes {
+		if t == sourceType {
+			return mapTypes(adj[i], allTypes)
+		}
+	}
+	panic("sourceType missing from allTypes")
+}
+
+func mapTypes(indices []int, allTypes []types.Type) []types.Type {
+	result := make([]types.Type, 0, len(indices))
+	for _, index := range indices {
+		result = append(result, allTypes[index])
+	}
+	return result
+}
+
+func implementsGraph(allTypes []types.Type) [][]int {
+	adj := make([][]int, len(allTypes))
+	for i, t := range allTypes {
+		switch interf := t.(type) {
+		case *types.Interface:
+			for j, typ := range allTypes {
+				if types.Implements(typ, interf, false) {
+					adj[i] = append(adj[i], j)
+					adj[j] = append(adj[j], i)
+				}
+			}
+		}
+	}
+	return adj
+}

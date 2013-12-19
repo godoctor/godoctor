@@ -55,3 +55,78 @@ func (s *TextSelection) ShortString() string {
 	return fmt.Sprintf("%d,%d:%d,%d",
 		s.StartLine, s.StartCol, s.EndLine, s.EndCol)
 }
+
+func digraphClosure(digraph [][]int) [][]int {
+	if !validateGraph(digraph) {
+		panic("invalid graph")
+	}
+	result := make([][]int, len(digraph))
+	index := make([]int, len(digraph))
+	lowlink := make([]int, len(digraph))
+	stack := []int{}
+	nextIndex := 1
+	var scc func(v int)
+	scc = func(v int) {
+		result[v] = []int{v}
+		index[v] = nextIndex
+		lowlink[v] = nextIndex
+		nextIndex++
+		stack = append(stack, v)
+		for _, w := range digraph[v] {
+			if index[w] == 0 {
+				scc(w)
+				lowlink[v] = min(lowlink[v], lowlink[w])
+			} else if contains(stack, w) {
+				lowlink[v] = min(lowlink[v], lowlink[w])
+			}
+			result[v] = union(result[v], result[w])
+		}
+		if lowlink[v] == index[v] {
+			for {
+				w := stack[len(stack)-1]
+				stack = stack[0 : len(stack)-1]
+				result[w] = result[v]
+				if w == v {
+					break
+				}
+			}
+		}
+	}
+	for i, _ := range digraph {
+		if index[i] == 0 {
+			scc(i)
+		}
+	}
+	return result
+}
+
+func validateGraph(digraph [][]int) bool {
+	for _, adj := range digraph {
+		for _, idx := range adj {
+			if idx < 0 || idx >= len(digraph) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func union(u, v []int) []int {
+	result := make([]int, len(u), len(u)+len(v))
+	copy(result, u)
+	for _, value := range v {
+		if !contains(result, value) {
+			result = append(result, value)
+		}
+	}
+	return result
+}
+
+func contains(slice []int, value int) bool {
+	for _, v := range slice {
+		if v == value {
+			return true
+		}
+	}
+	return false
+}
