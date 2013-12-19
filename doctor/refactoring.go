@@ -378,36 +378,40 @@ func (r *RefactoringBase) findFile(tfile *token.File, f func(file *token.File, a
 	log.Fatalf("Unable to find file %s in importer.AllPackages()", filename)
 }
 
-func closure(sourceType types.Type, allTypes []types.Type) []types.Type {
-	adj := digraphClosure(implementsGraph(allTypes))
-	for i, t := range allTypes {
-		if t == sourceType {
-			return mapTypes(adj[i], allTypes)
-		}
-	}
-	panic("sourceType missing from allTypes")
-}
+func closure(allInterfaces []*types.Interface, allConcreteTypes []types.Type) map[types.Type][]types.Type {
+	graph := digraphClosure(implementsGraph(allInterfaces, allConcreteTypes))
 
-func mapTypes(indices []int, allTypes []types.Type) []types.Type {
-	result := make([]types.Type, 0, len(indices))
-	for _, index := range indices {
-		result = append(result, allTypes[index])
+	result := make(map[types.Type][]types.Type, len(allInterfaces) + len(allConcreteTypes))
+	for u, adj := range graph {
+		typ := mapType(u, allInterfaces, allConcreteTypes)
+		typesAffected := make([]types.Type, 0, len(adj))
+		for _, v := range adj {
+			typesAffected = append(typesAffected, mapType(v, allInterfaces, allConcreteTypes))
+		}
+		result[typ] = typesAffected
 	}
 	return result
 }
 
-func implementsGraph(allTypes []types.Type) [][]int {
-	adj := make([][]int, len(allTypes))
-	for i, t := range allTypes {
-		switch interf := t.(type) {
-		case *types.Interface:
-			for j, typ := range allTypes {
-				if types.Implements(typ, interf, false) {
-					adj[i] = append(adj[i], j)
-					adj[j] = append(adj[j], i)
-				}
+func implementsGraph(allInterfaces []*types.Interface, allConcreteTypes []types.Type) [][]int {
+	adj := make([][]int, len(allInterfaces) + len(allConcreteTypes))
+	for i, interf := range allInterfaces {
+		for j, typ := range allConcreteTypes {
+			if types.Implements(typ, interf, false) {
+				adj[i] = append(adj[i], len(allInterfaces)+j)
+				adj[len(allInterfaces)+j] = append(adj[len(allInterfaces)+j], i)
 			}
 		}
 	}
+	// TODO: Handle subtype relationships due to embedded structs
 	return adj
 }
+
+func mapType(node int, allInterfaces []*types.Interface, allConcreteTypes []types.Type) types.Type {
+	if node >= len(allInterfaces) {
+		return allConcreteTypes[node - len(allInterfaces)]
+	} else {
+		return allInterfaces[node]
+	}
+}
+
