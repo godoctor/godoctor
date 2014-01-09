@@ -11,7 +11,6 @@ package doctor
 
 import (
 	"fmt"
-	"strconv"
 )
 
 // An OffsetLength consists of two integers: a 0-based offset and a nonnegative
@@ -29,8 +28,7 @@ func (o *OffsetLength) OffsetPastEnd() int {
 }
 
 func (o *OffsetLength) String() string {
-	return "offset " + strconv.Itoa(o.Offset) +
-		", length " + strconv.Itoa(o.Length)
+	return fmt.Sprintf("offset %d, length %d", o.Offset, o.Length)
 }
 
 // A TextSelection represents a selection in a text editor.  It consists of a

@@ -71,7 +71,7 @@ func TestLineRdr(t *testing.T) {
 	assertEquals("Line5", r.line, t)
 	assertTrue(r.lineOffset == 40, t)
 	assertTrue(r.lineNum == 5, t)
-	assertTrue(len(r.leadingCtxLines) == num_ctx_lines, t)
+	assertTrue(len(r.leadingCtxLines) == numCtxLines, t)
 	assertEquals("Line2....\n", r.leadingCtxLines[0], t)
 	assertEquals("Line3....\n", r.leadingCtxLines[1], t)
 	assertEquals("Line4....\n", r.leadingCtxLines[2], t)
