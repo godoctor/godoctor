@@ -424,7 +424,7 @@ func (r *RefactoringBase) findFile(tfile *token.File, f func(file *token.File, a
 func closure(allInterfaces []*types.Interface, allConcreteTypes []types.Type) map[types.Type][]types.Type {
 	graph := digraphClosure(implementsGraph(allInterfaces, allConcreteTypes))
 
-	result := make(map[types.Type][]types.Type, len(allInterfaces) + len(allConcreteTypes))
+	result := make(map[types.Type][]types.Type, len(allInterfaces)+len(allConcreteTypes))
 	for u, adj := range graph {
 		typ := mapType(u, allInterfaces, allConcreteTypes)
 		typesAffected := make([]types.Type, 0, len(adj))
@@ -437,7 +437,7 @@ func closure(allInterfaces []*types.Interface, allConcreteTypes []types.Type) ma
 }
 
 func implementsGraph(allInterfaces []*types.Interface, allConcreteTypes []types.Type) [][]int {
-	adj := make([][]int, len(allInterfaces) + len(allConcreteTypes))
+	adj := make([][]int, len(allInterfaces)+len(allConcreteTypes))
 	for i, interf := range allInterfaces {
 		for j, typ := range allConcreteTypes {
 			if types.Implements(typ, interf, false) {
@@ -452,9 +452,8 @@ func implementsGraph(allInterfaces []*types.Interface, allConcreteTypes []types.
 
 func mapType(node int, allInterfaces []*types.Interface, allConcreteTypes []types.Type) types.Type {
 	if node >= len(allInterfaces) {
-		return allConcreteTypes[node - len(allInterfaces)]
+		return allConcreteTypes[node-len(allInterfaces)]
 	} else {
 		return allInterfaces[node]
 	}
 }
-
