@@ -8,6 +8,8 @@
 
 // Contributors: Jeff Overbey
 
+// Package doctor provides infrastructure for building refactorings and similar
+// source code-level program transformations for Go programs.
 package doctor
 
 import (
@@ -280,9 +282,9 @@ func (r *RefactoringBase) ensureIsLoaded(filename string) (pkgInfo *importer.Pac
 	// Determine this file's package and load the package if possible
 	pkg, err := r.determinePackage(r.filename)
 	if err != nil || pkg == "" || pkg == "main" {
-		_, err = r.importer.LoadPackage(r.filename)
+		_, err = r.importer.ImportPackage(r.filename)
 	} else {
-		_, err = r.importer.LoadPackage(pkg)
+		_, err = r.importer.ImportPackage(pkg)
 	}
 
 	pkgInfo, file = r.getFileFromImporter(filename)
