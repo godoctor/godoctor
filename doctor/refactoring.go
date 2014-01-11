@@ -99,7 +99,7 @@ func GetRefactoring(shortName string) Refactoring {
 // the refactoring.
 type Refactoring interface {
 	Name() string
-	SetSelection(selection TextSelection, mainFile string) bool
+	SetSelection(selection TextSelection, scope []string) bool
 	Configure(args []string) bool
 	Run()
 	GetParams() []string
@@ -120,13 +120,17 @@ type RefactoringBase struct {
 }
 
 // Configures a refactoring by indicating the filename in which text is
-// selected and the beginning and end of the selected region.  Internally,
-// this configures all of the fields in the RefactoringBase struct.  If
-// nonempty, mainFile denotes the file containing the program entrypoint
-// (main function), which may be different from the file containing the
-// text selection.
-func (r *RefactoringBase) SetSelection(selection TextSelection, mainFile string) bool {
+// selected and the beginning and end of the selected region.  Internally, this
+// configures all of the fields in the RefactoringBase struct.  If nonempty,
+// scope denotes a scope (passed to the go.tools importer): typically a package
+// name or a file containing the program entrypoint (main function), which may
+// be different from the file containing the text selection.
+func (r *RefactoringBase) SetSelection(selection TextSelection, scope []string) bool {
 	r.log = NewLog()
+	// r.log.Log(INFO, fmt.Sprintf("GOPATH is %s", os.Getenv("GOPATH")))
+	// cwd, _ := os.Getwd()
+	// r.log.Log(INFO, fmt.Sprintf("Working directory is %s", cwd))
+	// r.log.Log(INFO, fmt.Sprintf("Scope is %s", scope))
 
 	r.filename = selection.Filename
 	//filename, err := filepath.Abs(selection.filename)
@@ -157,6 +161,7 @@ func (r *RefactoringBase) SetSelection(selection TextSelection, mainFile string)
 
 	var impcfg importer.Config
 	impcfg.Build = &buildContext
+	impcfg.SourceImports = true
 	impcfg.TypeChecker.Error = func(err error) {
 		// FIXME: Needs to be thread-safe
 		// As of today, you can access the components of the error (token.Pos, string) as:
@@ -170,7 +175,7 @@ func (r *RefactoringBase) SetSelection(selection TextSelection, mainFile string)
 	}
 	r.importer = importer.New(&impcfg)
 
-	pkgInfo, err := r.loadPackages(mainFile)
+	pkgInfo, err := r.loadPackages(scope)
 	if len(pkgInfo) < 1 {
 		r.log.Log(FATAL_ERROR, "Analysis error: unable to import package(s)")
 		if err != nil {
@@ -205,7 +210,7 @@ func (r *RefactoringBase) findOccurrences(all bool, ident *ast.Ident) map[string
 
 	decl := r.pkgInfo.ObjectOf(ident)
 	if decl == nil {
-		r.log.Log(FATAL_ERROR, "Unable to find declaration")
+		r.log.Log(FATAL_ERROR, "Unable to find declaration of "+ident.String())
 		return nil
 	}
 
@@ -255,11 +260,10 @@ func (r *RefactoringBase) findOccurrences(all bool, ident *ast.Ident) map[string
 //	return fs[0]
 //}
 
-func (r *RefactoringBase) loadPackages(mainFile string) (
+func (r *RefactoringBase) loadPackages(scope []string) (
 	pkgInfo []*importer.PackageInfo, err error) {
-	if mainFile != "" {
-		pkgInfo, _, err = r.importer.LoadInitialPackages(
-			[]string{mainFile})
+	if len(scope) > 0 {
+		pkgInfo, _, err = r.importer.LoadInitialPackages(scope)
 	}
 
 	var wasAlreadyLoaded bool

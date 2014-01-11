@@ -3,12 +3,10 @@ package doctor
 // This file defines the Rename refactoring.
 
 import (
-	//"fmt"
-	"go/ast"
-	//"strings"
-	//"reflect"
-	//"unicode"
 	"code.google.com/p/go.tools/go/types"
+	"go/ast"
+	"unicode"
+	"unicode/utf8"
 )
 
 // A RenameRefactoring is used to rename identifiers in Go programs.
@@ -96,7 +94,8 @@ func (r *RenameRefactoring) findIfFunction(ident *ast.Ident) bool {
 
 	obj := r.pkgInfo.ObjectOf(ident)
 	if obj == nil {
-		r.log.Log(FATAL_ERROR, "Unable to find declaration")
+		r.log.Log(FATAL_ERROR, "Unable to find declaration of "+
+			ident.String())
 	}
 
 	switch sig := types.Object.Type(obj).(type) {
@@ -119,7 +118,8 @@ func (r *RenameRefactoring) findIfMethod(ident *ast.Ident) bool {
 	obj := r.pkgInfo.ObjectOf(ident)
 
 	if obj == nil {
-		r.log.Log(FATAL_ERROR, "Unable to find declaration")
+		r.log.Log(FATAL_ERROR, "Unable to find declaration of "+
+			ident.String())
 	}
 	// fmt.Println("type of object is",types.Object.Type(obj))
 	switch sig := types.Object.Type(obj).Underlying().(type) {
@@ -147,7 +147,10 @@ func (r *RenameRefactoring) IsExportable(ident *ast.Ident) bool {
 
 	obj := r.pkgInfo.ObjectOf(ident)
 	if obj == nil {
-		r.log.Log(FATAL_ERROR, "Unable to find declaration")
+		r.log.Log(FATAL_ERROR, "Unable to find declaration of "+
+			ident.String())
+		ch, _ := utf8.DecodeRuneInString(ident.String())
+		return unicode.IsUpper(ch)
 	}
 
 	return types.Object.IsExported(obj)

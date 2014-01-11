@@ -334,29 +334,15 @@ func query(file string, args []string, r doctor.Refactoring, pos string, scope s
 		return nil, nil, err
 	}
 
+	if scope == "" {
+		scope = ts.Filename
+	}
+
 	// TODO these 3 all return bool, but get checked in log. Not sure if
 	// need a change here or not. Maybe move this entire function to main.go
-	r.SetSelection(ts, ts.Filename)
+	r.SetSelection(ts, []string{scope})
 	r.Configure(args)
 	r.Run()
 	e, l := r.GetResult()
 	return e, l, nil
-}
-
-// paths returns a (not necessarily unique) absolute path and a relative path
-// to the given file, if possible.  A non-nil error is returned if an absolute
-// path cannot be computed.
-func paths(file string) (string, string, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", "", err
-	}
-
-	absPath, err := filepath.Abs(file)
-	if err != nil {
-		return "", "", err
-	}
-
-	relativePath, _ := filepath.Rel(cwd, absPath)
-	return absPath, relativePath, err
 }

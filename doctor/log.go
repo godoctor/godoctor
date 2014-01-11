@@ -13,6 +13,8 @@ package doctor
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 )
 
 // Every LogEntry has a severity: INFO, WARNING, ERROR, or FATAL_ERROR.  An
@@ -95,8 +97,30 @@ func (log *Log) LogInitial(severity Severity, message string,
 		isInitial: true,
 		Severity:  severity,
 		Message:   message,
-		Filename:  filename,
+		Filename:  displayablePath(filename),
 		Position:  OffsetLength{offset, length}})
+}
+
+// displayablePath returns a path for the given file relative to the current
+// directory, if possible, and the original filename otherwise.  It is intended
+// for use in error messages.
+func displayablePath(file string) string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return file
+	}
+
+	absPath, err := filepath.Abs(file)
+	if err != nil {
+		return file
+	}
+
+	relativePath, err := filepath.Rel(cwd, absPath)
+	if err != nil || relativePath == "" {
+		return file
+	}
+
+	return relativePath
 }
 
 // Log adds a message to the given log with the given severity.  The message
