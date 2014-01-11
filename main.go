@@ -16,6 +16,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -103,18 +104,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	r := doctor.GetRefactoring(args[0])
 	var filename string
 
 	//no file given (assume stdin), e.g. go-doctor refactor params...
 	//TODO make stdin and importer get along
+	r := doctor.GetRefactoring(args[0])
 	if r != nil && len(args) > 0 {
-		filename = "temp"
 		args = args[1:]
 	} else {
 		//file given, e.g. go-doctor file refactor params...
-		r = doctor.GetRefactoring(args[1])
 		filename = args[0]
+		r = doctor.GetRefactoring(args[1])
 		args = args[2:]
 	}
 
@@ -129,7 +129,7 @@ func main() {
 	//TODO what to do about errors in JSON? default reply wrapper?
 	//since these aren't really "log" errors
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprint(os.Stderr, err)
 		os.Exit(1)
 	}
 
@@ -144,7 +144,7 @@ func main() {
 	for file, _ := range es {
 		changes[file], err = doctor.ApplyToFile(es[file], file)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Fprint(os.Stderr, err)
 			os.Exit(2)
 		}
 	}
@@ -153,7 +153,7 @@ func main() {
 		//write changes to their file and exit
 		for file, change := range changes {
 			if err := ioutil.WriteFile(file, change, 0); err != nil {
-				fmt.Println(err)
+				fmt.Fprint(os.Stderr, err)
 				os.Exit(2)
 			}
 		}
@@ -165,7 +165,7 @@ func main() {
 		for file, change := range changes {
 			f, err := ioutil.TempFile("", "go-doctor")
 			if err != nil {
-				fmt.Println(err)
+				fmt.Fprint(os.Stderr, err)
 				os.Exit(2)
 			}
 			//TODO make sure that we return, so this happens
@@ -193,9 +193,10 @@ func main() {
 	printResults(*formatFlag, r.Name(), l, changes)
 }
 
-func printResults(format, refactoring string, log *doctor.Log, changes map[string][]byte) {
+func printResults(format, refactoring string, l *doctor.Log, changes map[string][]byte) {
 	switch format {
 	case "plain":
+		fmt.Fprint(os.Stderr, l)
 		for file, change := range changes {
 			//TODO show file name, piss off the unix gurus?
 			fmt.Printf("%s:\n\n", file)
@@ -215,7 +216,7 @@ func printResults(format, refactoring string, log *doctor.Log, changes map[strin
 			Changes map[string]string `json:"changes"`
 		}{
 			refactoring,
-			log,
+			l,
 			c,
 		}, "", "\t")
 
@@ -310,7 +311,7 @@ func parsePositionToTextSelection(pos string) (t doctor.TextSelection, err error
 }
 
 //TODO (reed / josh) scope here?
-//TODO (jeff) I'm fairly sure I used scope wrong here...?
+//TODO (jeff) figure out how to deal with scope/mainFile/2nd arg to SetSelection
 // Anyway I think we need to know which file the main function is in,
 // so I made that the second arg to SetSelection -- confirm with Alan
 //
@@ -327,13 +328,35 @@ func query(file string, args []string, r doctor.Refactoring, pos string, scope s
 	if err != nil {
 		return nil, nil, err
 	}
-	ts.Filename = file
+
+	ts.Filename, err = filepath.Abs(file)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	// TODO these 3 all return bool, but get checked in log. Not sure if
 	// need a change here or not. Maybe move this entire function to main.go
-	r.SetSelection(ts, scope)
+	r.SetSelection(ts, ts.Filename)
 	r.Configure(args)
 	r.Run()
 	e, l := r.GetResult()
 	return e, l, nil
+}
+
+// paths returns a (not necessarily unique) absolute path and a relative path
+// to the given file, if possible.  A non-nil error is returned if an absolute
+// path cannot be computed.
+func paths(file string) (string, string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", "", err
+	}
+
+	absPath, err := filepath.Abs(file)
+	if err != nil {
+		return "", "", err
+	}
+
+	relativePath, _ := filepath.Rel(cwd, absPath)
+	return absPath, relativePath, err
 }
