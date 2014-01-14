@@ -1,3 +1,4 @@
+// <<<<< shortassign,11,3,10,13,fail
 package main
 
 import "fmt"
@@ -7,6 +8,6 @@ func f() (int, float64) {
 }
 
 func main() {
-  i, x := f()    // <<<<< shortassign,10,3,10,13,fail
+  var i, x  = f()
   fmt.Println(i, x)
 }
