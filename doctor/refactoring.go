@@ -201,48 +201,6 @@ func (r *RefactoringBase) SetSelection(selection TextSelection, scope []string) 
 	return true
 }
 
-// Finds all of the references in an AST to a single declaration
-//@all = all Packages or just this Package
-func (r *RefactoringBase) findOccurrences(all bool, ident *ast.Ident) map[string][]OffsetLength {
-
-	//filenames to offsets
-	result := make(map[string][]OffsetLength)
-
-	decl := r.pkgInfo.ObjectOf(ident)
-	if decl == nil {
-		r.log.Log(FATAL_ERROR, "Unable to find declaration of "+ident.String())
-		return nil
-	}
-
-	var pkgs []*importer.PackageInfo
-	if all {
-		for _, pkgInfo := range r.importer.AllPackages() {
-			pkgs = append(pkgs, pkgInfo)
-		}
-	} else {
-		pkgs = append(pkgs, r.pkgInfo)
-	}
-
-	for _, pkgInfo := range pkgs {
-		for _, f := range pkgInfo.Files {
-			//inspect each file in package for identifier
-			ast.Inspect(f, func(n ast.Node) bool {
-				switch thisIdent := n.(type) {
-				case *ast.Ident:
-					if r.pkgInfo.ObjectOf(thisIdent) == decl {
-						offset := r.importer.Fset.Position(thisIdent.NamePos).Offset
-						length := utf8.RuneCountInString(thisIdent.Name)
-						filename := r.importer.Fset.Position(f.Pos()).Filename
-						result[filename] = append(result[filename], OffsetLength{offset, length})
-					}
-				}
-				return true
-			})
-		}
-	}
-	return result
-}
-
 //// Parses the given file, logging errors to the given log, and returning both
 //// a FileSet and a File
 //func (r *RefactoringBase) parse(filename string) *ast.File {
@@ -462,4 +420,54 @@ func mapType(node int, allInterfaces []*types.Interface, allConcreteTypes []type
 	} else {
 		return allInterfaces[node]
 	}
+}
+
+// Finds all of the references in an AST to a single declaration
+//@all = all Packages or just this Package
+func (r *RefactoringBase) findOccurrences(all bool, ident *ast.Ident) map[string][]OffsetLength {
+
+	//maps filenames to offsets
+	result := make(map[string][]OffsetLength)
+
+	decl := r.pkgInfo.ObjectOf(ident)
+	if decl == nil {
+		r.log.Log(FATAL_ERROR, "Unable to find declaration")
+		return nil
+	}
+
+	pkgs := r.getPackages(all)
+
+	for _, pkgInfo := range pkgs {
+		r.pkgInfo = pkgInfo
+		for _, f := range r.pkgInfo.Files {
+			//inspect each file in package for identifier
+			ast.Inspect(f, func(n ast.Node) bool {
+				switch thisIdent := n.(type) {
+				case *ast.Ident:
+					if r.pkgInfo.ObjectOf(thisIdent) == decl {
+
+						offset := r.importer.Fset.Position(thisIdent.NamePos).Offset
+						length := utf8.RuneCountInString(thisIdent.Name)
+						filename := r.importer.Fset.Position(f.Pos()).Filename
+						result[filename] = append(result[filename], OffsetLength{offset, length})
+
+					}
+				}
+				return true
+			})
+		}
+	}
+	return result
+}
+
+func (r *RefactoringBase) getPackages(all bool) []*importer.PackageInfo {
+	var pkgs []*importer.PackageInfo
+	if all {
+		for _, pkgInfo := range r.importer.AllPackages() {
+			pkgs = append(pkgs, pkgInfo)
+		}
+	} else {
+		pkgs = append(pkgs, r.pkgInfo)
+	}
+	return pkgs
 }
