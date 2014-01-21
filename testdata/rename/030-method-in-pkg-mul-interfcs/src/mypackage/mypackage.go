@@ -1,0 +1,32 @@
+package mypackage 
+
+
+
+type Simple interface {
+
+Mymethod() string
+
+} 
+
+type Complex interface {
+
+Mymethod() string
+SecondMethod()
+
+}
+
+type Mystruct struct {
+
+Myvar string
+
+}
+
+func (mystructvar *Mystruct)Mymethod() string {
+
+
+return mystructvar.Myvar
+
+
+}
+
+
