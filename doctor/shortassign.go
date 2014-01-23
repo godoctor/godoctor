@@ -71,12 +71,12 @@ func (r *ShortAssignRefactoring) rhsExprs(selectedNode *ast.AssignStmt) []string
 func (r *ShortAssignRefactoring) createEditSet(selectedNode *ast.AssignStmt) {
 	startOffset, length := r.offsetLength(selectedNode)
 	replacementString := r.createReplacementString(selectedNode)
-	r.editSet[r.filename].Add(OffsetLength{startOffset, length + 1}, replacementString)
+	r.editSet[r.filename(r.file)].Add(OffsetLength{startOffset, length + 1}, replacementString)
 }
 
 func (r *ShortAssignRefactoring) offsetLength(node ast.Node) (int, int) {
-	startOffset := r.importer.Fset.Position(node.Pos()).Offset
-	endOffset := r.importer.Fset.Position(node.End()).Offset
+	startOffset := r.program.Fset.Position(node.Pos()).Offset
+	endOffset := r.program.Fset.Position(node.End()).Offset
 	return startOffset, (endOffset - startOffset)
 }
 
@@ -85,18 +85,18 @@ func (r *ShortAssignRefactoring) createReplacementString(selectedNode *ast.Assig
 
 	replacement := make([]string, len(selectedNode.Rhs))
 	for index, rhs := range selectedNode.Rhs {
-		if reflect.TypeOf(r.pkgInfo.TypeOf(rhs)).String() == "*types.Tuple" {
+		if reflect.TypeOf(r.pkgInfo(r.file).TypeOf(rhs)).String() == "*types.Tuple" {
 			replacement[index] = fmt.Sprintf("var %s %s = %s\n",
 				r.lhsNamesCommaSeparated(selectedNode),
-				r.returnTypeOfFunction(r.pkgInfo.TypeOf(rhs)),
+				r.returnTypeOfFunction(r.pkgInfo(r.file).TypeOf(rhs)),
 				r.rhsExprs(selectedNode)[index])
-			if r.returnTypeOfFunction(r.pkgInfo.TypeOf(rhs)) == "" {
+			if r.returnTypeOfFunction(r.pkgInfo(r.file).TypeOf(rhs)) == "" {
 				r.log.Log(ERROR, "This short assignment cannot be converted to an explicitly-typed var declaration.")
 			}
 		} else {
 			replacement[index] = fmt.Sprintf("var %s %s = %s\n",
 				r.lhsNames(selectedNode)[index],
-				r.pkgInfo.TypeOf(rhs).String(),
+				r.pkgInfo(r.file).TypeOf(rhs).String(),
 				r.rhsExprs(selectedNode)[index])
 			// include the space in front of the var for the second element you add
 		}
@@ -123,7 +123,7 @@ func (r *ShortAssignRefactoring) lhsNamesCommaSeparated(selectedNode *ast.Assign
 
 func (r *ShortAssignRefactoring) readFromFile(len, offset int) string {
 	buf := make([]byte, len)
-	file, err := os.Open(r.filename)
+	file, err := os.Open(r.filename(r.file))
 	if err != nil {
 		panic(err)
 	}

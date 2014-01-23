@@ -5,19 +5,11 @@ package doctor
 
 import (
 	"code.google.com/p/go.tools/go/types"
-	"fmt"
 	"go/ast"
 	"unicode/utf8"
 )
 
 // A RenameRefactoring is used to rename identifiers in Go programs.
-// It implements the Refactoring interface.
-// // To rename an identifier:
-// * Create a RenameRefactoring.
-// * Invoke SetSelection to determine what identifier to rename.
-// * Invoke SetNewName to set the new name for the identifier.
-// * Invoke Run to construct the EditSet.
-// * Invoke GetResult to get the resulting Log and EditSet.
 type RenameRefactoring struct {
 	RefactoringBase
 	newName   string
@@ -88,17 +80,17 @@ func (r *RenameRefactoring) Run() {
 	}
 }
 
-//TODO pkgs not identified 
-/*else if r.findIfPackage(ident) { 
+//TODO pkgs not identified
+/*else if r.findIfPackage(ident) {
           	if r.IsExportable(ident) {
 
                   fmt.Println("package is exportable")
-                  allOccurrences = r. findOccurrences(true,ident) 
+                  allOccurrences = r. findOccurrences(true,ident)
                    r.addOccurrences(allOccurrences)
                } else {
                 fmt.Println("package is not exportable")
-                  allOccurrences = r. findOccurrences(false,ident) 
-                   r.addOccurrences(allOccurrences) 
+                  allOccurrences = r. findOccurrences(false,ident)
+                   r.addOccurrences(allOccurrences)
                   }
 
 	    }
@@ -121,7 +113,7 @@ func (r *RenameRefactoring) findOccurrencesofVar(ident *ast.Ident) []OffsetLengt
 		switch thisIdent := n.(type) {
 		case *ast.Ident:
 			if r.pkgInfo.ObjectOf(thisIdent) == decl {
-				offset := r.importer.Fset.Position(thisIdent.NamePos).Offset
+				offset := r.program.Fset.Position(thisIdent.NamePos).Offset
 				length := utf8.RuneCountInString(thisIdent.Name)
 				result = append(result, OffsetLength{offset, length})
 			}
@@ -162,9 +154,9 @@ func (r *RenameRefactoring) findIfFunction(ident *ast.Ident) bool {
 
 // isMethod returns true if the given identifier is the name of a method
 func (r *RenameRefactoring) isMethod(ident *ast.Ident) bool {
-	obj := r.pkgInfo.ObjectOf(ident)
+	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
 	if obj == nil {
-		r.log.Log(FATAL_ERROR, "Unable to find declaration")
+		r.log.Log(FATAL_ERROR, "Unable to find declaration of "+ident.Name)
 		return false
 	}
 
@@ -192,9 +184,9 @@ func (r *RenameRefactoring) isMethod(ident *ast.Ident) bool {
 	case *types.Package:
          	//pkgname := pkg.Name()
        		//if pkgname == ident.Name {
-         		isapackage = true  
+         		isapackage = true
 
-		//}          
+		//}
 
 	default:
 
@@ -206,9 +198,9 @@ func (r *RenameRefactoring) isMethod(ident *ast.Ident) bool {
 }*/
 
 func (r *RenameRefactoring) isExportable(ident *ast.Ident) bool {
-	obj := r.pkgInfo.ObjectOf(ident)
+	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
 	if obj == nil {
-		r.log.Log(FATAL_ERROR, "Unable to find declaration")
+		r.log.Log(FATAL_ERROR, "Unable to find declaration of "+ident.Name)
 		return false
 	}
 
@@ -221,8 +213,7 @@ func (r *RenameRefactoring) isExportable(ident *ast.Ident) bool {
 func (r *RenameRefactoring) isMethodinInterface(all bool, methodname string) bool {
 	isinInterface := false
 	for _, pkgInfo := range r.getPackages(all) {
-		r.pkgInfo = pkgInfo // TODO: Why is this necessary?
-		for _, file := range r.pkgInfo.Files {
+		for _, file := range pkgInfo.Files {
 			ast.Inspect(file, func(n ast.Node) bool {
 				switch thisIdent := n.(type) {
 				case *ast.InterfaceType:
@@ -241,35 +232,41 @@ func (r *RenameRefactoring) isMethodinInterface(all bool, methodname string) boo
 	return isinInterface
 }
 
-// getTypesWithMethod returns all of the types that implement the given method 
+// getTypesWithMethod returns all of the types that implement the given method
 func (r *RenameRefactoring) getTypesWithMethod(all bool, method *ast.Ident) []types.Type {
 
-	methodobj := r.pkgInfo.ObjectOf(method)
+	methodobj := r.pkgInfo(r.fileContaining(method)).ObjectOf(method)
+	if methodobj == nil {
+		r.log.Log(FATAL_ERROR, "Unable to find declaration of "+method.Name)
+		return []types.Type{}
+	}
+
 	methodname := method.Name
 
 	var TypesofInterfaces []*types.Interface
 	var OtherTypes []types.Type
 	var affected []types.Type
-	var typ types.Type
+	//var typ types.Type
 
 	for _, pkgInfo := range r.getPackages(all) {
-		r.pkgInfo = pkgInfo // TODO: Why is this necessary?
-		for _, file := range r.pkgInfo.Files {
+		for _, file := range pkgInfo.Files {
 			ast.Inspect(file, func(n ast.Node) bool {
 				switch thisSpec := n.(type) {
 				case *ast.TypeSpec:
-					switch sig := r.pkgInfo.TypeOf(thisSpec.Name).Underlying().(type) {
+					switch sig := pkgInfo.TypeOf(thisSpec.Name).Underlying().(type) {
 					case *types.Interface:
-						if sig.MethodSet().Lookup(r.pkgInfo.Pkg, methodname) != nil {
+						if sig.MethodSet().Lookup(pkgInfo.Pkg, methodname) != nil {
 							TypesofInterfaces = append(TypesofInterfaces, sig)
 						}
 					}
 
 				case *ast.FuncDecl:
+					identobj := pkgInfo.ObjectOf(thisSpec.Name)
+					if identobj == nil {
+						r.log.Log(FATAL_ERROR, "Unable to find declaration of "+thisSpec.Name.Name)
+					} else if thisSpec.Name.Name == methodname && r.CheckforsameParam(identobj, methodobj) {
 
-					if thisSpec.Name.Name == methodname && r.CheckforsameParam(r.pkgInfo.ObjectOf(thisSpec.Name), methodobj) {
-
-						obj := r.pkgInfo.ObjectOf(thisSpec.Recv.List[0].Names[0])
+						obj := pkgInfo.ObjectOf(thisSpec.Recv.List[0].Names[0])
 						types := types.Object.Type(obj)
 						OtherTypes = append(OtherTypes, types)
 
@@ -283,35 +280,26 @@ func (r *RenameRefactoring) getTypesWithMethod(all bool, method *ast.Ident) []ty
 	}
 
 	var closure map[types.Type][]types.Type = closure(TypesofInterfaces, OtherTypes)
-	for typ, affected = range closure {
-		fmt.Printf("Renaming %s will also affect %v\n", typ, affected)
-		fmt.Println("methodsets of affectedtype", affected[0].MethodSet())
+	for /*typ*/ _, affected = range closure {
+		//fmt.Printf("Renaming %s will also affect %v\n", typ, affected)
+		//fmt.Println("methodsets of affectedtype", affected[0].MethodSet())
 	}
 	return affected
 	// TODO: Can we just return closure[something]?
 }
 
 //findOccurrencesinAffectedTypes finds all the Occurrences of Methods in affected types;if all parameter is true
-// it searches for Occurrences in all packages loaded by the importer ; if it is false it searches only the current package 
+// it searches for Occurrences in all packages loaded by the importer ; if it is false it searches only the current package
 func (r *RenameRefactoring) findOccurrencesinAffectedTypes(all bool, affected []types.Type, methodname string) map[string][]OffsetLength {
-
 	result := make(map[string][]OffsetLength)
-
 	pkgs := r.getPackages(all)
-
 	for _, affectedtype := range affected {
-
 		for _, pkgInfo := range pkgs {
-
-			r.pkgInfo = pkgInfo
-
-			for _, file := range r.pkgInfo.Files {
-
+			for _, file := range pkgInfo.Files {
 				ast.Inspect(file, func(n ast.Node) bool {
 					switch thisIdent := n.(type) {
 					case *ast.TypeSpec:
-
-						if r.pkgInfo.TypeOf(thisIdent.Name).Underlying() == affectedtype {
+						if pkgInfo.TypeOf(thisIdent.Name).Underlying() == affectedtype {
 
 							switch typeofthisIdent := thisIdent.Type.(type) {
 
@@ -320,10 +308,10 @@ func (r *RenameRefactoring) findOccurrencesinAffectedTypes(all bool, affected []
 								for _, MethodList := range typeofthisIdent.Methods.List {
 
 									if MethodList.Names[0].Name == methodname {
-										offset := r.importer.Fset.Position(MethodList.Names[0].NamePos).Offset
+										offset := r.program.Fset.Position(MethodList.Names[0].NamePos).Offset
 										length := utf8.RuneCountInString(MethodList.Names[0].Name)
 
-										filename := r.importer.Fset.Position(file.Pos()).Filename
+										filename := r.program.Fset.Position(file.Pos()).Filename
 
 										result[filename] = append(result[filename], OffsetLength{offset, length})
 
@@ -337,14 +325,14 @@ func (r *RenameRefactoring) findOccurrencesinAffectedTypes(all bool, affected []
 
 						if thisIdent.Name.Name == methodname {
 
-							obj := r.pkgInfo.ObjectOf(thisIdent.Recv.List[0].Names[0])
+							obj := pkgInfo.ObjectOf(thisIdent.Recv.List[0].Names[0])
 							methodtype := types.Object.Type(obj)
 
 							if methodtype == affectedtype {
 
-								offset := r.importer.Fset.Position(thisIdent.Name.NamePos).Offset
+								offset := r.program.Fset.Position(thisIdent.Name.NamePos).Offset
 								length := utf8.RuneCountInString(thisIdent.Name.Name)
-								filename := r.importer.Fset.Position(file.Pos()).Filename
+								filename := r.program.Fset.Position(file.Pos()).Filename
 								result[filename] = append(result[filename], OffsetLength{offset, length})
 
 							}
@@ -440,8 +428,7 @@ func (r *RenameRefactoring) CheckforsameParam(identObj types.Object, methodObj t
 	var methodParams *types.Tuple
 
 	if identObj == nil || methodObj == nil {
-		r.log.Log(FATAL_ERROR, "Unable to find declaration")
-		return false
+		panic("identObj and methodObj cannot be nil")
 
 	}
 

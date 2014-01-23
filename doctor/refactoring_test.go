@@ -89,7 +89,9 @@ func runAllTestsInSubdirectories(testDirInfo os.FileInfo, t *testing.T) {
 			//desc := filepath.Join(testDirInfo.Name(), subDirInfo.Name())
 			if strings.Contains(subDirPath, *filterFlag) {
 				//fmt.Printf("********** %s **********\n", desc)
+				//if !strings.Contains(subDirPath, "fiximports/003") && !strings.Contains(subDirPath, "fiximports/004") {
 				runAllTestsInDirectory(subDirPath, t)
+				//}
 			} else {
 				//fmt.Printf("Skipping directory %s (filtered)\n", desc)
 			}
