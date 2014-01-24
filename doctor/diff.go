@@ -1,4 +1,4 @@
-// Copyright 2013 The Go Authors. All rights reserved.
+// Copyright 2014 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -10,8 +10,6 @@
 // The unified diff format is documented in the POSIX standard (IEEE 1003.1),
 // "diff - compare two files", section: "Diff -u or -U Output Format"
 // http://pubs.opengroup.org/onlinepubs/9699919799/utilities/diff.html
-
-// Contributors: Jeff Overbey
 
 package doctor
 

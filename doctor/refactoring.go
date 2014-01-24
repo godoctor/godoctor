@@ -1,12 +1,10 @@
-// Copyright 2013 The Go Authors. All rights reserved.
+// Copyright 2014 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
 // This file defines the Refactoring interface, the RefactoringBase struct, and
 // several methods common to refactorings based on RefactoringBase, including
 // SetSelection, GetLog, and GetResult.
-
-// Contributors: Jeff Overbey
 
 // Package doctor provides infrastructure for building refactorings and similar
 // source code-level program transformations for Go programs.
