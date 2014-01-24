@@ -32,10 +32,11 @@ var refactorings map[string]Refactoring
 
 func init() {
 	refactorings = map[string]Refactoring{
-		"null":        new(NullRefactoring),
 		"rename":      new(RenameRefactoring),
 		"shortassign": new(ShortAssignRefactoring),
 		"fiximports":  new(FixImportsTransformation),
+		"debug":       new(debugRefactoring),
+		"null":        new(NullRefactoring),
 	}
 }
 
@@ -124,10 +125,6 @@ type RefactoringBase struct {
 // be different from the file containing the text selection.
 func (r *RefactoringBase) SetSelection(selection TextSelection, scope []string) bool {
 	r.log = NewLog()
-	// r.log.Log(INFO, fmt.Sprintf("GOPATH is %s", os.Getenv("GOPATH")))
-	// cwd, _ := os.Getwd()
-	// r.log.Log(INFO, fmt.Sprintf("Working directory is %s", cwd))
-	// r.log.Log(INFO, fmt.Sprintf("Scope is %s", scope))
 
 	buildContext := build.Default
 	if os.Getenv("GOPATH") != "" {
@@ -324,6 +321,14 @@ func (r *RefactoringBase) fileNamed(filename string) (*loader.PackageInfo, *ast.
 
 func (r *RefactoringBase) forEachFile(f func(ast *ast.File)) {
 	for _, pkgInfo := range r.program.AllPackages {
+		for _, ast := range pkgInfo.Files {
+			f(ast)
+		}
+	}
+}
+
+func (r *RefactoringBase) forEachInitialFile(f func(ast *ast.File)) {
+	for _, pkgInfo := range r.program.InitialPackages() {
 		for _, ast := range pkgInfo.Files {
 			f(ast)
 		}
