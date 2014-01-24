@@ -7,6 +7,6 @@ func f() (int,int,int) {
 	return 5,8,3
 }
 func main() {
-	_,y,_ := f()
+	_, y, _ := f()
 	fmt.Println("Value of y :",y)
 }

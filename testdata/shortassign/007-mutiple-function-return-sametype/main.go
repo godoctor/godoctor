@@ -8,6 +8,6 @@ func f() (float64, float64) {
 }
 
 func main() {
-  i,x := f()
+  i, x := f()
   fmt.Println(i, x)
 }

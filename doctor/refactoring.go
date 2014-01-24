@@ -33,10 +33,11 @@ var refactorings map[string]Refactoring
 
 func init() {
 	refactorings = map[string]Refactoring{
-		"null":        new(NullRefactoring),
-		"rename":      new(RenameRefactoring),
-		"shortassign": new(ShortAssignRefactoring),
-		"fiximports":  new(FixImportsTransformation),
+		"null":        	new(NullRefactoring),
+		"rename":      	new(RenameRefactoring),
+		"shortassign": 	new(ShortAssignRefactoring),
+		"reverseassign":new(ReverseAssignRefactoring),
+		"fiximports":	new(FixImportsTransformation),
 	}
 }
 
