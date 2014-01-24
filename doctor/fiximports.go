@@ -1,4 +1,4 @@
-// Copyright 2013 The Go Authors. All rights reserved.
+// Copyright 2014 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -15,17 +15,13 @@
 // This is not called "FixImportsRefactoring" since it does not technically
 // preserve behavior.
 
-// Contributors: Jeff Overbey
-
 package doctor
 
 import (
 	"bytes"
 	"code.google.com/p/go.tools/go/types"
-	//"fmt"
 	"go/ast"
 	"go/token"
-	//"reflect"
 	"sort"
 	"strings"
 )
@@ -54,7 +50,7 @@ func (r *FixImportsTransformation) Run() {
 
 	r.log.RemoveInitialEntries()
 
-	//ast.Print(r.importer.Fset, r.file)
+	//ast.Print(r.program.Fset, r.file)
 
 	imports, unusedImports := r.classifyExistingImports()
 
@@ -101,7 +97,7 @@ func (r *FixImportsTransformation) collectReferencedPackages() map[string]string
 	ast.Inspect(r.file, func(n ast.Node) bool {
 		switch ident := n.(type) {
 		case *ast.Ident:
-			decl := r.pkgInfo.ObjectOf(ident)
+			decl := r.pkgInfo(r.file).ObjectOf(ident)
 			//fmt.Println("ObjectOf", ident, "is", decl)
 			if decl != nil {
 				//fmt.Println(reflect.TypeOf(decl))
@@ -143,7 +139,7 @@ func (r *FixImportsTransformation) isIdentInLHSOfSelectorExpr(ident *ast.Ident) 
 
 func (r *FixImportsTransformation) resolveSelector(ident *ast.Ident, unusedImports map[string]string) (string, string) {
 	// If the selector matches an existing import that has no references,
-	// assume this is a reference to that package and the importer just
+	// assume this is a reference to that package and the loader just
 	// failed to load the package (e.g., GOPATH is wrong or something)
 	for path, name := range unusedImports {
 		var pathNoQuotes string = strings.Trim(path, "\"")
@@ -190,7 +186,7 @@ func (r *FixImportsTransformation) resolveSelector(ident *ast.Ident, unusedImpor
 func (r *FixImportsTransformation) fixImports(imports map[string]string) {
 	replaceRange, suffix := r.findReplacementRange()
 	replacement := r.constructNewImportStatement(imports) + suffix
-	r.editSet[r.filename].Add(replaceRange, replacement)
+	r.editSet[r.filename(r.file)].Add(replaceRange, replacement)
 }
 
 func (r *FixImportsTransformation) findReplacementRange() (OffsetLength, string) {
@@ -213,7 +209,7 @@ func (r *FixImportsTransformation) findFirstDeclOffset() int {
 			pos = node.Doc.List[0].Pos()
 		}
 	}
-	return r.importer.Fset.Position(pos).Offset
+	return r.program.Fset.Position(pos).Offset
 }
 
 func (r *FixImportsTransformation) findImportStatementRange() OffsetLength {
@@ -232,8 +228,8 @@ func (r *FixImportsTransformation) findImportStatementRange() OffsetLength {
 		return true
 	})
 
-	startOffset := r.importer.Fset.Position(startPos).Offset
-	endOffset := r.importer.Fset.Position(endPos).Offset
+	startOffset := r.program.Fset.Position(startPos).Offset
+	endOffset := r.program.Fset.Position(endPos).Offset
 	length := endOffset - startOffset + 1
 	return OffsetLength{startOffset, length}
 }

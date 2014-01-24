@@ -1,11 +1,9 @@
-// Copyright 2013 The Go Authors. All rights reserved.
+// Copyright 2014 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
 // This file defines miscellaneous structs and utility methods that are used
 // throughout the system.
-
-// Contributors: Jeff Overbey
 
 package doctor
 

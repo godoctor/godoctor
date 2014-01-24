@@ -1,4 +1,4 @@
-// Copyright 2013 The Go Authors. All rights reserved.
+// Copyright 2014 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -6,23 +6,20 @@
 // several methods common to refactorings based on RefactoringBase, including
 // SetSelection, GetLog, and GetResult.
 
-// Contributors: Jeff Overbey
-
 // Package doctor provides infrastructure for building refactorings and similar
 // source code-level program transformations for Go programs.
 package doctor
 
 import (
 	"code.google.com/p/go.tools/astutil"
+	"code.google.com/p/go.tools/go/loader"
 	"code.google.com/p/go.tools/go/types"
-	"code.google.com/p/go.tools/importer"
 	"fmt"
 	"go/ast"
 	"go/build"
 	"go/parser"
 	"go/token"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"unicode/utf8"
@@ -33,11 +30,12 @@ var refactorings map[string]Refactoring
 
 func init() {
 	refactorings = map[string]Refactoring{
-		"null":        	new(NullRefactoring),
-		"rename":      	new(RenameRefactoring),
-		"shortassign": 	new(ShortAssignRefactoring),
-		"reverseassign":new(ReverseAssignRefactoring),
-		"fiximports":	new(FixImportsTransformation),
+		"rename":        new(RenameRefactoring),
+		"reverseassign": new(ReverseAssignRefactoring),
+		"shortassign":   new(ShortAssignRefactoring),
+		"fiximports":    new(FixImportsTransformation),
+		"debug":         new(debugRefactoring),
+		"null":          new(NullRefactoring),
 	}
 }
 
@@ -109,10 +107,8 @@ type Refactoring interface {
 }
 
 type RefactoringBase struct {
-	importer       *importer.Importer
-	pkgInfo        *importer.PackageInfo
+	program        *loader.Program
 	file           *ast.File
-	filename       string
 	selectionStart token.Pos
 	selectionEnd   token.Pos
 	selectedNode   ast.Node
@@ -123,50 +119,26 @@ type RefactoringBase struct {
 // Configures a refactoring by indicating the filename in which text is
 // selected and the beginning and end of the selected region.  Internally, this
 // configures all of the fields in the RefactoringBase struct.  If nonempty,
-// scope denotes a scope (passed to the go.tools importer): typically a package
+// scope denotes a scope (passed to the go.tools loader): typically a package
 // name or a file containing the program entrypoint (main function), which may
 // be different from the file containing the text selection.
 func (r *RefactoringBase) SetSelection(selection TextSelection, scope []string) bool {
 	r.log = NewLog()
-	// r.log.Log(INFO, fmt.Sprintf("GOPATH is %s", os.Getenv("GOPATH")))
-	// cwd, _ := os.Getwd()
-	// r.log.Log(INFO, fmt.Sprintf("Working directory is %s", cwd))
-	// r.log.Log(INFO, fmt.Sprintf("Scope is %s", scope))
-
-	r.filename = selection.Filename
-	//filename, err := filepath.Abs(selection.filename)
-	//if err != nil {
-	//	r.log.Log(FATAL_ERROR, err.Error())
-	//	return false
-	//}
-	//r.filename = filename
-
-	//	cwd, err := os.Getwd()
-	//	if err != nil {
-	//		r.log.Log(FATAL_ERROR, err.Error())
-	//		return false
-	//	}
 
 	buildContext := build.Default
 	if os.Getenv("GOPATH") != "" {
 		// The test runner may change the GOPATH environment variable
 		// since the program was started, so set it here explicitly
+		// (not necessary when run as a CLI tool, but necessary when
+		// run from refactoring_test.go)
 		buildContext.GOPATH = os.Getenv("GOPATH")
-		//fmt.Println("GOPATH is ",GOPATH)
 	}
 
-	//r.importer = importer.New(new(importer.Config))
-	//r.importer = importer.New(&importer.Config{Build: &build.Default})
-
-	// r.importer = importer.New(&importer.Config{Build: &buildContext})
-
-	var impcfg importer.Config
-	impcfg.Build = &buildContext
-	impcfg.SourceImports = true
-	impcfg.TypeChecker.Error = func(err error) {
+	var config loader.Config
+	config.Build = &buildContext
+	config.SourceImports = true
+	config.TypeChecker.Error = func(err error) {
 		// FIXME: Needs to be thread-safe
-		// As of today, you can access the components of the error (token.Pos, string) as:
-		// err.(types.Error).Pos etc.
 		var message string = err.Error()
 		var pos token.Pos = err.(types.Error).Pos
 		var offset int = err.(types.Error).Fset.Position(pos).Offset
@@ -174,165 +146,59 @@ func (r *RefactoringBase) SetSelection(selection TextSelection, scope []string) 
 		var length int = 0
 		r.log.LogInitial(ERROR, message, filename, offset, length)
 	}
-	r.importer = importer.New(&impcfg)
+	// FIXME: Jeff: handle error
 
-	pkgInfo, err := r.loadPackages(scope)
-	if len(pkgInfo) < 1 {
-		r.log.Log(FATAL_ERROR, "Analysis error: unable to import package(s)")
-		if err != nil {
-			r.log.Log(FATAL_ERROR, err.Error())
-		}
+	if scope != nil {
+		config.FromArgs(scope)
+	} else {
+		config.FromArgs([]string{selection.Filename})
+	}
+
+	var err error
+	r.program, err = config.Load()
+	if err != nil {
+		r.log.Log(FATAL_ERROR, err.Error())
 		return false
-	} else if r.pkgInfo == nil || r.file == nil {
-		r.log.Log(FATAL_ERROR, "Unable to parse "+selection.Filename)
-		if err != nil {
-			r.log.Log(FATAL_ERROR, err.Error())
-		}
+	} else if r.program == nil {
+		r.log.Log(FATAL_ERROR, "Internal Error: Loader failed")
 		return false
 	}
 
-	r.selectionStart = r.lineColToPos(selection.StartLine, selection.StartCol)
-	r.selectionEnd = r.lineColToPos(selection.EndLine, selection.EndCol)
+	var pkgInfo *loader.PackageInfo
+	pkgInfo, r.file = r.fileNamed(selection.Filename)
+	if pkgInfo == nil || r.file == nil {
+		r.log.Log(FATAL_ERROR,
+			fmt.Sprintf("The selected file, %s, was not "+
+				"found in the provided scope: %s",
+				selection.Filename,
+				scope))
+		return false
+	}
+
+	r.selectionStart = r.lineColToPos(r.file, selection.StartLine, selection.StartCol)
+	r.selectionEnd = r.lineColToPos(r.file, selection.EndLine, selection.EndCol)
 
 	nodes, _ := astutil.PathEnclosingInterval(r.file,
 		r.selectionStart, r.selectionEnd)
 	r.selectedNode = nodes[0]
 
-	r.editSet = map[string]EditSet{selection.Filename: NewEditSet()}
+	r.editSet = map[string]EditSet{r.filename(r.file): NewEditSet()}
+
 	return true
 }
 
-// Finds all of the references in an AST to a single declaration
-//@all = all Packages or just this Package
-func (r *RefactoringBase) findOccurrences(all bool, ident *ast.Ident) map[string][]OffsetLength {
-
-	//filenames to offsets
-	result := make(map[string][]OffsetLength)
-
-	decl := r.pkgInfo.ObjectOf(ident)
-	if decl == nil {
-		r.log.Log(FATAL_ERROR, "Unable to find declaration of "+ident.String())
-		return nil
-	}
-
-	var pkgs []*importer.PackageInfo
-	if all {
-		for _, pkgInfo := range r.importer.AllPackages() {
-			pkgs = append(pkgs, pkgInfo)
-		}
-	} else {
-		pkgs = append(pkgs, r.pkgInfo)
-	}
-
-	for _, pkgInfo := range pkgs {
-		for _, f := range pkgInfo.Files {
-			//inspect each file in package for identifier
-			ast.Inspect(f, func(n ast.Node) bool {
-				switch thisIdent := n.(type) {
-				case *ast.Ident:
-					if r.pkgInfo.ObjectOf(thisIdent) == decl {
-						offset := r.importer.Fset.Position(thisIdent.NamePos).Offset
-						length := utf8.RuneCountInString(thisIdent.Name)
-						filename := r.importer.Fset.Position(f.Pos()).Filename
-						result[filename] = append(result[filename], OffsetLength{offset, length})
-					}
-				}
-				return true
-			})
-		}
-	}
-	return result
-}
-
-//// Parses the given file, logging errors to the given log, and returning both
-//// a FileSet and a File
-//func (r *RefactoringBase) parse(filename string) *ast.File {
-//	//f, err := parser.ParseFile(r.importer.Fset, filename, nil, parser.ParseComments)
-//	fs, err := importer.ParseFiles(r.importer.Fset, ".", filename)
-//	if err != nil {
-//		r.log.Log(FATAL_ERROR, "Error parsing "+filename+": "+
-//			err.Error())
-//		return nil
-//	}
-//	if len(fs) != 1 {
-//		r.log.Log(FATAL_ERROR, "Unable to parse " + filename)
-//		return nil
-//	}
-//	return fs[0]
-//}
-
-func (r *RefactoringBase) loadPackages(scope []string) (
-	pkgInfo []*importer.PackageInfo, err error) {
-	if len(scope) > 0 {
-		pkgInfo, _, err = r.importer.LoadInitialPackages(scope)
-	}
-
-	var wasAlreadyLoaded bool
-	r.pkgInfo, r.file, wasAlreadyLoaded, err = r.ensureIsLoaded(r.filename)
-	if !wasAlreadyLoaded {
-		pkgInfo = append(pkgInfo, r.pkgInfo)
-	}
-
-	return pkgInfo, err
-}
-
-func (r *RefactoringBase) ensureIsLoaded(filename string) (pkgInfo *importer.PackageInfo, file *ast.File, wasAlreadyLoaded bool, err error) {
-
-	// If the importer already loaded this file, do not load it again
-	pkgInfo, file = r.getFileFromImporter(filename)
-	if pkgInfo != nil && file != nil {
-		return pkgInfo, file, true, nil
-	}
-
-	// Determine this file's package and load the package if possible
-	pkg, err := r.determinePackage(r.filename)
-	if err != nil || pkg == "" || pkg == "main" {
-		_, err = r.importer.ImportPackage(r.filename)
-	} else {
-		_, err = r.importer.ImportPackage(pkg)
-	}
-
-	pkgInfo, file = r.getFileFromImporter(filename)
-	return pkgInfo, file, false, err
-}
-
-func (r *RefactoringBase) getFileFromImporter(filename string) (*importer.PackageInfo, *ast.File) {
-	absFilename, _ := filepath.Abs(filename)
-	for _, pkgInfo := range r.importer.AllPackages() {
-		for _, f := range pkgInfo.Files {
-			thisFile := r.importer.Fset.Position(f.Pos()).Filename
-			if thisFile == filename || thisFile == absFilename {
-				return pkgInfo, f
-			}
-		}
-	}
-	return nil, nil
-}
-
-func (r *RefactoringBase) determinePackage(filename string) (string, error) {
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, filename, nil, parser.PackageClauseOnly)
-	if err != nil {
-		return "", err
-	}
-	if f.Name == nil {
-		return "", nil
-	}
-	return f.Name.Name, nil
-}
-
-// Converts a line/column position (where the first character in a file is at
-// line 1, column 1) into a token.Pos
-func (r *RefactoringBase) lineColToPos(line int, column int) token.Pos {
-	file := r.importer.Fset.File(r.file.Pos())
+// lineColToPos converts a line/column position (where the first character in a
+// file is at // line 1, column 1) into a token.Pos
+func (r *RefactoringBase) lineColToPos(file *ast.File, line int, column int) token.Pos {
 	if file == nil {
 		panic("file is nil")
 	}
 	lastLine := -1
 	thisColumn := 1
-	for i := 0; i < file.Size(); i++ {
-		pos := file.Pos(i)
-		thisLine := file.Line(pos)
+	tfile := r.program.Fset.File(file.Package)
+	for i, size := 0, tfile.Size(); i < size; i++ {
+		pos := tfile.Pos(i)
+		thisLine := tfile.Line(pos)
 		if thisLine != lastLine {
 			thisColumn = 1
 		} else {
@@ -343,25 +209,25 @@ func (r *RefactoringBase) lineColToPos(line int, column int) token.Pos {
 		}
 		lastLine = thisLine
 	}
-	return r.file.Pos()
+	return file.Pos()
 }
 
 func (r *RefactoringBase) checkForErrors() {
-	contents, err := ioutil.ReadFile(r.filename)
+	contents, err := ioutil.ReadFile(r.filename(r.file))
 	if err != nil {
 		r.log.Log(ERROR, "Unable to read source file: "+err.Error())
 		return
 	}
 	sourceFromFile := string(contents)
 
-	string, err := ApplyToString(r.editSet[r.filename], sourceFromFile)
+	string, err := ApplyToString(r.editSet[r.filename(r.file)], sourceFromFile)
 	if err != nil {
 		r.log.Log(ERROR, "Transformation produced invalid EditSet: "+
 			err.Error())
 		return
 	}
 
-	f, err := parser.ParseFile(r.importer.Fset, "", string, parser.ParseComments)
+	_, err = parser.ParseFile(r.program.Fset, "", string, parser.ParseComments)
 	if err != nil {
 		fmt.Println("vvvvv")
 		fmt.Println(string)
@@ -371,15 +237,18 @@ func (r *RefactoringBase) checkForErrors() {
 		return
 	}
 
-	// TODO: This may be wrong if several files are changed...?
-	r.pkgInfo = r.importer.CreatePackage(r.file.Name.Name, f)
-	if r.pkgInfo.Err != nil {
-		r.log.Log(ERROR, "Transformation will introduce semantic "+
-			"errors: "+r.pkgInfo.Err.Error())
-		return
-	}
+	/*
+		// TODO: This may be wrong if several files are changed...?
+		r.pkgInfo = r.program.CreatePackage(r.file.Name.Name, f)
+		if r.pkgInfo.Err != nil {
+			r.log.Log(ERROR, "Transformation will introduce semantic "+
+				"errors: "+r.pkgInfo.Err.Error())
+			return
+		}
+	*/
 }
 
+/*
 //find occurrences of [top level] identifier across package
 //TODO filter file? /dumbfounded
 func (r *RefactoringBase) findAnyOccurrences(name string) bool {
@@ -388,7 +257,7 @@ func (r *RefactoringBase) findAnyOccurrences(name string) bool {
 	//switch thisIdent := n.(type) {
 	//case *ast.Ident:
 	//if r.pkgInfo.ObjectOf(thisIdent) == decl {
-	//offset := r.importer.Fset.Position(thisIdent.NamePos).Offset
+	//offset := r.program.Fset.Position(thisIdent.NamePos).Offset
 	//length := utf8.RuneCountInString(thisIdent.Name)
 	//result = append(result, OffsetLength{offset, length})
 	//}
@@ -398,6 +267,7 @@ func (r *RefactoringBase) findAnyOccurrences(name string) bool {
 	//})
 	return result
 }
+*/
 
 func (r *RefactoringBase) GetLog() *Log {
 	return r.log
@@ -407,25 +277,61 @@ func (r *RefactoringBase) GetResult() (*Log, map[string]EditSet) {
 	return r.log, r.editSet
 }
 
-func (r *RefactoringBase) forEachFile(f func(file *token.File, ast *ast.File)) {
-	r.importer.Fset.Iterate(func(tfile *token.File) bool {
-		r.findFile(tfile, f)
-		return true
-	})
-}
-
-func (r *RefactoringBase) findFile(tfile *token.File, f func(file *token.File, ast *ast.File)) {
-	filename := tfile.Name()
-	for _, pkgInfo := range r.importer.AllPackages() {
-		for _, file := range pkgInfo.Files {
-			pkgInfoFilename := r.importer.Fset.Position(file.Pos()).Filename
-			if pkgInfoFilename == filename {
-				f(tfile, file)
-				return
+func (r *RefactoringBase) pkgInfo(file *ast.File) *loader.PackageInfo {
+	for _, pkgInfo := range r.program.AllPackages {
+		for _, thisFile := range pkgInfo.Files {
+			if thisFile == file {
+				return pkgInfo
 			}
 		}
 	}
-	log.Fatalf("Unable to find file %s in importer.AllPackages()", filename)
+	return nil
+}
+
+func (r *RefactoringBase) filename(file *ast.File) string {
+	return r.program.Fset.Position(file.Package).Filename
+}
+
+func (r *RefactoringBase) fileContaining(node ast.Node) *ast.File {
+	tfile := r.program.Fset.File(node.Pos())
+	for _, pkgInfo := range r.program.AllPackages {
+		for _, thisFile := range pkgInfo.Files {
+			thisTFile := r.program.Fset.File(thisFile.Package)
+			if thisTFile == tfile {
+				return thisFile
+			}
+		}
+	}
+	panic("No ast.File for node")
+}
+
+func (r *RefactoringBase) fileNamed(filename string) (*loader.PackageInfo, *ast.File) {
+	absFilename, _ := filepath.Abs(filename)
+	for _, pkgInfo := range r.program.AllPackages {
+		for _, f := range pkgInfo.Files {
+			thisFile := r.program.Fset.Position(f.Pos()).Filename
+			if thisFile == filename || thisFile == absFilename {
+				return pkgInfo, f
+			}
+		}
+	}
+	return nil, nil
+}
+
+func (r *RefactoringBase) forEachFile(f func(ast *ast.File)) {
+	for _, pkgInfo := range r.program.AllPackages {
+		for _, ast := range pkgInfo.Files {
+			f(ast)
+		}
+	}
+}
+
+func (r *RefactoringBase) forEachInitialFile(f func(ast *ast.File)) {
+	for _, pkgInfo := range r.program.InitialPackages() {
+		for _, ast := range pkgInfo.Files {
+			f(ast)
+		}
+	}
 }
 
 func closure(allInterfaces []*types.Interface, allConcreteTypes []types.Type) map[types.Type][]types.Type {
@@ -463,4 +369,51 @@ func mapType(node int, allInterfaces []*types.Interface, allConcreteTypes []type
 	} else {
 		return allInterfaces[node]
 	}
+}
+
+// Finds all of the references in an AST to a single declaration
+//@all = all Packages or just this Package
+func (r *RefactoringBase) findOccurrences(all bool, ident *ast.Ident) map[string][]OffsetLength {
+
+	//maps filenames to offsets
+	result := make(map[string][]OffsetLength)
+
+	decl := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
+	if decl == nil {
+		r.log.Log(FATAL_ERROR, "Unable to find declaration of "+ident.Name)
+		return nil
+	}
+
+	pkgs := r.getPackages(all)
+
+	for _, pkgInfo := range pkgs {
+		for _, f := range pkgInfo.Files {
+			//inspect each file in package for identifier
+			ast.Inspect(f, func(n ast.Node) bool {
+				switch thisIdent := n.(type) {
+				case *ast.Ident:
+					if pkgInfo.ObjectOf(thisIdent) == decl {
+						offset := r.program.Fset.Position(thisIdent.NamePos).Offset
+						length := utf8.RuneCountInString(thisIdent.Name)
+						filename := r.program.Fset.Position(f.Pos()).Filename
+						result[filename] = append(result[filename], OffsetLength{offset, length})
+					}
+				}
+				return true
+			})
+		}
+	}
+	return result
+}
+
+func (r *RefactoringBase) getPackages(all bool) []*loader.PackageInfo {
+	var pkgs []*loader.PackageInfo
+	if all {
+		for _, pkgInfo := range r.program.AllPackages {
+			pkgs = append(pkgs, pkgInfo)
+		}
+	} else {
+		pkgs = append(pkgs, r.pkgInfo(r.file))
+	}
+	return pkgs
 }

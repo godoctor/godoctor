@@ -1,4 +1,4 @@
-// Copyright 2013 The Go Authors. All rights reserved.
+// Copyright 2014 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -38,8 +38,6 @@
 // compile and run it before and after performing the refactoring.  This is
 // used as a sanity check to ensure that program still compiles and still
 // produces the same output after it has been refactored.
-
-// Contributors: Jeff Overbey
 
 package doctor
 
@@ -89,7 +87,9 @@ func runAllTestsInSubdirectories(testDirInfo os.FileInfo, t *testing.T) {
 			//desc := filepath.Join(testDirInfo.Name(), subDirInfo.Name())
 			if strings.Contains(subDirPath, *filterFlag) {
 				//fmt.Printf("********** %s **********\n", desc)
+				//if !strings.Contains(subDirPath, "fiximports/003") && !strings.Contains(subDirPath, "fiximports/004") {
 				runAllTestsInDirectory(subDirPath, t)
+				//}
 			} else {
 				//fmt.Printf("Skipping directory %s (filtered)\n", desc)
 			}

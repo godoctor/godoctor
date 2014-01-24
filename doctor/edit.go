@@ -1,4 +1,4 @@
-// Copyright 2013 The Go Authors. All rights reserved.
+// Copyright 2014 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -6,8 +6,6 @@
 // including the NewEditSet method.  All Go refactorings/transformations return
 // an EditSet, which describes what file(s) will be affected by a refactoring
 // and exactly what characters in those files will be affected.
-
-// Contributors: Jeff Overbey, Reed Allman
 
 package doctor
 

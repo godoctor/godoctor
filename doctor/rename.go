@@ -1,27 +1,22 @@
+// Copyright 2014 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package doctor
 
-// This file defines the Rename refactoring.
+// This file defines a refactoring to rename variables, functions, methods, structs, and interfaces.
+// (TODO: It cannot yet rename packages.)
 
 import (
 	"code.google.com/p/go.tools/go/types"
 	"go/ast"
-	"unicode"
 	"unicode/utf8"
 )
 
 // A RenameRefactoring is used to rename identifiers in Go programs.
-// It implements the Refactoring interface.
-// // To rename an identifier:
-// * Create a RenameRefactoring.
-// * Invoke SetSelection to determine what identifier to rename.
-// * Invoke SetNewName to set the new name for the identifier.
-// * Invoke Run to construct the EditSet.
-// * Invoke GetResult to get the resulting Log and EditSet.
-//
 type RenameRefactoring struct {
 	RefactoringBase
-	newName string
-	//	object *types.Object
+	newName   string
 	signature *types.Signature
 }
 
@@ -33,6 +28,10 @@ func (r *RenameRefactoring) SetNewName(newName string) {
 	r.newName = newName
 }
 
+func (r *RenameRefactoring) GetParams() []string {
+	return []string{"New Name"}
+}
+
 func (r *RenameRefactoring) Configure(args []string) bool {
 	if len(args) == 1 {
 		r.SetNewName(args[0])
@@ -41,10 +40,6 @@ func (r *RenameRefactoring) Configure(args []string) bool {
 		r.log.Log(FATAL_ERROR, "(Internal Error) Invalid arguments")
 		return false
 	}
-}
-
-func (r *RenameRefactoring) GetParams() []string {
-	return []string{"New Name"}
 }
 
 func (r *RenameRefactoring) Run() {
@@ -58,25 +53,28 @@ func (r *RenameRefactoring) Run() {
 		return
 	}
 
-	switch ident := r.selectedNode.(type) {
-	case *ast.Ident:
+	// TODO: Check if r.newName is a valid Go identifier
 
-		if r.IsExportable(ident) {
-			//apparently this has duplicates
-			for file, occ := range r.findOccurrences(true, ident) {
-				for _, o := range occ {
-					r.editSet[file].Add(o, r.newName)
+	allOccurrences := make(map[string][]OffsetLength)
+	switch ident := r.selectedNode.(type) {
+
+	case *ast.Ident:
+		if r.isMethod(ident) {
+			if r.isExportable(ident) {
+				allOccurrences = r.findOccurrencesIncludingClosure(r.isMethodinInterface(true, ident.Name), ident)
+			} else {
+				if r.isMethodinInterface(false, ident.Name) {
+					allOccurrences = r.findOccurrencesIncludingClosure(false, ident)
+				} else {
+					allOccurrences = r.findOccurrences(false, ident)
 				}
 			}
 		} else {
-			for file, occ := range r.findOccurrences(false, ident) {
-				for _, o := range occ {
-					r.editSet[file].Add(o, r.newName)
-				}
-			}
+			allOccurrences = r.findOccurrences(r.isExportable(ident), ident)
 		}
 
-		//r.checkForErrors()
+		r.addOccurrences(allOccurrences)
+		//TODO: r.checkForErrors()
 
 		return
 
@@ -86,16 +84,60 @@ func (r *RenameRefactoring) Run() {
 	}
 }
 
+//TODO pkgs not identified
+/*else if r.findIfPackage(ident) {
+          	if r.IsExportable(ident) {
+
+                  fmt.Println("package is exportable")
+                  allOccurrences = r. findOccurrences(true,ident)
+                   r.addOccurrences(allOccurrences)
+               } else {
+                fmt.Println("package is not exportable")
+                  allOccurrences = r. findOccurrences(false,ident)
+                   r.addOccurrences(allOccurrences)
+                  }
+
+	    }
+*/
+
+/*
+// Finds all of the references to a single declaration in one AST
+// (unlike findOccurrences, which searches the entire package)
+func (r *RenameRefactoring) findOccurrencesofVar(ident *ast.Ident) []OffsetLength {
+
+	var result []OffsetLength
+
+	decl := r.pkgInfo.ObjectOf(ident)
+	if decl == nil {
+		r.log.Log(FATAL_ERROR, "Unable to find declaration")
+		return []OffsetLength{}
+	}
+
+	ast.Inspect(r.file, func(n ast.Node) bool {
+		switch thisIdent := n.(type) {
+		case *ast.Ident:
+			if r.pkgInfo.ObjectOf(thisIdent) == decl {
+				offset := r.program.Fset.Position(thisIdent.NamePos).Offset
+				length := utf8.RuneCountInString(thisIdent.Name)
+				result = append(result, OffsetLength{offset, length})
+			}
+		}
+
+		return true
+	})
+	return result
+}
+*/
+
+/*
 //finds if selected identifier is name of a funciton
-
 func (r *RenameRefactoring) findIfFunction(ident *ast.Ident) bool {
-
 	var isafunction bool = false
 
 	obj := r.pkgInfo.ObjectOf(ident)
 	if obj == nil {
-		r.log.Log(FATAL_ERROR, "Unable to find declaration of "+
-			ident.String())
+		r.log.Log(FATAL_ERROR, "Unable to find declaration")
+		return false
 	}
 
 	switch sig := types.Object.Type(obj).(type) {
@@ -112,156 +154,309 @@ func (r *RenameRefactoring) findIfFunction(ident *ast.Ident) bool {
 
 	return isafunction
 }
-func (r *RenameRefactoring) findIfMethod(ident *ast.Ident) bool {
+*/
 
-	var isamethod bool = false
-	obj := r.pkgInfo.ObjectOf(ident)
-
+// isMethod returns true if the given identifier is the name of a method
+func (r *RenameRefactoring) isMethod(ident *ast.Ident) bool {
+	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
 	if obj == nil {
-		r.log.Log(FATAL_ERROR, "Unable to find declaration of "+
-			ident.String())
+		r.log.Log(FATAL_ERROR, "Unable to find declaration of "+ident.Name)
+		return false
 	}
-	// fmt.Println("type of object is",types.Object.Type(obj))
+
 	switch sig := types.Object.Type(obj).Underlying().(type) {
 	case *types.Signature:
-		recv := sig.Recv()
-		if recv != nil {
-			isamethod = true
-			// fmt.Println("methodset", sig.MethodSet())
-			//fmt.Println("Receivers type ", sig.Recv().Type())
+		return sig.Recv() != nil
 
-		}
+	default:
+		return false
+	}
+}
+
+//finds if selected identifier is name of a package
+/*func (r *RenameRefactoring) findIfPackage(ident *ast.Ident) bool  {
+
+	var isapackage bool = false
+
+	obj := r.pkgInfo.ObjectOf(ident)
+	if obj == nil {
+			r.log.Log(FATAL_ERROR, "Unable to find declaration")
+             return false
+	}
+         fmt.Println("type",types.Object.Type(obj).Underlying())
+	/*switch pkg := types.Object.Type(obj).Underlying().(type) {
+	case *types.Package:
+         	//pkgname := pkg.Name()
+       		//if pkgname == ident.Name {
+         		isapackage = true
+
+		//}
+
 	default:
 
+		fmt.Println(pkg)
 		// TODO error
 	}
 
-	return isamethod
+	return isapackage
+}*/
 
-}
-
-//Finds if the given function name is exportable
-//returns true if exportable and false otherwise
-
-func (r *RenameRefactoring) IsExportable(ident *ast.Ident) bool {
-
-	obj := r.pkgInfo.ObjectOf(ident)
+func (r *RenameRefactoring) isExportable(ident *ast.Ident) bool {
+	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
 	if obj == nil {
-		r.log.Log(FATAL_ERROR, "Unable to find declaration of "+
-			ident.String())
-		ch, _ := utf8.DecodeRuneInString(ident.String())
-		return unicode.IsUpper(ch)
+		r.log.Log(FATAL_ERROR, "Unable to find declaration of "+ident.Name)
+		return false
 	}
 
 	return types.Object.IsExported(obj)
-
 }
 
-//finds if selected method lies in any of the interfaces in pkg
-func (r *RenameRefactoring) isMethodinInterface(identname string) bool {
-
-	var isinInterface = false
-	methodname := identname
-	//fmt.Println("package name is ",r.pkgInfo.Pkg.Name())
-
-	for _, file := range r.pkgInfo.Files {
-
-		//fmt.Println("FILENAME:", r.importer.Fset.Position(file.Pos()).Filename)
-
-		ast.Inspect(file, func(n ast.Node) bool {
-			switch thisIdent := n.(type) {
-			case *ast.InterfaceType:
-				for _, name := range thisIdent.Methods.List[0].Names {
-					if name.Name == methodname {
-						isinInterface = true
-						//fmt.Println("method name is present in interface")
-						//fmt.Println("total names",thisIdent.Methods.List[0].Names)
-						//break
+// isMethodinInterface returns true if the given method is in the method set of
+// any interface.  If the all parameter is true, it searches all packages loaded
+// into the importer; if it is false, it searches only the current package.
+func (r *RenameRefactoring) isMethodinInterface(all bool, methodname string) bool {
+	isinInterface := false
+	for _, pkgInfo := range r.getPackages(all) {
+		for _, file := range pkgInfo.Files {
+			ast.Inspect(file, func(n ast.Node) bool {
+				switch thisIdent := n.(type) {
+				case *ast.InterfaceType:
+					if len(thisIdent.Methods.List) != 0 {
+						for _, name := range thisIdent.Methods.List[0].Names {
+							if name.Name == methodname {
+								isinInterface = true
+							}
+						}
 					}
 				}
-
-			}
-
-			return true
-
-		})
-
+				return true
+			})
+		}
 	}
-
 	return isinInterface
 }
 
-//finds all interface and sturct types which has the selected method
+// getTypesWithMethod returns all of the types that implement the given method
+func (r *RenameRefactoring) getTypesWithMethod(all bool, method *ast.Ident) []types.Type {
 
-func (r *RenameRefactoring) getTypesWithMethod(methodname string) {
+	methodobj := r.pkgInfo(r.fileContaining(method)).ObjectOf(method)
+	if methodobj == nil {
+		r.log.Log(FATAL_ERROR, "Unable to find declaration of "+method.Name)
+		return []types.Type{}
+	}
+
+	methodname := method.Name
 
 	var TypesofInterfaces []*types.Interface
-	var TypesofStructs []types.Type
 	var OtherTypes []types.Type
-	//fmt.Println("inside getTypes")
+	var affected []types.Type
+	//var typ types.Type
 
-	for _, file := range r.pkgInfo.Files {
-
-		ast.Inspect(file, func(n ast.Node) bool {
-
-			switch thisSpec := n.(type) {
-
-			case *ast.TypeSpec:
-				//TODO Use ast.Ident , to include pointers
-				// Gives Run time error now??
-				obj := r.pkgInfo.ObjectOf(thisSpec.Name)
-
-				//switch sig := types.Object.Type(obj).Underlying().(type) {
-				switch sig := r.pkgInfo.TypeOf(thisSpec.Name).Underlying().(type) {
-
-				case *types.Interface:
-					if sig.MethodSet().Lookup(r.pkgInfo.Pkg, methodname) != nil {
-						TypesofInterfaces = append(TypesofInterfaces, sig)
+	for _, pkgInfo := range r.getPackages(all) {
+		for _, file := range pkgInfo.Files {
+			ast.Inspect(file, func(n ast.Node) bool {
+				switch thisSpec := n.(type) {
+				case *ast.TypeSpec:
+					switch sig := pkgInfo.TypeOf(thisSpec.Name).Underlying().(type) {
+					case *types.Interface:
+						if sig.MethodSet().Lookup(pkgInfo.Pkg, methodname) != nil {
+							TypesofInterfaces = append(TypesofInterfaces, sig)
+						}
 					}
 
-				case *types.Struct:
-					if types.Object.Type(obj).MethodSet().Lookup(r.pkgInfo.Pkg, methodname) != nil {
+				case *ast.FuncDecl:
+					identobj := pkgInfo.ObjectOf(thisSpec.Name)
+					if identobj == nil {
+						r.log.Log(FATAL_ERROR, "Unable to find declaration of "+thisSpec.Name.Name)
+					} else if thisSpec.Name.Name == methodname && r.CheckforsameParam(identobj, methodobj) {
 
-						//fmt.Println("methodset of struct",types.Object.Type(obj).MethodSet())
-						TypesofStructs = append(TypesofStructs, types.Object.Type(obj))
-						//fmt.Println("struct types",types.Object.Type(obj))
+						obj := pkgInfo.ObjectOf(thisSpec.Recv.List[0].Names[0])
+						types := types.Object.Type(obj)
+						OtherTypes = append(OtherTypes, types)
+
 					}
-
-				case *types.Pointer:
-					//TODO get types of pointer types
-					//fmt.Println("methodset of pointer", sig.Elem().MethodSet())
-				default:
 
 				}
 
-			case *ast.FuncDecl:
-				if thisSpec.Name.Name == methodname {
-					//types := thisSpec.Recv.List[0].Type
-					//types    := r.pkgInfo.TypeOf(thisSpec.Name).Underlying()
-					//types  := thisSpec.Name.Obj.Type
-					//obj    := r.pkgInfo.ObjectOf(thisSpec.Name)
-					//types  := types.Object.Type(obj)
-					obj := r.pkgInfo.ObjectOf(thisSpec.Recv.List[0].Names[0])
-					types := types.Object.Type(obj)
+				return true
+			})
+		}
+	}
 
-					OtherTypes = append(OtherTypes, types)
+	var closure map[types.Type][]types.Type = closure(TypesofInterfaces, OtherTypes)
+	for /*typ*/ _, affected = range closure {
+		//fmt.Printf("Renaming %s will also affect %v\n", typ, affected)
+		//fmt.Println("methodsets of affectedtype", affected[0].MethodSet())
+	}
+	return affected
+	// TODO: Can we just return closure[something]?
+}
 
-				}
+//findOccurrencesinAffectedTypes finds all the Occurrences of Methods in affected types;if all parameter is true
+// it searches for Occurrences in all packages loaded by the importer ; if it is false it searches only the current package
+func (r *RenameRefactoring) findOccurrencesinAffectedTypes(all bool, affected []types.Type, methodname string) map[string][]OffsetLength {
+	result := make(map[string][]OffsetLength)
+	pkgs := r.getPackages(all)
+	for _, affectedtype := range affected {
+		for _, pkgInfo := range pkgs {
+			for _, file := range pkgInfo.Files {
+				ast.Inspect(file, func(n ast.Node) bool {
+					switch thisIdent := n.(type) {
+					case *ast.TypeSpec:
+						if pkgInfo.TypeOf(thisIdent.Name).Underlying() == affectedtype {
+
+							switch typeofthisIdent := thisIdent.Type.(type) {
+
+							case *ast.InterfaceType:
+
+								for _, MethodList := range typeofthisIdent.Methods.List {
+
+									if MethodList.Names[0].Name == methodname {
+										offset := r.program.Fset.Position(MethodList.Names[0].NamePos).Offset
+										length := utf8.RuneCountInString(MethodList.Names[0].Name)
+
+										filename := r.program.Fset.Position(file.Pos()).Filename
+
+										result[filename] = append(result[filename], OffsetLength{offset, length})
+
+									}
+								}
+
+							}
+						}
+
+					case *ast.FuncDecl:
+
+						if thisIdent.Name.Name == methodname {
+
+							obj := pkgInfo.ObjectOf(thisIdent.Recv.List[0].Names[0])
+							methodtype := types.Object.Type(obj)
+
+							if methodtype == affectedtype {
+
+								offset := r.program.Fset.Position(thisIdent.Name.NamePos).Offset
+								length := utf8.RuneCountInString(thisIdent.Name.Name)
+								filename := r.program.Fset.Position(file.Pos()).Filename
+								result[filename] = append(result[filename], OffsetLength{offset, length})
+
+							}
+
+						}
+					}
+
+					return true
+
+				})
 
 			}
 
-			return true
+		}
+	}
 
-		})
+	return result
+}
+
+func (r *RenameRefactoring) findOccurrencesIncludingClosure(all bool, ident *ast.Ident) map[string][]OffsetLength {
+
+	allOccurrences := make(map[string][]OffsetLength)
+	OccurrencesofMethods := r.findOccurrences(all, ident)
+
+	affected := r.getTypesWithMethod(all, ident)
+
+	OccurrencesinTypes := r.findOccurrencesinAffectedTypes(all, affected, ident.Name)
+
+	for filename, occurrences := range OccurrencesofMethods {
+		for _, occurrence := range occurrences {
+
+			allOccurrences[filename] = append(allOccurrences[filename], occurrence)
+
+		}
+	}
+
+	for filename, occurrences := range OccurrencesinTypes {
+		for _, occurrence := range occurrences {
+
+			var isDuplicate bool
+			//eliminate duplicate occurrences
+			isDuplicate = isOccurrenceDuplicate(allOccurrences, filename, occurrence)
+			if !isDuplicate {
+				allOccurrences[filename] = append(allOccurrences[filename], occurrence)
+			}
+
+		}
+	}
+
+	return allOccurrences
+}
+
+//addOccurrences Adds all the Occurences to the editset
+func (r *RenameRefactoring) addOccurrences(allOccurrences map[string][]OffsetLength) {
+
+	for filename, occurrences := range allOccurrences {
+		for _, occurrence := range occurrences {
+			if r.editSet[filename] == nil {
+				r.editSet[filename] = NewEditSet()
+			}
+
+			r.editSet[filename].Add(occurrence, r.newName)
+
+			//fmt.Println("filename", filename, "occurance", occurrence)
+
+		}
 
 	}
-	//fmt.Println("type of struct",TypesofStructs[0])
-	//fmt.Println("methoset of struct",TypesofStructs[0].MethodSet())
 
-	//fmt.Println("type of Interface", TypesofInterfaces[0])
-	//fmt.Println("methoset of Interface", TypesofInterfaces[0].MethodSet())
+}
 
-	//fmt.Println("other types", OtherTypes)
-	//fmt.Println("does struct implement interface", types.Implements(OtherTypes[0], TypesofInterfaces[0], true))
+func isOccurrenceDuplicate(allOccurrences map[string][]OffsetLength, filename string, occurrence OffsetLength) bool {
 
+	for _, occurrenceinfile := range allOccurrences[filename] {
+
+		if occurrenceinfile == occurrence {
+
+			return true
+		}
+
+	}
+
+	return false
+
+}
+
+//CheckforSameParam checks if given  objects (objects of method)  have same parameters;
+//returns true if they have same paramets ;returns false otherwise
+//func (r *RenameRefactoring) CheckforsameParam(ident *ast.Ident, method *ast.Ident) bool {
+func (r *RenameRefactoring) CheckforsameParam(identObj types.Object, methodObj types.Object) bool {
+
+	var identParams *types.Tuple
+	var methodParams *types.Tuple
+
+	if identObj == nil || methodObj == nil {
+		panic("identObj and methodObj cannot be nil")
+
+	}
+
+	switch sig := types.Object.Type(identObj).Underlying().(type) {
+	case *types.Signature:
+		identParams = sig.Params()
+
+	default:
+		return false
+	}
+
+	switch sig := types.Object.Type(methodObj).Underlying().(type) {
+	case *types.Signature:
+		methodParams = sig.Params()
+
+	default:
+		return false
+	}
+
+	if identParams == methodParams {
+
+		return true
+
+	}
+
+	return false
 }

@@ -1,4 +1,4 @@
-// Copyright 2013 The Go Authors. All rights reserved.
+// Copyright 2014 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -6,8 +6,6 @@
 // returns a Log, which contains informational messages, warnings, and errors
 // generated during the refactoring process.  If the log is nonempty, it should
 // be displayed to the user before a refactoring's changes are applied.
-
-// Contributors: Jeff Overbey
 
 package doctor
 
