@@ -110,12 +110,12 @@ func (r *debugRefactoring) showIdentifiers() {
 		ast.Inspect(file, func(n ast.Node) bool {
 			switch id := n.(type) {
 			case *ast.Ident:
-				position := r.program.Fset.Position(n.Pos())
+				position := r.program.Fset.Position(id.Pos())
 				fmt.Printf("%s\t(Line %d)", id.Name, position.Line)
 				if obj := r.pkgInfo(file).ObjectOf(id); obj == nil {
 					fmt.Printf(" does not have an associated object\n")
 				} else {
-					fmt.Printf(" is a reference to %s\n", obj.Id())
+					fmt.Printf(" is a reference to %s (%s)\n", obj.Id(), r.program.Fset.Position(obj.Pos()))
 				}
 			}
 			return true

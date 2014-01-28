@@ -32,7 +32,6 @@ func init() {
 	refactorings = map[string]Refactoring{
 		"rename":      new(RenameRefactoring),
 		"shortassign": new(ShortAssignRefactoring),
-		"fiximports":  new(FixImportsTransformation),
 		"debug":       new(debugRefactoring),
 		"null":        new(NullRefactoring),
 	}
