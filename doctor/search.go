@@ -16,34 +16,6 @@ type SearchEngine struct {
 	program *loader.Program
 }
 
-/* -=-=- Utility Methods -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
-
-// TODO: These are duplicated from refactoring.go
-
-func (r *SearchEngine) fileContaining(node ast.Node) *ast.File {
-	tfile := r.program.Fset.File(node.Pos())
-	for _, pkgInfo := range r.program.AllPackages {
-		for _, thisFile := range pkgInfo.Files {
-			thisTFile := r.program.Fset.File(thisFile.Package)
-			if thisTFile == tfile {
-				return thisFile
-			}
-		}
-	}
-	panic("No ast.File for node")
-}
-
-func (r *SearchEngine) pkgInfo(file *ast.File) *loader.PackageInfo {
-	for _, pkgInfo := range r.program.AllPackages {
-		for _, thisFile := range pkgInfo.Files {
-			if thisFile == file {
-				return pkgInfo
-			}
-		}
-	}
-	return nil
-}
-
 /* -=-=- Search Across Interfaces =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 
 // FindDeclarationsAcrossInterfaces finds all objects that might need to be
@@ -56,9 +28,10 @@ func (r *SearchEngine) pkgInfo(file *ast.File) *loader.PackageInfo {
 //       /      \   /     \
 //     Type1    Type2    Type3
 //
-// where renaming a method in Type1 could force a method of the same name to
-// be renamed in Interface1, Interface2, Type2, and Type3.  This method
-// returns a slice of all of all such identifiers.
+// where renaming a method in Type1 could force a method with the same
+// signature to be renamed in Interface1, Interface2, Type2, and Type3.  This
+// method returns a slice containing the reflexive-transitive closure of
+// objects that must be renamed along with the given identifier.
 func (r *SearchEngine) FindDeclarationsAcrossInterfaces(ident *ast.Ident) (decls []types.Object, err error) {
 	pkgInfo := r.pkgInfo(r.fileContaining(ident))
 	obj := pkgInfo.ObjectOf(ident)
@@ -82,6 +55,8 @@ func (r *SearchEngine) FindDeclarationsAcrossInterfaces(ident *ast.Ident) (decls
 	}
 }
 
+// allInterfacesIncluding returns all interfaces in the current program that
+// declare a method with the given name (regardless of signature).
 func (r *SearchEngine) allInterfacesIncluding(method string) []*types.Interface {
 	result := make(map[*types.Interface]int)
 	for _, pkgInfo := range r.program.AllPackages {
@@ -106,6 +81,8 @@ func (r *SearchEngine) allInterfacesIncluding(method string) []*types.Interface 
 	return slice
 }
 
+// allTypesIncluding returns all types in the current program for which a
+// method is declared with the given name (regardless of signature).
 func (r *SearchEngine) allTypesIncluding(method string) []types.Type {
 	result := make(map[types.Type]int)
 	for _, pkgInfo := range r.program.AllPackages {
@@ -147,6 +124,25 @@ func (r *SearchEngine) allTypesIncluding(method string) []types.Type {
 	return slice
 }
 
+// closure builds an undirected graph representing the subtype relation and
+// finds the reflexive-transitive closure of each type in the graph.
+// Typically, the interfaces and types passed as arguments will consist of the
+// interfaces and types in the program that declare a method with a particular
+// method name; then, closure will determine subtype relationships (using
+// go/types) to determine the results.  The returned map maps each type to all
+// of the types that are reachable from that type.  As an example,
+//
+//      Interface0
+//           |
+//      Interface1  Interface2
+//        /    \    /        \
+//    Type1    Type2        Type3
+//
+// if Interface1 and Interface2 both declare a method m(), then the closure of
+// Type1 will include Type1, Interface1, Type2, Interface2, and Type3, since
+// renaming m() in Type1 will have a cascading effect, requiring m() to be
+// renamed in Interface1, Type2, Interface2, and Type3 in order to maintain the
+// subtype relationship.
 func closure(interfcs []*types.Interface, typs []types.Type) map[types.Type][]types.Type {
 	graph := digraphClosure(implementsGraph(interfcs, typs))
 
@@ -162,6 +158,10 @@ func closure(interfcs []*types.Interface, typs []types.Type) map[types.Type][]ty
 	return result
 }
 
+// implementsGraph produces an adjacency-list representation of the
+// subtype graph, suitable for processing by digraphClosure.  If the arguments
+// include n interfcs and m typs, then the interfaces are mapped to the
+// integers { 1, 2, ..., n } and types to { n+1, n+2, ..., n+m }.  See mapType.
 func implementsGraph(interfcs []*types.Interface, typs []types.Type) [][]int {
 	adj := make([][]int, len(interfcs)+len(typs))
 	for i, interf := range interfcs {
@@ -173,10 +173,11 @@ func implementsGraph(interfcs []*types.Interface, typs []types.Type) [][]int {
 			}
 		}
 	}
-	// TODO: Handle subtype relationships due to embedded structs
 	return adj
 }
 
+// mapType maps an integer in the adjacency list returned by implementsGraph
+// to the type represented by that integer.
 func mapType(node int, interfcs []*types.Interface, typs []types.Type) types.Type {
 	if node >= len(interfcs) {
 		return typs[node-len(interfcs)]
@@ -202,6 +203,8 @@ func (r *SearchEngine) methods(ts []types.Type, methodName string) []types.Objec
 	return result
 }
 
+// isMethodFor returns true iff the given Object represents a method for one of
+// the given types.
 func (r *SearchEngine) isMethodFor(ts []types.Type, obj types.Object) bool {
 	fun, isFunc := obj.(*types.Func)
 	if isFunc {
@@ -216,6 +219,7 @@ func (r *SearchEngine) isMethodFor(ts []types.Type, obj types.Object) bool {
 	return false
 }
 
+// containsType returns true iff t is contained in ts.
 func (r *SearchEngine) containsType(ts []types.Type, t types.Type) bool {
 	for _, typ := range ts {
 		if typ == t {
@@ -261,8 +265,8 @@ func (r *SearchEngine) isMethod(obj types.Object) bool {
 	}
 }
 
-// findOccurrences finds all identifiers that resolve to one of the given
-// objects.
+// findOccurrences returns the source locations of all identifiers that resolve
+// to one of the given objects.
 func (r *SearchEngine) findOccurrences(decls []types.Object) map[string][]OffsetLength {
 	result := make(map[string][]OffsetLength)
 	for _, pkgInfo := range r.getPackages(decls) {
@@ -289,6 +293,10 @@ func (r *SearchEngine) containsObject(decls []types.Object, o types.Object) bool
 	return false
 }
 
+// getPackages returns a set of PackageInfos that may reference the given
+// Objects.  If at least one of the given declarations is exported, the method
+// returns AllPackages for this program; otherwise, it returns the package(s)
+// containing the given declarations.
 func (r *SearchEngine) getPackages(decls []types.Object) []*loader.PackageInfo {
 	pkgs := make(map[*loader.PackageInfo]int)
 	for _, decl := range decls {
@@ -321,4 +329,31 @@ func (r *SearchEngine) allPackages() []*loader.PackageInfo {
 		pkgs = append(pkgs, pkgInfo)
 	}
 	return pkgs
+}
+
+/* -=-=- Utility Methods -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
+// TODO: These are duplicated from refactoring.go
+
+func (r *SearchEngine) fileContaining(node ast.Node) *ast.File {
+	tfile := r.program.Fset.File(node.Pos())
+	for _, pkgInfo := range r.program.AllPackages {
+		for _, thisFile := range pkgInfo.Files {
+			thisTFile := r.program.Fset.File(thisFile.Package)
+			if thisTFile == tfile {
+				return thisFile
+			}
+		}
+	}
+	panic("No ast.File for node")
+}
+
+func (r *SearchEngine) pkgInfo(file *ast.File) *loader.PackageInfo {
+	for _, pkgInfo := range r.program.AllPackages {
+		for _, thisFile := range pkgInfo.Files {
+			if thisFile == file {
+				return pkgInfo
+			}
+		}
+	}
+	return nil
 }
