@@ -166,7 +166,7 @@ func implementsGraph(interfcs []*types.Interface, typs []types.Type) [][]int {
 	adj := make([][]int, len(interfcs)+len(typs))
 	for i, interf := range interfcs {
 		for j, typ := range typs {
-			if types.Implements(typ, interf, false) {
+			if types.Implements(typ, interf, true) {
 				adj[i] = append(adj[i], len(interfcs)+j)
 				adj[len(interfcs)+j] =
 					append(adj[len(interfcs)+j], i)

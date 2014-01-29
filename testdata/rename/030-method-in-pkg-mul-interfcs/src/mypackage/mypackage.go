@@ -10,8 +10,14 @@ Mymethod() string
 
 type Complex interface {
 
-Mymethod() string
-SecondMethod()
+Mymethod() int
+
+}
+
+type Third interface {
+
+Renamed() string
+ThirdOnly()
 
 }
 
@@ -29,4 +35,5 @@ return mystructvar.Myvar
 
 }
 
-
+func (mystructvar *Mystruct) ThirdOnly() {
+}
