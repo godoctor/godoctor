@@ -10,7 +10,7 @@ Renamed() string
 
 type Complex interface {
 
-Mymethod() string
+Renamed() string
 SecondMethod()
 
 }

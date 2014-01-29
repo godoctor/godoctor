@@ -11,9 +11,6 @@
 package doctor
 
 import (
-	"code.google.com/p/go.tools/astutil"
-	"code.google.com/p/go.tools/go/loader"
-	"code.google.com/p/go.tools/go/types"
 	"fmt"
 	"go/ast"
 	"go/build"
@@ -22,7 +19,10 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"unicode/utf8"
+
+	"code.google.com/p/go.tools/astutil"
+	"code.google.com/p/go.tools/go/loader"
+	"code.google.com/p/go.tools/go/types"
 )
 
 // All available refactorings, keyed by a unique, one-short, all-lowercase name
@@ -275,6 +275,8 @@ func (r *RefactoringBase) GetResult() (*Log, map[string]EditSet) {
 	return r.log, r.editSet
 }
 
+/* -=-=- Utility Methods -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
+
 func (r *RefactoringBase) pkgInfo(file *ast.File) *loader.PackageInfo {
 	for _, pkgInfo := range r.program.AllPackages {
 		for _, thisFile := range pkgInfo.Files {
@@ -330,88 +332,4 @@ func (r *RefactoringBase) forEachInitialFile(f func(ast *ast.File)) {
 			f(ast)
 		}
 	}
-}
-
-func closure(allInterfaces []*types.Interface, allConcreteTypes []types.Type) map[types.Type][]types.Type {
-	graph := digraphClosure(implementsGraph(allInterfaces, allConcreteTypes))
-
-	result := make(map[types.Type][]types.Type, len(allInterfaces)+len(allConcreteTypes))
-	for u, adj := range graph {
-		typ := mapType(u, allInterfaces, allConcreteTypes)
-		typesAffected := make([]types.Type, 0, len(adj))
-		for _, v := range adj {
-			typesAffected = append(typesAffected, mapType(v, allInterfaces, allConcreteTypes))
-		}
-		result[typ] = typesAffected
-	}
-	return result
-}
-
-func implementsGraph(allInterfaces []*types.Interface, allConcreteTypes []types.Type) [][]int {
-	adj := make([][]int, len(allInterfaces)+len(allConcreteTypes))
-	for i, interf := range allInterfaces {
-		for j, typ := range allConcreteTypes {
-			if types.Implements(typ, interf, false) {
-				adj[i] = append(adj[i], len(allInterfaces)+j)
-				adj[len(allInterfaces)+j] = append(adj[len(allInterfaces)+j], i)
-			}
-		}
-	}
-	// TODO: Handle subtype relationships due to embedded structs
-	return adj
-}
-
-func mapType(node int, allInterfaces []*types.Interface, allConcreteTypes []types.Type) types.Type {
-	if node >= len(allInterfaces) {
-		return allConcreteTypes[node-len(allInterfaces)]
-	} else {
-		return allInterfaces[node]
-	}
-}
-
-// Finds all of the references in an AST to a single declaration
-//@all = all Packages or just this Package
-func (r *RefactoringBase) findOccurrences(all bool, ident *ast.Ident) map[string][]OffsetLength {
-
-	//maps filenames to offsets
-	result := make(map[string][]OffsetLength)
-
-	decl := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
-	if decl == nil {
-		r.log.Log(FATAL_ERROR, "Unable to find declaration of "+ident.Name)
-		return nil
-	}
-
-	pkgs := r.getPackages(all)
-
-	for _, pkgInfo := range pkgs {
-		for _, f := range pkgInfo.Files {
-			//inspect each file in package for identifier
-			ast.Inspect(f, func(n ast.Node) bool {
-				switch thisIdent := n.(type) {
-				case *ast.Ident:
-					if pkgInfo.ObjectOf(thisIdent) == decl {
-						offset := r.program.Fset.Position(thisIdent.NamePos).Offset
-						length := utf8.RuneCountInString(thisIdent.Name)
-						filename := r.program.Fset.Position(f.Pos()).Filename
-						result[filename] = append(result[filename], OffsetLength{offset, length})
-					}
-				}
-				return true
-			})
-		}
-	}
-	return result
-}
-
-func (r *RefactoringBase) getPackages(all bool) []*loader.PackageInfo {
-	var pkgs []*loader.PackageInfo
-	if all {
-		for _, pkgInfo := range r.program.AllPackages {
-			pkgs = append(pkgs, pkgInfo)
-		}
-	} else {
-		pkgs = append(pkgs, r.pkgInfo(r.file))
-	}
-	return pkgs
 }
