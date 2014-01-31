@@ -19,7 +19,6 @@ type ShortAssignRefactoring struct {
 	RefactoringBase
 }
 
-
 func (r *ShortAssignRefactoring) Name() string {
 	return "Short Assignment Refactoring"
 }
@@ -40,10 +39,10 @@ func (r *ShortAssignRefactoring) Run() {
 		return // SetSelection did not succeed
 	}
 	switch selectedNode := r.selectedNode.(type) {
-		case *ast.AssignStmt:
-			r.createEditSet(selectedNode)
-		default:
-			r.log.Log(FATAL_ERROR, fmt.Sprintf("Select a short assignment (:=) statement! Selected node is %s", reflect.TypeOf(r.selectedNode)))
+	case *ast.AssignStmt:
+		r.createEditSet(selectedNode)
+	default:
+		r.log.Log(FATAL_ERROR, fmt.Sprintf("Select a short assignment (:=) statement! Selected node is %s", reflect.TypeOf(r.selectedNode)))
 	}
 	r.checkForErrors()
 	return
@@ -69,9 +68,9 @@ func (r *ShortAssignRefactoring) createReplacementString(assign *ast.AssignStmt)
 		if T, ok := r.pkgInfo(r.file).TypeOf(rhs).(*types.Tuple); ok {
 			replacement[i] = fmt.Sprintf("var %s %s = %s\n",
 				r.lhsNames(assign)[i].String(),
-				TypeOfFunctiontype(T),
+				typeOfFunctionType(T),
 				r.rhsExprs(assign)[i])
-			if TypeOfFunctiontype(T) == "" {
+			if typeOfFunctionType(T) == "" {
 				r.log.Log(ERROR, "This short assignment cannot be converted to an explicitly-typed var declaration.")
 			}
 		} else {
@@ -103,10 +102,10 @@ func (r *ShortAssignRefactoring) lhsNames(assign *ast.AssignStmt) []bytes.Buffer
 	return buf
 }
 
-// TypeOfFunctiontype receives a type of function's return type, which must be a
+// typeOfFunctionType receives a type of function's return type, which must be a
 // tuple type; if each component has the same type (T, T, T), then it returns
 // the type T as a string; otherwise, it returns the empty string.
-func TypeOfFunctiontype(returnType types.Type) string { 
+func typeOfFunctionType(returnType types.Type) string {
 	typeArray := make([]string, returnType.(*types.Tuple).Len())
 	initialType := returnType.(*types.Tuple).At(0).Type().String()
 	finalType := initialType
