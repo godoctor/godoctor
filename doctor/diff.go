@@ -71,28 +71,26 @@ func diff(a []string, b []string) *editSet {
 	for d := 0; d <= max; d++ {
 		for k := -d; k <= d; k += 2 {
 			var x, y int
-			var vert bool
-			if k == -d || k != d && abs(v[offset+k-1]) < abs(v[offset+k+1]) {
-				x = abs(v[offset+k+1])
-				vert = false
+			if k == -d || k != d && v[offset+k-1] < v[offset+k+1] {
+				// Vertical edge
+				x = v[offset+k+1]
 			} else {
-				x = abs(v[offset+k-1]) + 1
-				vert = true
+				// Horizontal edge
+				x = v[offset+k-1] + 1
 			}
 			y = x - k
 			for x < n && y < m && a[x] == b[y] {
 				x = x + 1
 				y = y + 1
 			}
-			if vert {
-				v[offset+k] = -x
-			} else {
-				v[offset+k] = x
-			}
+			v[offset+k] = x
 			if x >= n && y >= m {
 				// length of SES is D
 				vs = append(vs, v)
-				return constructEditSet(a, b, vs)
+				//return constructEditSet(a, b, vs)
+				edits := &editSet{}
+				constructEditSet(a, b, vs, edits, n-m)
+				return edits
 			}
 		}
 		vCopy := make([]int, len(v))
@@ -113,55 +111,52 @@ func abs(n int) int {
 
 // constructEditSet uses the matrix vs (computed by Diff) to compute a
 // sequence of deletions and additions.
-func constructEditSet(a, b []string, vs [][]int) *editSet {
+func constructEditSet(a, b []string, vs [][]int, edits *editSet, k int) {
 	n := len(a)
 	m := len(b)
 	max := m + n
 	offset := max
-	result := &editSet{}
-	k := n - m
+
 	for len(vs) > 1 {
 		v := vs[len(vs)-1]
-		vk := v[offset+k]
-		x := abs(vk)
+
+		x := v[offset+k]
 		y := x - k
 
-		vs = vs[:len(vs)-1]
-		v = vs[len(vs)-1]
-		if vk > 0 {
-			k++
-		} else {
-			k--
-		}
-		nextvk := v[offset+k]
-		nextx := abs(nextvk)
-		nexty := nextx - k
-
-		if vk > 0 {
+		d := len(vs)
+		if k == -d+1 || k != d-1 && v[offset+k-1] < v[offset+k+1] {
 			// Insert
-			charsToCopy := y - nexty - 1
+			k++
+			prevx := v[offset+k]
+			prevy := prevx - k
+
+			charsToCopy := y - prevy - 1
 			insertOffset := x - charsToCopy
 			ol := OffsetLength{offsetOfString(insertOffset, a), 0}
 			copyOffset := y - charsToCopy - 1
 			replaceWith := b[copyOffset : copyOffset+1]
 			replacement := strings.Join(replaceWith, "")
 			if len(replacement) > 0 {
-				result.Add(ol, replacement)
+				edits.Add(ol, replacement)
 			}
 		} else {
 			// Delete
-			charsToCopy := x - nextx - 1
+			k--
+			prevx := v[offset+k]
+
+			charsToCopy := x - prevx - 1
 			deleteOffset := x - charsToCopy - 1
 			ol := OffsetLength{
 				offsetOfString(deleteOffset, a),
 				len(a[deleteOffset])}
 			replaceWith := ""
 			if ol.Length > 0 {
-				result.Add(ol, replaceWith)
+				edits.Add(ol, replaceWith)
 			}
 		}
+
+		vs = vs[:len(vs)-1]
 	}
-	return result
 }
 
 // offsetOfString returns the byte offset of the substring ss[index] in the

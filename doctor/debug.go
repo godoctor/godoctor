@@ -23,6 +23,7 @@ type debugRefactoring struct {
 	optShowPackages    bool
 	optShowIdentifiers bool
 	optShowReferences  bool
+	optShowAffected    bool
 }
 
 func (r *debugRefactoring) Name() string {
@@ -41,6 +42,7 @@ func (r *debugRefactoring) Configure(options []string) bool {
 		fmt.Println("    showpackages")
 		fmt.Println("    showidentifiers")
 		fmt.Println("    showreferences")
+		fmt.Println("    showaffected")
 		return false
 	}
 
@@ -54,6 +56,8 @@ func (r *debugRefactoring) Configure(options []string) bool {
 			r.optShowIdentifiers = true
 		case "showreferences":
 			r.optShowReferences = true
+		case "showaffected":
+			r.optShowAffected = true
 		default:
 			r.log.Log(FATAL_ERROR, "Unknown option "+opt)
 			return false
@@ -79,6 +83,10 @@ func (r *debugRefactoring) Run() {
 
 	if r.optShowReferences {
 		r.showReferences()
+	}
+
+	if r.optShowAffected {
+		r.showAffected()
 	}
 
 	r.editSet = map[string]EditSet{}
@@ -110,12 +118,12 @@ func (r *debugRefactoring) showIdentifiers() {
 		ast.Inspect(file, func(n ast.Node) bool {
 			switch id := n.(type) {
 			case *ast.Ident:
-				position := r.program.Fset.Position(n.Pos())
+				position := r.program.Fset.Position(id.Pos())
 				fmt.Printf("%s\t(Line %d)", id.Name, position.Line)
 				if obj := r.pkgInfo(file).ObjectOf(id); obj == nil {
 					fmt.Printf(" does not have an associated object\n")
 				} else {
-					fmt.Printf(" is a reference to %s\n", obj.Id())
+					fmt.Printf(" is a reference to %s (%s)\n", obj.Id(), r.program.Fset.Position(obj.Pos()))
 				}
 			}
 			return true
@@ -134,11 +142,44 @@ func (r *debugRefactoring) showReferences() {
 	switch id := r.selectedNode.(type) {
 	case *ast.Ident:
 		fmt.Printf("References to %s:\n", id.Name)
-		for filename, occs := range r.findOccurrences(true, id) {
+		search := &SearchEngine{r.program}
+		searchResult, err := search.FindOccurrences(id)
+		if err != nil {
+			r.log.Log(FATAL_ERROR, err.Error())
+			return
+		}
+		for filename, occs := range searchResult {
 			fmt.Printf("  in %s:\n", filename)
 			for _, ol := range occs {
 				fmt.Printf("    %s\n", ol.String())
 			}
+		}
+	default:
+		r.log.Log(FATAL_ERROR, errorMsg)
+		return
+	}
+}
+
+func (r *debugRefactoring) showAffected() {
+	errorMsg := "Please select an identifier for showaffected"
+
+	if r.selectedNode == nil {
+		r.log.Log(FATAL_ERROR, errorMsg)
+		return
+	}
+	switch id := r.selectedNode.(type) {
+	case *ast.Ident:
+		fmt.Printf("Affected Declarations:\n")
+		search := &SearchEngine{r.program}
+		searchResult, err := search.FindDeclarationsAcrossInterfaces(id)
+		if err != nil {
+			r.log.Log(FATAL_ERROR, err.Error())
+			return
+		}
+		for _, obj := range searchResult {
+			p := r.program.Fset.Position(obj.Pos())
+			fmt.Printf("  %s - %s, Line %d\n",
+				obj.Name(), p.Filename, p.Line)
 		}
 	default:
 		r.log.Log(FATAL_ERROR, errorMsg)

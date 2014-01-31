@@ -44,6 +44,8 @@ func TestAdditionalDiffs(t *testing.T) {
 	testDiff("abcdefg", "bdf", t)
 	testDiff("abc", "defg", t)
 	testDiff("abcdefg", "xyz", t)
+	testDiff("abc", "dea", t)
+	testDiff("abc", "deaf", t)
 }
 
 func TestLineRdr(t *testing.T) {

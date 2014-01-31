@@ -11,9 +11,6 @@
 package doctor
 
 import (
-	"code.google.com/p/go.tools/astutil"
-	"code.google.com/p/go.tools/go/loader"
-	"code.google.com/p/go.tools/go/types"
 	"fmt"
 	"go/ast"
 	"go/build"
@@ -22,7 +19,10 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"unicode/utf8"
+
+	"code.google.com/p/go.tools/astutil"
+	"code.google.com/p/go.tools/go/loader"
+	"code.google.com/p/go.tools/go/types"
 )
 
 // All available refactorings, keyed by a unique, one-short, all-lowercase name
@@ -33,9 +33,8 @@ func init() {
 		"rename":        new(RenameRefactoring),
 		"reverseassign": new(ReverseAssignRefactoring),
 		"shortassign":   new(ShortAssignRefactoring),
-		"fiximports":    new(FixImportsTransformation),
 		"debug":         new(debugRefactoring),
-		"extract":		 new(ExtractRefactoring),
+		//"extract":		 new(ExtractRefactoring),
 		"null":          new(NullRefactoring),
 	}
 }
@@ -278,6 +277,8 @@ func (r *RefactoringBase) GetResult() (*Log, map[string]EditSet) {
 	return r.log, r.editSet
 }
 
+/* -=-=- Utility Methods -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
+
 func (r *RefactoringBase) pkgInfo(file *ast.File) *loader.PackageInfo {
 	for _, pkgInfo := range r.program.AllPackages {
 		for _, thisFile := range pkgInfo.Files {
@@ -334,6 +335,7 @@ func (r *RefactoringBase) forEachInitialFile(f func(ast *ast.File)) {
 		}
 	}
 }
+<<<<<<< HEAD
 
 func closure(allInterfaces []*types.Interface, allConcreteTypes []types.Type) map[types.Type][]types.Type {
 	graph := digraphClosure(implementsGraph(allInterfaces, allConcreteTypes))
@@ -436,3 +438,5 @@ func (r *RefactoringBase) readFromFile(offset, len int) string {
 func (r *RefactoringBase) offsetLength(node ast.Node) (int, int) {
 	return r.program.Fset.Position(node.Pos()).Offset, (r.program.Fset.Position(node.End()).Offset - r.program.Fset.Position(node.Pos()).Offset)
 }
+=======
+>>>>>>> origin/master
