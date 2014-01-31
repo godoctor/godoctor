@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"go/ast"
 	"io"
-	"os"
 	"reflect"
 )
 
@@ -20,10 +19,6 @@ type ShortAssignRefactoring struct {
 	RefactoringBase
 }
 
-type offsetAndLength struct {
-	osffset int
-	length  int
-}
 
 func (r *ShortAssignRefactoring) Name() string {
 	return "Short Assignment Refactoring"
@@ -44,12 +39,11 @@ func (r *ShortAssignRefactoring) Run() {
 		r.log.Log(ERROR, "The selection cannot be null.Please select a valid node!")
 		return // SetSelection did not succeed
 	}
-
 	switch selectedNode := r.selectedNode.(type) {
-	case *ast.AssignStmt:
-		r.createEditSet(selectedNode)
-	default:
-		r.log.Log(FATAL_ERROR, fmt.Sprintf("Select a short assignment (:=) statement! Selected node is %s", reflect.TypeOf(r.selectedNode)))
+		case *ast.AssignStmt:
+			r.createEditSet(selectedNode)
+		default:
+			r.log.Log(FATAL_ERROR, fmt.Sprintf("Select a short assignment (:=) statement! Selected node is %s", reflect.TypeOf(r.selectedNode)))
 	}
 	r.checkForErrors()
 	return
@@ -68,22 +62,16 @@ func (r *ShortAssignRefactoring) rhsExprs(assign *ast.AssignStmt) []string {
 	return rhsValue
 }
 
-func (r *ShortAssignRefactoring) offsetLength(node ast.Node) (int, int) {
-	//	fmt.Println("offsetLength",r.program.Fset.Position(node.Pos()).Offset, (r.program.Fset.Position(node.End()).Offset-r.program.Fset.Position(node.Pos()).Offset))
-	return r.program.Fset.Position(node.Pos()).Offset, (r.program.Fset.Position(node.End()).Offset - r.program.Fset.Position(node.Pos()).Offset)
-}
-
 func (r *ShortAssignRefactoring) createReplacementString(assign *ast.AssignStmt) string {
 	var buf bytes.Buffer
 	replacement := make([]string, len(assign.Rhs))
 	for i, rhs := range assign.Rhs {
 		if T, ok := r.pkgInfo(r.file).TypeOf(rhs).(*types.Tuple); ok {
-			fmt.Println("type of rh in createReplacementString():", reflect.TypeOf(rhs))
 			replacement[i] = fmt.Sprintf("var %s %s = %s\n",
 				r.lhsNames(assign)[i].String(),
-				returnTypeOfFunction(T),
+				TypeOfFunctiontype(T),
 				r.rhsExprs(assign)[i])
-			if returnTypeOfFunction(T) == "" {
+			if TypeOfFunctiontype(T) == "" {
 				r.log.Log(ERROR, "This short assignment cannot be converted to an explicitly-typed var declaration.")
 			}
 		} else {
@@ -115,26 +103,11 @@ func (r *ShortAssignRefactoring) lhsNames(assign *ast.AssignStmt) []bytes.Buffer
 	return buf
 }
 
-func (r *ShortAssignRefactoring) readFromFile(offset, len int) string {
-	buf := make([]byte, len)
-	file, err := os.Open(r.filename(r.file)) /// work on opening the file in the beginning according to Alan !!!
-	if err != nil {
-		panic(err) // log.Fatal error
-	}
-	defer file.Close()
-	_, err = file.ReadAt(buf, int64(offset))
-	if err != nil {
-		panic(err)
-	}
-	return string(buf)
-}
-
-// returnTypeOfFunction receives a function's return type, which must be a
+// TypeOfFunctiontype receives a type of function's return type, which must be a
 // tuple type; if each component has the same type (T, T, T), then it returns
 // the type T as a string; otherwise, it returns the empty string.
-func returnTypeOfFunction(returnType types.Type) string { // change of fuction name
+func TypeOfFunctiontype(returnType types.Type) string { 
 	typeArray := make([]string, returnType.(*types.Tuple).Len())
-	fmt.Println("type of the function:", reflect.TypeOf(returnType))
 	initialType := returnType.(*types.Tuple).At(0).Type().String()
 	finalType := initialType
 	for i := 1; i < returnType.(*types.Tuple).Len(); i++ {

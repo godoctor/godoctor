@@ -35,6 +35,7 @@ func init() {
 		"shortassign":   new(ShortAssignRefactoring),
 		"fiximports":    new(FixImportsTransformation),
 		"debug":         new(debugRefactoring),
+		"extract":		 new(ExtractRefactoring),
 		"null":          new(NullRefactoring),
 	}
 }
@@ -416,4 +417,22 @@ func (r *RefactoringBase) getPackages(all bool) []*loader.PackageInfo {
 		pkgs = append(pkgs, r.pkgInfo(r.file))
 	}
 	return pkgs
+}
+
+func (r *RefactoringBase) readFromFile(offset, len int) string {
+	buf := make([]byte, len)
+	file, err := os.Open(r.filename(r.file)) 
+	if err != nil {
+		r.log.Log(FATAL_ERROR, fmt.Sprintf("Error on file Open %s",err))
+	}
+	defer file.Close()
+	_, err = file.ReadAt(buf, int64(offset))
+	if err != nil {
+		r.log.Log(FATAL_ERROR, fmt.Sprintf("Error on file Open %s",err))
+	}
+	return string(buf)
+}
+
+func (r *RefactoringBase) offsetLength(node ast.Node) (int, int) {
+	return r.program.Fset.Position(node.Pos()).Offset, (r.program.Fset.Position(node.End()).Offset - r.program.Fset.Position(node.Pos()).Offset)
 }
