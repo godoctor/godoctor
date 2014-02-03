@@ -71,7 +71,10 @@ func (r *ShortAssignRefactoring) createReplacementString(assign *ast.AssignStmt)
 				typeOfFunctionType(T),
 				r.rhsExprs(assign)[i])
 			if typeOfFunctionType(T) == "" {
-				r.log.Log(ERROR, "This short assignment cannot be converted to an explicitly-typed var declaration.")
+				//	r.log.Log(ERROR, "This short assignment cannot be converted to an explicitly-typed var declaration.")
+				replacement[i] = fmt.Sprintf("var %s = %s\n",
+					r.lhsNames(assign)[i].String(),
+					r.rhsExprs(assign)[i])
 			}
 		} else {
 			replacement[i] = fmt.Sprintf("var %s %s = %s\n",
