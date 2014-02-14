@@ -149,9 +149,9 @@ func (r *RefactoringBase) SetSelection(selection TextSelection, scope []string) 
 	// FIXME: Jeff: handle error
 
 	if scope != nil {
-		config.FromArgs(scope)
+		config.FromArgs(scope, false)
 	} else {
-		config.FromArgs([]string{selection.Filename})
+		config.FromArgs([]string{selection.Filename}, false)
 	}
 
 	var err error

@@ -61,11 +61,11 @@ func (r *SearchEngine) allInterfacesIncluding(method string) []*types.Interface 
 	result := make(map[*types.Interface]int)
 	for _, pkgInfo := range r.program.AllPackages {
 		for _, typ := range pkgInfo.Types {
-			intf, isInterface := typ.Underlying().(*types.Interface)
+			intf, isInterface := typ.Type.Underlying().(*types.Interface)
 			if isInterface {
 				if _, ok := result[intf]; !ok {
 					obj, _, _ := types.LookupFieldOrMethod(
-						typ, pkgInfo.Pkg, method)
+						typ.Type, pkgInfo.Pkg, method)
 					if obj != nil {
 						result[intf] = 0
 					}
@@ -104,14 +104,14 @@ func (r *SearchEngine) allTypesIncluding(method string) []types.Type {
 			}
 		}
 		for _, typ := range pkgInfo.Types {
-			if _, ok := result[typ]; !ok {
+			if _, ok := result[typ.Type]; !ok {
 				obj1, _, _ := types.LookupFieldOrMethod(
-					typ, pkgInfo.Pkg, method)
+					typ.Type, pkgInfo.Pkg, method)
 				obj2, _, _ := types.LookupFieldOrMethod(
-					typ.Underlying(), pkgInfo.Pkg, method)
+					typ.Type.Underlying(), pkgInfo.Pkg, method)
 				if obj1 != nil || obj2 != nil {
-					result[typ] = 0
-					result[typ.Underlying()] = 0
+					result[typ.Type] = 0
+					result[typ.Type.Underlying()] = 0
 				}
 			}
 		}
@@ -166,7 +166,7 @@ func implementsGraph(interfcs []*types.Interface, typs []types.Type) [][]int {
 	adj := make([][]int, len(interfcs)+len(typs))
 	for i, interf := range interfcs {
 		for j, typ := range typs {
-			if types.Implements(typ, interf, true) {
+			if types.Implements(typ, interf) {
 				adj[i] = append(adj[i], len(interfcs)+j)
 				adj[len(interfcs)+j] =
 					append(adj[len(interfcs)+j], i)
@@ -300,7 +300,7 @@ func (r *SearchEngine) containsObject(decls []types.Object, o types.Object) bool
 func (r *SearchEngine) getPackages(decls []types.Object) []*loader.PackageInfo {
 	pkgs := make(map[*loader.PackageInfo]int)
 	for _, decl := range decls {
-		if types.Object.IsExported(decl) {
+		if decl.Exported() {
 			return r.allPackages()
 		} else {
 			pkgs[r.pkgInfoForPkg(decl.Pkg())] = 0
