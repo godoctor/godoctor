@@ -3,11 +3,9 @@
 package cfg
 
 import (
-	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"os"
 	"testing"
 )
 
@@ -34,6 +32,25 @@ func TestDoubleForBreak(t *testing.T) {
 	c.expectPreds(t, 3, 2)
 	c.expectPreds(t, 4, 1)
 	c.expectPreds(t, 5, 4)
+}
+
+func TestFor(t *testing.T) {
+	c := getWrapper(t, `
+  package main
+
+  func foo(c int) {
+    //START 0
+    for i := 0; i < c; i++ { //2, 1, 3
+      println(i) //4
+    }
+    println(c) //5
+    //END 6
+  }`)
+
+	c.expectSuccs(t, 0, 1)
+	c.expectSuccs(t, 2, 1)
+	c.expectSuccs(t, 1, 4, 5)
+	c.expectSuccs(t, 4, 3)
 }
 
 func TestIfElse(t *testing.T) {
@@ -197,21 +214,22 @@ func TestSwitch(t *testing.T) {
     case 2: //7
       break //8
       print("two") //9
-    default: //10
-      print("done") //11
+    case 3: //10
+    default: //11
+      print("done") //12
     }
-    print("bye") //12
-    //END 13
+    print("bye") //13
+    //END 14
   }
   `)
 	c.expectSuccs(t, 0, 1)
 	c.expectSuccs(t, 1, 2)
 	c.expectSuccs(t, 2, 3)
-	c.expectSuccs(t, 3, 4, 7, 10)
+	c.expectSuccs(t, 3, 4, 7, 10, 11)
 	//TODO finish
 
 	//preds meow...
-	c.expectPreds(t, 12, 11, 9, 8)
+	c.expectPreds(t, 13, 12, 10, 9, 8)
 	//TODO finish
 }
 
@@ -291,7 +309,7 @@ func getWrapper(t *testing.T, str string) *CFGWrapper {
 		t.FailNow()
 		return nil
 	}
-	cfg := FuncCFG(f.Decls[0].(*ast.FuncDecl))
+	cfg := FuncCFG(f.Decls[0].(*ast.FuncDecl)) //yes, so all test cases take first function
 	//cfg.cfgtodot() //weird placement -- useful
 	v, i := make(map[int]ast.Stmt), 1
 	v[0] = cfg.start
@@ -310,8 +328,7 @@ func getWrapper(t *testing.T, str string) *CFGWrapper {
 	v[i] = cfg.end
 	if len(v) != len(cfg.vMap) {
 		t.Errorf("Expected %d vertices, got %d --construction error", len(v), len(cfg.vMap))
-		t.FailNow()
-		return nil
+		//t.FailNow()
 	}
 	return &CFGWrapper{cfg, v}
 }
@@ -324,7 +341,7 @@ func (c *CFGWrapper) expectSuccs(t *testing.T, s int, expSuccs ...int) {
 
 	//get successors for stmt s as slice, put in map
 	actualSuccs := make(map[ast.Stmt]bool)
-	for _, v := range c.cfg.Successors(c.exp[s]) {
+	for _, v := range c.cfg.Succs(c.exp[s]) {
 		actualSuccs[v] = true
 	}
 
@@ -358,7 +375,7 @@ func (c *CFGWrapper) expectPreds(t *testing.T, s int, expPreds ...int) {
 
 	//get predecessors for stmt s as slice, put in map
 	actualPreds := make(map[ast.Stmt]bool)
-	for _, v := range c.cfg.Predecessors(c.exp[s]) {
+	for _, v := range c.cfg.Preds(c.exp[s]) {
 		actualPreds[v] = true
 	}
 
@@ -384,114 +401,114 @@ func (c *CFGWrapper) expectPreds(t *testing.T, s int, expPreds ...int) {
 
 //output a graph.dot file... for now
 //most likely for testing only
-func (c *CFG) cfgtodot() {
-	f, err := os.Create("graph.dot")
-	if err != nil {
-		panic(err)
-	}
-	fmt.Fprintf(f, `digraph mgraph {
-    mode="heir";
-    splines="ortho";
+//func (c *CFG) cfgtodot() {
+//f, err := os.Create("graph.dot")
+//if err != nil {
+//panic(err)
+//}
+//fmt.Fprintf(f, `digraph mgraph {
+//mode="heir";
+//splines="ortho";
 
-`)
-	for _, v := range c.vMap {
-		for _, a := range v.succs {
-			fmt.Fprintf(f, "\t\"%s\" -> \"%s\"\n", c.printVertex(v), c.printVertex(c.getVertex(a)))
-		}
-	}
-	fmt.Fprintf(f, "}\n")
-}
+//`)
+//for _, v := range c.vMap {
+//for _, a := range v.succs {
+//fmt.Fprintf(f, "\t\"%s\" -> \"%s\"\n", c.printVertex(v), c.printVertex(c.getVertex(a)))
+//}
+//}
+//fmt.Fprintf(f, "}\n")
+//}
 
-func (c *CFG) printVertex(v *vertex) string {
-	switch v.stmt {
-	case c.start:
-		return fmt.Sprintf("%s %p", "START", v.stmt)
-	case c.end:
-		return fmt.Sprintf("%s %p", "END", v.stmt)
-	}
-	return printStmt(v.stmt)
-}
+//func (c *CFG) printVertex(v *vertex) string {
+//switch v.stmt {
+//case c.start:
+//return fmt.Sprintf("%s %p", "START", v.stmt)
+//case c.end:
+//return fmt.Sprintf("%s %p", "END", v.stmt)
+//}
+//return printStmt(v.stmt)
+//}
 
-func printStmt(s ast.Stmt) string {
-	p := func(str string) string {
-		return fmt.Sprintf("%s %p", str, s)
-	}
-	switch s.(type) {
-	case *ast.CaseClause: //DONE
-		return p("CASE")
-	case *ast.CommClause: //DONE
-		return p("COMM")
-	case *ast.ForStmt: //DONE
-		return p("FOR")
-	case *ast.IfStmt: //DONE
-		return p("IF")
-	case *ast.AssignStmt: //DONE
-		return p("ASSIGN")
-	case *ast.BadStmt: //DONE
-		return p("BAD")
-	case *ast.BranchStmt: //DONE
-		return p("BRANCH")
-	case *ast.BlockStmt: //TODO where? use as entry?
-		return p("BLOCK")
-	case *ast.DeclStmt: //DONE
-		return p("DECL")
-	case *ast.DeferStmt: //TODO conditionals... done?
-		return p("DEFER")
-	case *ast.EmptyStmt: //DONE
-		return p("EMPTY")
-	case *ast.ExprStmt: //DONE
-		return p("EXPR")
-	case *ast.GoStmt: //DONE
-		return p("GO")
-	case *ast.IncDecStmt: //DONE
-		return p("INCDEC")
-	case *ast.LabeledStmt: //DONE
-		return p("LABELED")
-	case *ast.RangeStmt: //DONE
-		return p("RANGE")
-	case *ast.ReturnStmt: //DONE
-		return p("RETURN")
-	case *ast.SelectStmt: //DONE
-		return p("SELECT")
-	case *ast.SendStmt: //DONE
-		return p("SEND")
-	case *ast.SwitchStmt: //DONE
-		return p("SWITCH")
-	case *ast.TypeSwitchStmt: //DONE
-		return p("TYPESWITCH")
-	}
-	return ""
-}
+//func printStmt(s ast.Stmt) string {
+//p := func(str string) string {
+//return fmt.Sprintf("%s %p", str, s)
+//}
+//switch s.(type) {
+//case *ast.CaseClause: //DONE
+//return p("CASE")
+//case *ast.CommClause: //DONE
+//return p("COMM")
+//case *ast.ForStmt: //DONE
+//return p("FOR")
+//case *ast.IfStmt: //DONE
+//return p("IF")
+//case *ast.AssignStmt: //DONE
+//return p("ASSIGN")
+//case *ast.BadStmt: //DONE
+//return p("BAD")
+//case *ast.BranchStmt: //DONE
+//return p("BRANCH")
+//case *ast.BlockStmt: //TODO where? use as entry?
+//return p("BLOCK")
+//case *ast.DeclStmt: //DONE
+//return p("DECL")
+//case *ast.DeferStmt: //TODO conditionals... done?
+//return p("DEFER")
+//case *ast.EmptyStmt: //DONE
+//return p("EMPTY")
+//case *ast.ExprStmt: //DONE
+//return p("EXPR")
+//case *ast.GoStmt: //DONE
+//return p("GO")
+//case *ast.IncDecStmt: //DONE
+//return p("INCDEC")
+//case *ast.LabeledStmt: //DONE
+//return p("LABELED")
+//case *ast.RangeStmt: //DONE
+//return p("RANGE")
+//case *ast.ReturnStmt: //DONE
+//return p("RETURN")
+//case *ast.SelectStmt: //DONE
+//return p("SELECT")
+//case *ast.SendStmt: //DONE
+//return p("SEND")
+//case *ast.SwitchStmt: //DONE
+//return p("SWITCH")
+//case *ast.TypeSwitchStmt: //DONE
+//return p("TYPESWITCH")
+//}
+//return ""
+//}
 
-//leave this around for printing and things...
-func TestCFGPrint(t *testing.T) {
-	//TODO ast.Inspect and number nodes
-	//expectSuccs(#, #...)
+////leave this around for printing and things...
+//func TestCFGPrint(t *testing.T) {
+////TODO ast.Inspect and number nodes
+////expectSuccs(#, #...)
 
-	//fset := token.NewFileSet() // positions are relative to fset
-	//f, err := parser.ParseFile(fset, "", `
-	//package main
+////fset := token.NewFileSet() // positions are relative to fset
+////f, err := parser.ParseFile(fset, "", `
+////package main
 
-	//func foo(s ast.Stmt) {
-	////START 0
-	//switch s.(type) { //1, 2
-	//case *ast.AssignStmt: //3
-	//print("assign") //4
-	//case *ast.ForStmt: //5
-	//print("for") //6
-	//default: //7
-	//print("default") //8
-	//}
-	//print("done") //9
-	////END 10
-	//}
-	//`, 0)
-	//if err != nil {
-	//fmt.Println(err)
-	//}
+////func foo(s ast.Stmt) {
+//////START 0
+////switch s.(type) { //1, 2
+////case *ast.AssignStmt: //3
+////print("assign") //4
+////case *ast.ForStmt: //5
+////print("for") //6
+////default: //7
+////print("default") //8
+////}
+////print("done") //9
+//////END 10
+////}
+////`, 0)
+////if err != nil {
+////fmt.Println(err)
+////}
 
-	////// Print the AST.
-	//ast.Print(fset, f)
-	//cfg := MakeCFG(f.Decls[0].(*ast.FuncDecl))
-	//cfg.cfgtodot() //side effects: .dot file
-}
+//////// Print the AST.
+////ast.Print(fset, f)
+////cfg := MakeCFG(f.Decls[0].(*ast.FuncDecl))
+////cfg.cfgtodot() //side effects: .dot file
+//}
