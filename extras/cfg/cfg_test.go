@@ -3,10 +3,17 @@
 package cfg
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
 	"testing"
+)
+
+const (
+	START = 0
+	END   = 100000000 //if there's this many statements, may god have mercy on your soul
 )
 
 func TestDoubleForBreak(t *testing.T) {
@@ -14,24 +21,24 @@ func TestDoubleForBreak(t *testing.T) {
   package main
 
   func foo(c int) {
-    //START 0
+    //START
     for { //1
       for { //2
         break //3
       }
     }
     print("this") //4
-    //END 5
+    //END
   }`)
 	//            t, stmt, ...successors
-	c.expectSuccs(t, 0, 1)
+	c.expectSuccs(t, START, 1)
 	c.expectSuccs(t, 1, 2, 4)
 	c.expectSuccs(t, 2, 3, 1)
 	c.expectSuccs(t, 3, 1)
 
 	c.expectPreds(t, 3, 2)
 	c.expectPreds(t, 4, 1)
-	c.expectPreds(t, 5, 4)
+	c.expectPreds(t, END, 4)
 }
 
 func TestFor(t *testing.T) {
@@ -39,18 +46,20 @@ func TestFor(t *testing.T) {
   package main
 
   func foo(c int) {
-    //START 0
+    //START
     for i := 0; i < c; i++ { //2, 1, 3
       println(i) //4
     }
     println(c) //5
-    //END 6
+    //END
   }`)
 
-	c.expectSuccs(t, 0, 1)
+	c.expectSuccs(t, START, 1)
 	c.expectSuccs(t, 2, 1)
 	c.expectSuccs(t, 1, 4, 5)
 	c.expectSuccs(t, 4, 3)
+
+	c.expectPreds(t, END, 5)
 }
 
 func TestIfElse(t *testing.T) {
@@ -58,21 +67,21 @@ func TestIfElse(t *testing.T) {
   package main
 
   func foo(c int) {
-    //START 0
+    //START
     if c := 1; c > 0 { //1, 2
       print("there") //3
     } else {
       print("nowhere") //4
     }
-    //END 5
+    //END
   }`)
 
-	c.expectSuccs(t, 0, 1)
+	c.expectSuccs(t, START, 1)
 	c.expectSuccs(t, 1, 2)
 	c.expectSuccs(t, 2, 3, 4)
 
 	c.expectPreds(t, 4, 2)
-	c.expectPreds(t, 5, 4, 3)
+	c.expectPreds(t, END, 4, 3)
 	//TODO
 }
 
@@ -81,20 +90,19 @@ func TestIfNoElse(t *testing.T) {
   package main
 
   func foo(c int) {
-    //START 0
-    if c > 0 { //1
+    //START
+    if c > 0 && true { //1
       println("here") //2
     }
     print("there") //3
-    //END //4
+    //END
   }
   `)
-
-	c.expectSuccs(t, 0, 1)
+	c.expectSuccs(t, START, 1)
 	c.expectSuccs(t, 1, 2, 3)
 
 	c.expectPreds(t, 3, 1, 2)
-	c.expectPreds(t, 4, 3)
+	c.expectPreds(t, END, 3)
 }
 
 func TestIfElseIf(t *testing.T) {
@@ -102,7 +110,7 @@ func TestIfElseIf(t *testing.T) {
   package main
 
   func foo(c int) {
-    //START 0
+    //START
     if c > 0 { //1
       println("here") //2
     } else if c == 0 { //3
@@ -110,10 +118,11 @@ func TestIfElseIf(t *testing.T) {
     } else {
       println("everywhere") //5
     }
-    //END 6
+    print("almost end") //6
+    //END
   }`)
 
-	c.expectSuccs(t, 0, 1)
+	c.expectSuccs(t, START, 1)
 	c.expectSuccs(t, 1, 2, 3)
 	c.expectSuccs(t, 2, 6)
 	c.expectSuccs(t, 3, 4, 5)
@@ -128,7 +137,7 @@ func TestDefer(t *testing.T) {
   package main
 
   func foo() {
-    //START 0
+    //START
     print("this") //1
     defer print("one") //2
     if 1 != 0 { //3
@@ -138,15 +147,14 @@ func TestDefer(t *testing.T) {
     print("that") //6
     defer print("three") //7
     return //8
-    //END 9
+    //END
   }
   `)
-	c.expectSuccs(t, 0, 1)
-	c.expectSuccs(t, 2, 9)
+	c.expectSuccs(t, 3, 5, 6)
 	c.expectSuccs(t, 5, 4)
 
 	c.expectPreds(t, 7, 8)
-	c.expectPreds(t, 9, 2)
+	c.expectPreds(t, 4, 7, 5)
 	c.expectPreds(t, 2, 4)
 	c.expectPreds(t, 5, 3)
 	//TODO
@@ -158,7 +166,7 @@ func TestRange(t *testing.T) {
   package main
 
   func foo() { 
-    //START 0
+    //START
     c := []int{1, 2, 3} //1
   lbl: //2
     for i, v := range c { //3
@@ -171,10 +179,10 @@ func TestRange(t *testing.T) {
       }
     }
     print("done") //9
-    //END 10
+    //END
   }
   `)
-	c.expectSuccs(t, 0, 1)
+	c.expectSuccs(t, START, 1)
 	//TODO
 }
 
@@ -183,7 +191,7 @@ func TestTypeSwitchDefault(t *testing.T) {
   package main
 
   func foo(s ast.Stmt) {
-    //START 0
+    //START
     switch s.(type) { //1, 2
     case *ast.AssignStmt: //3
       print("assign") //4
@@ -193,7 +201,7 @@ func TestTypeSwitchDefault(t *testing.T) {
       print("default") //8
     }
     print("done") //9
-    //END 10
+    //END
   }
   `)
 	c.expectSuccs(t, 2, 3, 5, 7)
@@ -205,7 +213,7 @@ func TestSwitch(t *testing.T) {
   package main
   
   func foo(c int) {
-    //START 0
+    //START
     print("hi") //1
     switch c+=1; c { //2, 3
     case 1: //4
@@ -219,13 +227,14 @@ func TestSwitch(t *testing.T) {
       print("done") //12
     }
     print("bye") //13
-    //END 14
+    //END
   }
   `)
-	c.expectSuccs(t, 0, 1)
+	c.expectSuccs(t, START, 1)
 	c.expectSuccs(t, 1, 2)
 	c.expectSuccs(t, 2, 3)
 	c.expectSuccs(t, 3, 4, 7, 10, 11)
+	c.expectSuccs(t, 13, END)
 	//TODO finish
 
 	//preds meow...
@@ -238,7 +247,7 @@ func TestLabeledFallthrough(t *testing.T) {
   package main
 
   func foo(c int) {
-    //START 0
+    //START
     switch c { //1
     case 1: //2
       print("one") //3
@@ -250,17 +259,39 @@ func TestLabeledFallthrough(t *testing.T) {
     default: //9
       print("number") //10
     }
-    //END 11
+    //END
   }`)
 
-	c.expectSuccs(t, 0, 1)
+	c.expectSuccs(t, START, 1)
 	c.expectSuccs(t, 1, 2, 5, 9)
 	c.expectSuccs(t, 4, 8)
 	c.expectSuccs(t, 7, 8)
 	c.expectSuccs(t, 8, 9)
-
-	c.expectPreds(t, 11, 10)
 }
+
+// TODO modify ast.Inspect for go statements
+// TODO also, does a go statement have control ever?
+//func TestClosure(t *testing.T) {
+//c := getWrapper(t, `
+//package main
+
+//func foo(c int) {
+////START
+//if c > 0 { //1
+//go func(i int) { //2
+//println(i)
+//}(c)
+//}
+//println(c) //3
+////END
+//}`)
+
+//c.printAST()
+//c.printDOT()
+
+//c.expectSuccs(t, START, 1)
+//c.expectSuccs(t, 1, 2, 3)
+//}
 
 func TestDietyExistence(t *testing.T) {
 	c := getWrapper(t, `
@@ -290,17 +321,21 @@ func TestDietyExistence(t *testing.T) {
     ending:
   }
   `)
-	c.expectSuccs(t, 0, 1)
+	c.expectSuccs(t, START, 1)
 	//TODO ultimate stress test
 }
 
 //lo and behold how it's done -- caution: disgust may ensue
 type CFGWrapper struct {
-	cfg *CFG
-	exp map[int]ast.Stmt
+	cfg  *CFG
+	exp  map[int]ast.Stmt
+	fset *token.FileSet
+	f    *ast.File
 }
 
-//uses first function in given string to produce CFG
+// uses first function in given string to produce CFG
+// w/ some other convenient fields for printing in test
+// cases when need be...
 func getWrapper(t *testing.T, str string) *CFGWrapper {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, "", str, 0)
@@ -310,9 +345,7 @@ func getWrapper(t *testing.T, str string) *CFGWrapper {
 		return nil
 	}
 	cfg := FuncCFG(f.Decls[0].(*ast.FuncDecl)) //yes, so all test cases take first function
-	//cfg.cfgtodot() //weird placement -- useful
 	v, i := make(map[int]ast.Stmt), 1
-	v[0] = cfg.start
 	ast.Inspect(f.Decls[0].(*ast.FuncDecl), func(n ast.Node) bool {
 		switch x := n.(type) {
 		case ast.Stmt:
@@ -322,15 +355,17 @@ func getWrapper(t *testing.T, str string) *CFGWrapper {
 			}
 			v[i] = x
 			i++
+			//TODO skip over any statements w/i func... as our graph does
 		}
 		return true
 	})
-	v[i] = cfg.end
+	v[END] = cfg.end
+	v[START] = cfg.start
 	if len(v) != len(cfg.vMap) {
 		t.Errorf("Expected %d vertices, got %d --construction error", len(v), len(cfg.vMap))
 		//t.FailNow()
 	}
-	return &CFGWrapper{cfg, v}
+	return &CFGWrapper{cfg, v, fset, f}
 }
 
 func (c *CFGWrapper) expectSuccs(t *testing.T, s int, expSuccs ...int) {
@@ -399,116 +434,88 @@ func (c *CFGWrapper) expectPreds(t *testing.T, s int, expPreds ...int) {
 	}
 }
 
+//prints given AST
+func (c *CFGWrapper) printAST() {
+	ast.Print(c.fset, c.f)
+}
+
 //output a graph.dot file... for now
 //most likely for testing only
-//func (c *CFG) cfgtodot() {
-//f, err := os.Create("graph.dot")
-//if err != nil {
-//panic(err)
-//}
-//fmt.Fprintf(f, `digraph mgraph {
-//mode="heir";
-//splines="ortho";
+func (c *CFGWrapper) printDOT() {
+	f, err := os.Create("graph.dot")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Fprintf(f, `digraph mgraph {
+mode="heir";
+splines="ortho";
 
 //`)
-//for _, v := range c.vMap {
-//for _, a := range v.succs {
-//fmt.Fprintf(f, "\t\"%s\" -> \"%s\"\n", c.printVertex(v), c.printVertex(c.getVertex(a)))
-//}
-//}
-//fmt.Fprintf(f, "}\n")
-//}
+	for _, v := range c.cfg.vMap {
+		for a, _ := range v.succs {
+			fmt.Fprintf(f, "\t\"%s\" -> \"%s\"\n", c.printVertex(v), c.printVertex(c.cfg.vMap[a]))
+		}
+	}
+	fmt.Fprintf(f, "}\n")
+}
 
-//func (c *CFG) printVertex(v *vertex) string {
-//switch v.stmt {
-//case c.start:
-//return fmt.Sprintf("%s %p", "START", v.stmt)
-//case c.end:
-//return fmt.Sprintf("%s %p", "END", v.stmt)
-//}
-//return printStmt(v.stmt)
-//}
+func (c *CFGWrapper) printVertex(v *vertex) string {
+	switch v.stmt {
+	case c.cfg.start:
+		return fmt.Sprintf("%s %p", "START", v.stmt)
+	case c.cfg.end:
+		return fmt.Sprintf("%s %p", "END", v.stmt)
+	}
+	return printStmt(v.stmt)
+}
 
-//func printStmt(s ast.Stmt) string {
-//p := func(str string) string {
-//return fmt.Sprintf("%s %p", str, s)
-//}
-//switch s.(type) {
-//case *ast.CaseClause: //DONE
-//return p("CASE")
-//case *ast.CommClause: //DONE
-//return p("COMM")
-//case *ast.ForStmt: //DONE
-//return p("FOR")
-//case *ast.IfStmt: //DONE
-//return p("IF")
-//case *ast.AssignStmt: //DONE
-//return p("ASSIGN")
-//case *ast.BadStmt: //DONE
-//return p("BAD")
-//case *ast.BranchStmt: //DONE
-//return p("BRANCH")
-//case *ast.BlockStmt: //TODO where? use as entry?
-//return p("BLOCK")
-//case *ast.DeclStmt: //DONE
-//return p("DECL")
-//case *ast.DeferStmt: //TODO conditionals... done?
-//return p("DEFER")
-//case *ast.EmptyStmt: //DONE
-//return p("EMPTY")
-//case *ast.ExprStmt: //DONE
-//return p("EXPR")
-//case *ast.GoStmt: //DONE
-//return p("GO")
-//case *ast.IncDecStmt: //DONE
-//return p("INCDEC")
-//case *ast.LabeledStmt: //DONE
-//return p("LABELED")
-//case *ast.RangeStmt: //DONE
-//return p("RANGE")
-//case *ast.ReturnStmt: //DONE
-//return p("RETURN")
-//case *ast.SelectStmt: //DONE
-//return p("SELECT")
-//case *ast.SendStmt: //DONE
-//return p("SEND")
-//case *ast.SwitchStmt: //DONE
-//return p("SWITCH")
-//case *ast.TypeSwitchStmt: //DONE
-//return p("TYPESWITCH")
-//}
-//return ""
-//}
-
-////leave this around for printing and things...
-//func TestCFGPrint(t *testing.T) {
-////TODO ast.Inspect and number nodes
-////expectSuccs(#, #...)
-
-////fset := token.NewFileSet() // positions are relative to fset
-////f, err := parser.ParseFile(fset, "", `
-////package main
-
-////func foo(s ast.Stmt) {
-//////START 0
-////switch s.(type) { //1, 2
-////case *ast.AssignStmt: //3
-////print("assign") //4
-////case *ast.ForStmt: //5
-////print("for") //6
-////default: //7
-////print("default") //8
-////}
-////print("done") //9
-//////END 10
-////}
-////`, 0)
-////if err != nil {
-////fmt.Println(err)
-////}
-
-//////// Print the AST.
-////ast.Print(fset, f)
-////cfg := MakeCFG(f.Decls[0].(*ast.FuncDecl))
-////cfg.cfgtodot() //side effects: .dot file
-//}
+func printStmt(s ast.Stmt) string {
+	p := func(str string) string {
+		return fmt.Sprintf("%s %p", str, s)
+	}
+	switch s.(type) {
+	case *ast.CaseClause: //DONE
+		return p("CASE")
+	case *ast.CommClause: //DONE
+		return p("COMM")
+	case *ast.ForStmt: //DONE
+		return p("FOR")
+	case *ast.IfStmt: //DONE
+		return p("IF")
+	case *ast.AssignStmt: //DONE
+		return p("ASSIGN")
+	case *ast.BadStmt: //DONE
+		return p("BAD")
+	case *ast.BranchStmt: //DONE
+		return p("BRANCH")
+	case *ast.BlockStmt: //TODO where? use as entry?
+		return p("BLOCK")
+	case *ast.DeclStmt: //DONE
+		return p("DECL")
+	case *ast.DeferStmt: //TODO conditionals... done?
+		return p("DEFER")
+	case *ast.EmptyStmt: //DONE
+		return p("EMPTY")
+	case *ast.ExprStmt: //DONE
+		return p("EXPR")
+	case *ast.GoStmt: //DONE
+		return p("GO")
+	case *ast.IncDecStmt: //DONE
+		return p("INCDEC")
+	case *ast.LabeledStmt: //DONE
+		return p("LABELED")
+	case *ast.RangeStmt: //DONE
+		return p("RANGE")
+	case *ast.ReturnStmt: //DONE
+		return p("RETURN")
+	case *ast.SelectStmt: //DONE
+		return p("SELECT")
+	case *ast.SendStmt: //DONE
+		return p("SEND")
+	case *ast.SwitchStmt: //DONE
+		return p("SWITCH")
+	case *ast.TypeSwitchStmt: //DONE
+		return p("TYPESWITCH")
+	}
+	return ""
+}

@@ -81,7 +81,6 @@ import (
 // given to construct the graph. They are useful for return
 // and defer statement handling as well as declaring a singular
 // entry (and exit) node.
-// TODO need to strip from returned preds/succs
 type CFG struct {
 	vMap       map[ast.Stmt]*vertex
 	start, end *ast.BadStmt
@@ -94,7 +93,7 @@ type CFG struct {
 // They will be iterated over in depth first manner.
 //
 // TODO (reed) read more java design pattern books for builder entry
-// TODO (reed) don't hook up defers to end unless creating from func?
+// TODO (reed) don't hook up defers to end unless we have a return or end of func?
 func MakeCFG(s []ast.Stmt) *CFG {
 	return newCFGBuilder().build(s)
 }
@@ -109,15 +108,33 @@ func FuncCFG(f *ast.FuncDecl) *CFG {
 }
 
 //Preds returns a slice of all immediate predecessors to the given statement
+//TODO if map would be more convenient, do speak
 func (c *CFG) Preds(s ast.Stmt) []ast.Stmt {
-	//TODO remove START/END?
-	return c.vMap[s].preds
+	//TODO remove START/END? return err if no stmt?
+	preds := make([]ast.Stmt, 0)
+	if v, ok := c.vMap[s]; ok {
+		for k, _ := range v.preds {
+			if k != c.end || k != c.start {
+				preds = append(preds, k)
+			}
+		}
+	}
+	return preds
 }
 
 //Succs returns a slice of all immediate successors to the given statement
+//TODO if map would be more convenient, do speak
 func (c *CFG) Succs(s ast.Stmt) []ast.Stmt {
-	//TODO remove START/END?
-	return c.vMap[s].succs
+	//TODO remove START/END? return err if no stmt?
+	succs := make([]ast.Stmt, 0)
+	if v, ok := c.vMap[s]; ok {
+		for k, _ := range v.succs {
+			if k != c.end || k != c.start {
+				succs = append(succs, k)
+			}
+		}
+	}
+	return succs
 }
 
 // Vertices are represented inside of a map of statements
@@ -181,13 +198,13 @@ func (b *builder) build(s []ast.Stmt) *CFG {
 //TODO see listed kinks for preds/succs
 type vertex struct {
 	stmt  ast.Stmt
-	preds []ast.Stmt //not sure if []*Vertex would be as useful?
-	succs []ast.Stmt //map[ast.Stmt]*Vertex would disallow double entries/convenience?
+	preds map[ast.Stmt]*vertex //not sure if []*Vertex would be as useful?
+	succs map[ast.Stmt]*vertex //map[ast.Stmt]*Vertex would disallow double entries/convenience?
 }
 
 // about the zero value thing...
 func makeVertex(s ast.Stmt) *vertex {
-	return &vertex{s, make([]ast.Stmt, 0), make([]ast.Stmt, 0)}
+	return &vertex{s, make(map[ast.Stmt]*vertex), make(map[ast.Stmt]*vertex, 0)}
 }
 
 // Will access or create vertex for given statements
@@ -202,8 +219,8 @@ func (b *builder) flowTo(src, dest ast.Stmt) *builder {
 	}
 	v := b.getVertex(src)
 	w := b.getVertex(dest)
-	v.succs = append(v.succs, dest)
-	w.preds = append(w.preds, src)
+	v.succs[dest] = w
+	w.preds[src] = v
 	return b
 }
 
