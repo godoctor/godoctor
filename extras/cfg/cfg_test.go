@@ -178,12 +178,17 @@ func TestRange(t *testing.T) {
         break lbl //8
       }
     }
-    print("done") //9
     //END
   }
   `)
 	c.expectSuccs(t, START, 1)
-	//TODO
+	c.expectSuccs(t, 2, 3)
+	c.expectSuccs(t, 3, 4, END)
+	c.expectSuccs(t, 4, 5, 3)
+	c.expectSuccs(t, 6, 3)
+	c.expectSuccs(t, 8, END)
+
+	c.expectPreds(t, END, 8, 3)
 }
 
 func TestTypeSwitchDefault(t *testing.T) {
@@ -200,11 +205,12 @@ func TestTypeSwitchDefault(t *testing.T) {
     default: //7
       print("default") //8
     }
-    print("done") //9
     //END
   }
   `)
 	c.expectSuccs(t, 2, 3, 5, 7)
+
+	c.expectPreds(t, END, 8, 6, 4)
 	//TODO
 }
 
@@ -223,22 +229,26 @@ func TestSwitch(t *testing.T) {
       break //8
       print("two") //9
     case 3: //10
-    default: //11
-      print("done") //12
+    case 4: //11
+      if i > 3 { //12
+        print("> 3") //13
+      } else { 
+        print("< 3") //14
+      }
+    default: //15
+      print("done") //16
     }
-    print("bye") //13
     //END
   }
   `)
 	c.expectSuccs(t, START, 1)
 	c.expectSuccs(t, 1, 2)
 	c.expectSuccs(t, 2, 3)
-	c.expectSuccs(t, 3, 4, 7, 10, 11)
-	c.expectSuccs(t, 13, END)
+	c.expectSuccs(t, 3, 4, 7, 10, 11, 15)
 	//TODO finish
 
 	//preds meow...
-	c.expectPreds(t, 13, 12, 10, 9, 8)
+	c.expectPreds(t, END, 16, 14, 13, 10, 9, 8)
 	//TODO finish
 }
 
@@ -255,18 +265,23 @@ func TestLabeledFallthrough(t *testing.T) {
     case 2: //5
       print("two") //6
     lbl: //7
-      fallthrough //8
-    default: //9
-      print("number") //10
+      mlbl: //8
+        fallthrough //9
+    default: //10
+      print("number") //11
     }
     //END
   }`)
 
 	c.expectSuccs(t, START, 1)
-	c.expectSuccs(t, 1, 2, 5, 9)
+	c.expectSuccs(t, 1, 2, 5, 10)
 	c.expectSuccs(t, 4, 8)
 	c.expectSuccs(t, 7, 8)
 	c.expectSuccs(t, 8, 9)
+	c.expectSuccs(t, 9, 10)
+	c.expectSuccs(t, 10, 11)
+
+	c.expectPreds(t, END, 11)
 }
 
 // TODO modify ast.Inspect for go statements

@@ -198,8 +198,8 @@ func (b *builder) build(s []ast.Stmt) *CFG {
 //TODO see listed kinks for preds/succs
 type vertex struct {
 	stmt  ast.Stmt
-	preds map[ast.Stmt]*vertex //not sure if []*Vertex would be as useful?
-	succs map[ast.Stmt]*vertex //map[ast.Stmt]*Vertex would disallow double entries/convenience?
+	preds map[ast.Stmt]*vertex
+	succs map[ast.Stmt]*vertex
 }
 
 // about the zero value thing...
@@ -242,7 +242,7 @@ func (b *builder) getVertex(s ast.Stmt) (v *vertex) {
 // or at the end of
 //
 //
-//TODO defers in conditionals = mindfreak
+//TODO defers in conditionals and fors = mindfreak
 func (b *builder) pushDefer(d *ast.DeferStmt) *builder {
 	switch {
 	case b.dHead == nil:
@@ -255,10 +255,9 @@ func (b *builder) pushDefer(d *ast.DeferStmt) *builder {
 	return b
 }
 
-// For muxing, and handling of most simple stmts.
-// Each builderXxx method will define its own "edges"
-// if we're at the edge of a block, with the default
-// being set to 'cur'.
+// For muxing, and handling of simple stmts.
+// Each buildXxx method will define its own "edges", which
+// will be hooked up here to the next stmt in block
 func (b *builder) buildStmt(cur, next ast.Stmt) *builder {
 	b.edges = nil //reset for each statement
 
@@ -327,7 +326,11 @@ func (b *builder) buildIf(f *ast.IfStmt, next ast.Stmt) *builder {
 		cur = f.Init
 	}
 
+	//We have to keep track of all edges from each block we parse
+	//w/i this method in order to return later
 	edges := make([]ast.Stmt, 0)
+
+	//Builds "then"
 	edges = append(edges, b.buildBlock(cur, f.Body.List).edges...)
 
 	switch s := f.Else.(type) {
@@ -359,21 +362,22 @@ func (b *builder) buildIf(f *ast.IfStmt, next ast.Stmt) *builder {
 // for this statement. Returns for as edge
 func (b *builder) buildFor(stmt ast.Stmt, next ast.Stmt) *builder {
 
-	var post ast.Stmt //post condition in for loop
+	var post ast.Stmt //post statement in for loop
 
 	switch s := stmt.(type) {
 	// for i := 0; i < len(list); i++ {
 	// for [ init ]; ; [post] {
-	//  Body
+	//   Body
 	// }
 	case *ast.ForStmt:
 		if s.Init != nil {
 			//TODO hard to follow?
-			b.flowTo(s.Init, s) //currently assign -> for -> body -> post -> for
+			b.flowTo(s.Init, s) //currently init -> for -> body -> post -> for
 		}
 
 		b.buildBlock(stmt, s.Body.List)
 
+		//all edges either flow back to for or post, don't need to return later
 		if s.Post != nil {
 			post = s.Post
 			b.buildEdges(s.Post).flowTo(s.Post, stmt)
@@ -382,17 +386,17 @@ func (b *builder) buildFor(stmt ast.Stmt, next ast.Stmt) *builder {
 		}
 	case *ast.RangeStmt:
 		// for i, _ := range {
-		//  Body
+		//   Body
 		// }
-		b.buildBlock(s, s.Body.List)
+		b.buildBlock(s, s.Body.List).buildEdges(stmt)
 	}
 
+	//for stmt is only edge at this point, any breaks will be added next
 	b.edges = []ast.Stmt{stmt}
 
-	//handle appropriate branches
-	for j := 0; j < len(b.branches); {
+	//handle any branches; if no label or for me: handle and remove from branches
+	for j := 0; j < len(b.branches); j++ {
 		br := b.branches[j].(*ast.BranchStmt)
-		//if nil label or for me: handle and remove from branches
 		if br.Label == nil || br.Label.Obj.Decl.(*ast.LabeledStmt).Stmt == stmt {
 			switch br.Tok {
 			case token.CONTINUE:
@@ -404,9 +408,8 @@ func (b *builder) buildFor(stmt ast.Stmt, next ast.Stmt) *builder {
 			case token.BREAK:
 				b.flowTo(br, next)
 			}
-			b.branches = append(b.branches[:j], b.branches[j+1:]...) //delete
-		} else {
-			j++
+			b.branches = append(b.branches[:j], b.branches[j+1:]...)
+			j-- //removed in place, so go back to this j
 		}
 	}
 	return b
@@ -417,30 +420,8 @@ func (b *builder) buildFor(stmt ast.Stmt, next ast.Stmt) *builder {
 // Nevertheless, switch, type switch and select are all handled
 // very similarly for control flow.
 //
-// TODO this is 120 lines w/o Buzz... taking ideas
+// TODO this is 120 lines...
 func (b *builder) buildSwitch(sw, next ast.Stmt) *builder {
-	//
-	//                      _._
-	//                      ||||
-	//       ___           _||||
-	//    .-'___`-.        ||  |
-	//   ' .'_ _'. '.      \   /
-	//  | (| b d |) |       |~~\
-	//  |  |  '  |  |       |  `\
-	// ,|  | `-' |  |,      :-.__\        ,
-	///.|  /\___/\  |.\""''-/    )-------'|
-	///   '-._____.-'   \   /'-._/        |
-	//|_    .---. ===  |_.'\    /--------.|
-	//|\_\ _ \=v=/  _   | |  \ /         '
-	//| \_\_\ ~~~  (_)  | |  .'
-	//|`'--.__.^.__.--'`|'"'`
-	//\                 /
-	// `,..---'"'---..,'
-	//   :--..___..--:    Type assertions...
-	//    \         /
-	//    |`.     .'|       Type assertions everywhere...
-
-	//
 	// switch: *ast.SwitchStmt
 	//  Body.List: []*ast.CaseClause
 	//    clause: []ast.Stmt
@@ -485,12 +466,15 @@ func (b *builder) buildSwitch(sw, next ast.Stmt) *builder {
 	//  []stmt []stmt []stmt
 	//       \  |   /
 	//         next
+
+	edges := make([]ast.Stmt, 0)
+
 	for i, clause := range cases {
 		b.flowTo(cur, clause)
 
 		var caseBody []ast.Stmt
 
-		//both following are guaranteed in spec
+		//both of the following cases are guaranteed in spec
 		switch cl := clause.(type) {
 		case *ast.CaseClause: //switch/type switch
 			//case: [expr,expr,...]:
@@ -524,9 +508,9 @@ func (b *builder) buildSwitch(sw, next ast.Stmt) *builder {
 			}
 		}
 
-		b.buildBlock(clause, caseBody).buildEdges(next) //build case block's edges
-		//TODO (reed) I'm confused on why this works... not good. act like if?
+		edges = append(edges, b.buildBlock(clause, caseBody).edges...)
 	}
+	b.edges = edges
 
 	if !defaultCase {
 		// if default case exists, then assume switch will flow there.
@@ -542,14 +526,13 @@ func (b *builder) buildSwitch(sw, next ast.Stmt) *builder {
 	}
 
 	//handle any breaks that are unlabeled or for me
-	for j := 0; j < len(b.branches); {
-		//if nil label or for me: handle and remove from branches
+	for j := 0; j < len(b.branches); j++ {
 		if br := b.branches[j].(*ast.BranchStmt); br.Tok == token.BREAK &&
 			(br.Label == nil || br.Label.Obj.Decl.(*ast.LabeledStmt).Stmt == cur) {
+
 			b.flowTo(br, next)
-			b.branches = append(b.branches[:j], b.branches[j+1:]...) //remove
-		} else {
-			j++
+			b.branches = append(b.branches[:j], b.branches[j+1:]...)
+			j-- //we removed in place, so go back to this index
 		}
 	}
 
