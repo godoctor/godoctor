@@ -6,59 +6,64 @@
 
 package main
 
+//TODO(reed): this is getting rather crufty... go read other go CLI's.
+// mainly there's prints everywhere when in reality these should all
+// get shoved through one function
+
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"golang-refactoring.org/go-doctor/doctor"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"golang-refactoring.org/go-doctor/doctor"
 )
 
 var (
 	formatFlag = flag.String("format", "plain",
-		"Output in 'plain' or 'json'")
+		"output in 'plain' or 'json'")
 
 	helpFlag = flag.Bool("h", false,
-		"Prints usage")
+		"prints usage")
 
 	diffFlag = flag.Bool("d", false,
-		"Get diff of all files affected by given refactoring")
+		"get diff of all files affected by given refactoring")
 
 	listFlag = flag.Bool("l", false,
-		"List all possible refactorings")
+		"list all possible refactorings")
 
 	paramsFlag = flag.Bool("p", false,
-		"Get description of parameters for given refactoring")
+		"get description of parameters for given refactoring")
 
 	posFlag = flag.String("pos", "0,0:0,0",
-		"Line, col offset usually necessary, e.g. -pos=5,11:5,11")
+		"line, col offset usually necessary, e.g. -pos=5,11:5,11")
 
-	//TODO (reed) need to understand this happening
+	//TODO (reed) not sure if this actually works
 	scopeFlag = flag.String("scope", "",
-		"Give a scope (package), e.g. -scope=code.google.com/p/go.tools/")
+		"give a scope (package), e.g. -scope=code.google.com/p/go.tools/")
 
 	writeFlag = flag.Bool("w", false,
-		"Write the refactored files in place")
+		"write the refactored files in place")
 
 	//useful for JSON I'm thinking
 	skipLogFlag = flag.Bool("e", false,
-		"Write results even if log, dangerous")
+		"write results even if log, dangerous")
 )
 
 func usage() {
-	fmt.Printf(
-		`Usage of `+os.Args[0]+`:
-  `+os.Args[0]+` [<flag> ...] <file> <refactoring> <args> ...
+	fmt.Fprintf(os.Stderr,
+		`usage of `+os.Args[0]+`:`+"\n"+
+			os.Args[0]+` [<flag> ...] <file> <refactoring> <args> ...
 
-  The <refactoring> may be one of:
+The <refactoring> may be one of:
 %v
 
-  The <flag> arguments are
+The <flag> arguments are
 
 `,
 		func() (s string) {
@@ -69,183 +74,208 @@ func usage() {
 		}())
 	flag.PrintDefaults()
 	fmt.Printf(`
-  <args> are <refactoring> specific and must be provided in order
-  for a <refactoring to occur. To see the <args> for a <refactoring> do:
+<args> are <refactoring> specific and must be provided in order
+for a <refactoring> to occur. To see the <args> for a <refactoring> do:
 
-  ` + os.Args[0] + ` -p <refactoring>`)
-	fmt.Println()
+` + os.Args[0] + ` -p <refactoring>` + "\n")
 }
 
-//TODO (reed / josh)  -comments to change comments (if a thing?)
-//TODO (reed / josh) scope (importer? wait?)
-//TODO (reed) handle errors better (JSON-wise, especially, not log stuff)
-//TODO (reed) take byte offsets AND line:col
+type Response struct {
+	Reply string
+	Json  map[string]interface{}
+	Plain []string
+}
+
+func (r Response) String() string {
+	var s string
+	switch *formatFlag {
+	case "plain":
+		for i, p := range r.Plain {
+			s += p
+			if i != len(r.Plain)-1 {
+				s += "\n"
+			}
+		}
+	case "json":
+		r.Json["reply"] = r.Reply
+		b, err := json.MarshalIndent(r.Json, "", "\t")
+		s = string(b)
+		if err != nil {
+			s = ""
+		}
+	default:
+		return "invalid -format flag"
+	}
+	return s
+}
+
+//TODO(reed) -comments to change comments (if a thing?)
+//TODO(reed) scope... done?
+//TODO(reed) handle errors better (JSON-wise, especially the not log stuff)
+//TODO(reed) take byte offsets AND line:col
 //
 //example query: go-doctor -pos=11,8:11,8 someFile.go rename newName
-//TODO query (stdin): cat file.go | go-doctor -pos=11,8:11,8 rename newName
 func main() {
+	err := attempt()
+	if err != nil {
+		r := Response{"Error", map[string]interface{}{"message": err.Error()}, []string{err.Error()}}
+		fmt.Fprintf(os.Stderr, "%s\n", r)
+	}
+}
+
+//TODO(reed) usage() in JSON
+func attempt() error {
 	flag.Parse()
 	args := flag.Args()
 
 	if *helpFlag {
 		usage()
-		os.Exit(0)
+		return nil
 	}
 
 	if *listFlag {
 		printAllRefactorings(*formatFlag)
-		os.Exit(0)
+		return nil
 	}
 
 	if len(args) == 0 {
+		if *paramsFlag {
+			return fmt.Errorf("no refactoring given to parameterize")
+		}
 		usage()
-		os.Exit(1)
+		return nil
 	}
 
-	var filename string
+	var filename, src string
+
+	r := doctor.GetRefactoring(args[0])
+
+	if *paramsFlag {
+		printRefactoringParams(r)
+		return nil
+	}
 
 	//no file given (assume stdin), e.g. go-doctor refactor params...
-	//TODO make stdin and importer get along
-	r := doctor.GetRefactoring(args[0])
 	if r != nil && len(args) > 0 {
 		args = args[1:]
-	} else {
-		//file given, e.g. go-doctor file refactor params...
+		stat, err := os.Stdin.Stat()
+		if err != nil {
+			return err
+		}
+		if stat.Size() < 1 {
+			return fmt.Errorf("no filename given and no input given on stdin")
+		}
+		bytes, err := ioutil.ReadAll(os.Stdin)
+		if err != nil {
+			return err
+		}
+		src = string(bytes)
+		filename = os.Stdin.Name()
+	} else { //file given, e.g. go-doctor file refactor params...
 		filename = args[0]
 		r = doctor.GetRefactoring(args[1])
 		args = args[2:]
 	}
 
-	if *paramsFlag {
-		printRefactoringParams(*formatFlag, r)
-		os.Exit(0)
-	}
-
 	//do the refactoring
-	l, es, err := query(filename, args, r, *posFlag, *scopeFlag)
-
-	//TODO what to do about errors in JSON? default reply wrapper?
-	//since these aren't really "log" errors
+	//TODO(reed): params much?
+	l, es, err := query(filename, src, args, r, *posFlag, *scopeFlag)
 	if err != nil {
-		fmt.Fprint(os.Stderr, err)
-		os.Exit(1)
+		return err
 	}
 
+	//map[filename]output
+	//where: output == diff || updated file
 	changes := make(map[string][]byte)
 
 	if l.ContainsErrors() && !*skipLogFlag {
-		printResults(*formatFlag, r.Name(), l, changes)
-		os.Exit(0)
+		printResults(r.Name(), l, changes)
+		return nil
+	}
+
+	if *diffFlag {
+		//compute diff for each file changed
+		for f, e := range es {
+			var p *doctor.Patch
+			var err error
+			if src != "" {
+				// TODO(reed): I suppose passing on stdin we can trust
+				// that len(es) == 1, but I'm skeptical...
+				// if scope is passed then multiple files could be effected.
+				p, err = e.CreatePatch(strings.NewReader(src))
+			} else {
+				p, err = doctor.CreatePatchForFile(e, f)
+			}
+			if err != nil {
+				return err
+			}
+
+			var b bytes.Buffer
+			p.Write(f, f, &b)
+			changes[f] = b.Bytes()
+		}
+		printResults(r.Name(), l, changes)
+		return nil
 	}
 
 	//write all edits out to changes; something to work with
 	for file, _ := range es {
-		changes[file], err = doctor.ApplyToFile(es[file], file)
-		if err != nil {
-			fmt.Fprint(os.Stderr, err)
-			os.Exit(2)
+		if src != "" {
+			str, err := doctor.ApplyToString(es[file], src)
+			if err != nil {
+				return err
+			}
+			changes[file] = []byte(str)
+		} else {
+			changes[file], err = doctor.ApplyToFile(es[file], file)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
+	//write changes to their file and exit
 	if *writeFlag {
-		//write changes to their file and exit
+		if *diffFlag || *formatFlag != "plain" {
+			return fmt.Errorf("cannot write files with json or diff flags, try again")
+		}
 		for file, change := range changes {
 			if err := ioutil.WriteFile(file, change, 0); err != nil {
-				fmt.Fprint(os.Stderr, err)
-				os.Exit(2)
+				return err
 			}
 		}
-		return
+		return nil
+
 	}
 
-	if *diffFlag {
-		//compute diff for each
-		for file, change := range changes {
-			f, err := ioutil.TempFile("", "go-doctor")
-			if err != nil {
-				fmt.Fprint(os.Stderr, err)
-				os.Exit(2)
-			}
-			//TODO make sure that we return, so this happens
-			defer os.Remove(f.Name())
-			defer f.Close()
-
-			f.Write(change)
-			diff, err := exec.Command("diff", "-u", file, f.Name()).CombinedOutput()
-			if len(diff) > 0 {
-				//diff exits with a non-zero status when the files don't match.
-				//Ignore that failure as long as we get output.
-				err = nil
-			}
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			//put diff in changes instead of just changed file
-			changes[file] = diff
-		}
-	}
-
-	//At this point changes either has updated files or diff data
-	//so output what we have.
-	printResults(*formatFlag, r.Name(), l, changes)
+	// At this point changes has updated files and user did not give write flag,
+	// so print refactored files.
+	printResults(r.Name(), l, changes)
+	return nil
 }
 
-func printResults(format, refactoring string, l *doctor.Log, changes map[string][]byte) {
-	switch format {
-	case "plain":
-		fmt.Fprint(os.Stderr, l)
-		for file, change := range changes {
-			//TODO show file name, piss off the unix gurus?
-			fmt.Printf("%s:\n\n", file)
-			fmt.Printf("%s\n", change)
-		}
-	case "json":
-		//TODO figure out a better way, O(N) says so.
-		//[]byte goes to base64 string in json
-		c := make(map[string]string)
-		for file, change := range changes {
-			c[file] = string(change[:])
-		}
+func printResults(refactoring string, l *doctor.Log, changes map[string][]byte) {
+	c := make(map[string]string)
+	var contents []string
 
-		out, err := json.MarshalIndent(struct {
-			Name    string            `json:"name"`
-			Log     *doctor.Log       `json:"log"`
-			Changes map[string]string `json:"changes"`
-		}{
-			refactoring,
-			l,
-			c,
-		}, "", "\t")
-
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		fmt.Printf("%s\n", out)
+	for file, change := range changes {
+		c[file] = string(change)
+		contents = append(contents, string(change))
 	}
+	r := make(map[string]interface{})
+	r["log"] = l
+	r["name"] = refactoring
+	r["changes"] = c
+	repl := Response{"OK", r, contents}
+	fmt.Printf("%s\n", repl)
 }
 
-func printRefactoringParams(format string, r doctor.Refactoring) {
-	switch format {
-	case "plain":
-		if r != nil {
-			for _, p := range r.GetParams() {
-				fmt.Println(p)
-			}
-		}
-	case "json":
-		p, err := json.MarshalIndent(struct {
-			Params []string `json:"params"`
-		}{
-			r.GetParams(),
-		}, "", "\t")
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(2)
-		}
-		fmt.Printf("%s\n", p)
+func printRefactoringParams(r doctor.Refactoring) {
+	resp := Response{"OK",
+		map[string]interface{}{"params": r.GetParams()},
+		r.GetParams(),
 	}
+	fmt.Printf("%s\n", resp)
 }
 
 func printAllRefactorings(format string) {
@@ -254,26 +284,14 @@ func printAllRefactorings(format string) {
 		names = append(names, name)
 	}
 
-	switch format {
-	case "plain":
-		for _, n := range names {
-			fmt.Println(n)
-		}
-	case "json":
-		p, err := json.MarshalIndent(struct {
-			Refactorings []string `json:"refactorings"`
-		}{
-			names,
-		}, "", "\t")
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(2)
-		}
-		fmt.Printf("%s\n", p)
-	}
+	info := make(map[string]interface{})
+	info["refactorings"] = names
+
+	r := Response{"OK", info, names}
+	fmt.Printf("%s\n", r)
 }
 
-//e.g. 302,6
+// e.g. 302,6
 func parseLineCol(linecol string) (int, int) {
 	lc := strings.Split(linecol, ",")
 	if l, err := strconv.ParseInt(lc[0], 10, 32); err == nil {
@@ -285,7 +303,7 @@ func parseLineCol(linecol string) (int, int) {
 	return -1, -1
 }
 
-//pos=3,6:3,9
+// e.g. pos=3,6:3,9
 func parsePositionToTextSelection(pos string) (t doctor.TextSelection, err error) {
 	args := strings.Split(pos, ":")
 
@@ -308,18 +326,22 @@ func parsePositionToTextSelection(pos string) (t doctor.TextSelection, err error
 	return
 }
 
-//TODO (reed / josh) scope here?
+func parseScopes(scope string) []string {
+	return strings.Split(scope, ",")
+}
+
 //TODO (jeff) figure out how to deal with scope/mainFile/2nd arg to SetSelection
 // Anyway I think we need to know which file the main function is in,
 // so I made that the second arg to SetSelection -- confirm with Alan
+//TODO(reed): what jeff said, currently prints nothing if scope != nil
 //
-//This will do all of the configuration and execution for
-//a refactoring (@op), returning the edits to be made and log.
-//For use with the CLI, but have at it.
+// This will do all of the configuration and execution for
+// a refactoring (@op), returning the edits to be made and log.
+// For use with the CLI, but have at it.
 //
-func query(file string, args []string, r doctor.Refactoring, pos string, scope string) (*doctor.Log, map[string]doctor.EditSet, error) {
+func query(file string, src string, args []string, r doctor.Refactoring, pos string, scope string) (*doctor.Log, map[string]doctor.EditSet, error) {
 	if r == nil {
-		return nil, nil, fmt.Errorf("Invalid refactoring")
+		return nil, nil, fmt.Errorf("invalid refactoring")
 	}
 
 	ts, err := parsePositionToTextSelection(pos)
@@ -327,20 +349,26 @@ func query(file string, args []string, r doctor.Refactoring, pos string, scope s
 		return nil, nil, err
 	}
 
+	s := parseScopes(scope)
+
 	ts.Filename, err = filepath.Abs(file)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	if scope == "" {
-		scope = ts.Filename
+		s = []string{ts.Filename}
 	}
 
 	// TODO these 3 all return bool, but get checked in log. Not sure if
 	// need a change here or not. Maybe move this entire function to main.go
-	r.SetSelection(ts, []string{scope})
-	r.Configure(args)
+	if !r.SetSelection(ts, s, src) {
+		return nil, nil, fmt.Errorf("unable to set selection for %s at %s", file, pos)
+	}
+	if !r.Configure(args) {
+		return nil, nil, fmt.Errorf("unable to configure refactoring with args %s", args)
+	}
 	r.Run()
-	e, l := r.GetResult()
-	return e, l, nil
+	l, e := r.GetResult()
+	return l, e, nil
 }

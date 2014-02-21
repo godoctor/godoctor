@@ -98,7 +98,7 @@ func GetRefactoring(shortName string) Refactoring {
 // the refactoring.
 type Refactoring interface {
 	Name() string
-	SetSelection(selection TextSelection, scope []string) bool
+	SetSelection(selection TextSelection, scope []string, src string) bool
 	Configure(args []string) bool
 	Run()
 	GetParams() []string
@@ -121,8 +121,9 @@ type RefactoringBase struct {
 // configures all of the fields in the RefactoringBase struct.  If nonempty,
 // scope denotes a scope (passed to the go.tools loader): typically a package
 // name or a file containing the program entrypoint (main function), which may
-// be different from the file containing the text selection.
-func (r *RefactoringBase) SetSelection(selection TextSelection, scope []string) bool {
+// be different from the file containing the text selection. If nonempty,
+// src is the contents of a .go file, mainly for use when passing from stdin.
+func (r *RefactoringBase) SetSelection(selection TextSelection, scope []string, src string) bool {
 	r.log = NewLog()
 
 	buildContext := build.Default
@@ -148,7 +149,14 @@ func (r *RefactoringBase) SetSelection(selection TextSelection, scope []string) 
 	}
 	// FIXME: Jeff: handle error
 
-	if scope != nil {
+	if src != "" {
+		// passed on stdin, create *ast.File
+		f, err := config.ParseFile(selection.Filename, src, 0)
+		if err != nil {
+			return false
+		}
+		config.CreateFromFiles(selection.Filename, f)
+	} else if scope != nil {
 		config.FromArgs(scope, false)
 	} else {
 		config.FromArgs([]string{selection.Filename}, false)

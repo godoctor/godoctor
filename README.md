@@ -11,7 +11,7 @@ The "go doctor"
 ## 3. Driver
 
 ### 3.1 Calling
-  The "go doctor" can be called correctly using a command of the form
+  The "go doctor" can be called using a command of the form
   `go-doctor [<flag> ...] <file> <refactoring> [<arg> ...]`
 
   Where <flag> (shown with defaults) may be a combination of:
@@ -32,7 +32,7 @@ The "go doctor"
     rename
     shortassign
 
-  <arg> ... are all of the required params for a given <refactoring>,
+  <args> ... are all of the required params for a given <refactoring>,
   to see what these are first execute with -p for said <refactoring>.
 
 ### 3.2 Output
