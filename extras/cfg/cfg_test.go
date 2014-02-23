@@ -275,7 +275,7 @@ func TestLabeledFallthrough(t *testing.T) {
 
 	c.expectSuccs(t, START, 1)
 	c.expectSuccs(t, 1, 2, 5, 10)
-	c.expectSuccs(t, 4, 8)
+	c.expectSuccs(t, 4, 7)
 	c.expectSuccs(t, 7, 8)
 	c.expectSuccs(t, 8, 9)
 	c.expectSuccs(t, 9, 10)
