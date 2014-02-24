@@ -165,6 +165,19 @@ func (e *editSet) CreatePatch(in io.Reader) (result *Patch, err error) {
 	return createPatch(e, in)
 }
 
+// CreatePatchForFile reads bytes from a file, applying the edits in an EditSet
+// and returning a Patch.
+func CreatePatchForFile(es EditSet, filename string) (*Patch, error) {
+	file, err := os.OpenFile(filename, syscall.O_RDWR, 0666)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer file.Close()
+
+	return es.CreatePatch(file)
+}
+
 // ApplyToFile reads bytes from a file, applying the edits in an EditSet and
 // returning the result as a slice of bytes.
 func ApplyToFile(es EditSet, filename string) ([]byte, error) {
