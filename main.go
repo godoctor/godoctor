@@ -3,7 +3,6 @@
 // license that can be found in the LICENSE file.
 
 // This file contains the command line interface for Go refactoring.
-
 package main
 
 //TODO(reed): this is getting rather crufty... go read other go CLI's.
@@ -25,34 +24,17 @@ import (
 )
 
 var (
-	formatFlag = flag.String("format", "plain",
-		"output in 'plain' or 'json'")
-
-	helpFlag = flag.Bool("h", false,
-		"prints usage")
-
-	diffFlag = flag.Bool("d", false,
-		"get diff of all files affected by given refactoring")
-
-	listFlag = flag.Bool("l", false,
-		"list all possible refactorings")
-
-	paramsFlag = flag.Bool("p", false,
-		"get description of parameters for given refactoring")
-
-	posFlag = flag.String("pos", "0,0:0,0",
-		"line, col offset usually necessary, e.g. -pos=5,11:5,11")
-
+	formatFlag = flag.String("format", "plain", "output in 'plain' or 'json'")
+	helpFlag   = flag.Bool("h", false, "prints usage")
+	diffFlag   = flag.Bool("d", false, "get diff of all files affected by given refactoring")
+	listFlag   = flag.Bool("l", false, "list all possible refactorings")
+	paramsFlag = flag.Bool("p", false, "get description of parameters for given refactoring")
+	posFlag    = flag.String("pos", "0,0:0,0", "line, col offset usually necessary, e.g. -pos=5,11:5,11")
 	//TODO (reed) not sure if this actually works
-	scopeFlag = flag.String("scope", "",
-		"give a scope (package), e.g. -scope=code.google.com/p/go.tools/")
-
-	writeFlag = flag.Bool("w", false,
-		"write the refactored files in place")
-
+	scopeFlag = flag.String("scope", "", "give a scope (package), e.g. -scope=code.google.com/p/go.tools/")
+	writeFlag = flag.Bool("w", false, "write the refactored files in place")
 	//useful for JSON I'm thinking
-	skipLogFlag = flag.Bool("e", false,
-		"write results even if log, dangerous")
+	skipLogFlag = flag.Bool("e", false, "write results even if log, dangerous")
 )
 
 func usage() {
@@ -63,8 +45,11 @@ func usage() {
 The <refactoring> may be one of:
 %v
 
-The <flag> arguments are
+<args> are <refactoring> specific and must be provided in order
+for a <refactoring> to occur. To see the <args> for a <refactoring> do:
+`+os.Args[0]+` -p <refactoring>`+"\n"+`
 
+The <flag> arguments are
 `,
 		func() (s string) {
 			for key, _ := range doctor.AllRefactorings() {
@@ -73,11 +58,7 @@ The <flag> arguments are
 			return
 		}())
 	flag.PrintDefaults()
-	fmt.Printf(`
-<args> are <refactoring> specific and must be provided in order
-for a <refactoring> to occur. To see the <args> for a <refactoring> do:
-
-` + os.Args[0] + ` -p <refactoring>` + "\n")
+	os.Exit(2)
 }
 
 type Response struct {
@@ -124,13 +105,13 @@ func main() {
 }
 
 //TODO(reed) usage() in JSON
+//TODO(reed) find weird flag combos that shouldn't work
 func attempt() error {
 	flag.Parse()
 	args := flag.Args()
 
-	if *helpFlag {
+	if *helpFlag || (flag.NFlag() == 0 && flag.NArg() == 0) {
 		usage()
-		return nil
 	}
 
 	if *listFlag {
@@ -138,32 +119,23 @@ func attempt() error {
 		return nil
 	}
 
-	if len(args) == 0 {
-		if *paramsFlag {
-			return fmt.Errorf("no refactoring given to parameterize")
-		}
-		usage()
-		return nil
-	}
-
-	var filename, src string
-
 	r := doctor.GetRefactoring(args[0])
 
 	if *paramsFlag {
+		if r == nil {
+			return fmt.Errorf("no refactoring given to parameterize, see -h")
+		}
 		printRefactoringParams(r)
 		return nil
 	}
 
-	//no file given (assume stdin), e.g. go-doctor refactor params...
-	if r != nil && len(args) > 0 {
-		args = args[1:]
-		stat, err := os.Stdin.Stat()
-		if err != nil {
+	var filename, src string
+	// no file given (assume stdin), e.g. go-doctor refactor params...
+	if r != nil {
+		if stat, err := os.Stdin.Stat(); err != nil {
 			return err
-		}
-		if stat.Size() < 1 {
-			return fmt.Errorf("no filename given and no input given on stdin")
+		} else if stat.Size() < 1 {
+			return fmt.Errorf("no filename given and no input given on stdin, see -h")
 		}
 		bytes, err := ioutil.ReadAll(os.Stdin)
 		if err != nil {
@@ -171,36 +143,38 @@ func attempt() error {
 		}
 		src = string(bytes)
 		filename = os.Stdin.Name()
-	} else { //file given, e.g. go-doctor file refactor params...
+		args = args[1:]
+	} else { // file given, e.g. go-doctor file refactor params...
 		filename = args[0]
 		r = doctor.GetRefactoring(args[1])
 		args = args[2:]
 	}
+	// at this point args = refactoring's args, possibly none
 
-	//do the refactoring
-	//TODO(reed): params much?
-	l, es, err := query(filename, src, args, r, *posFlag, *scopeFlag)
+	// TODO(reed): params much?
+	// do the refactoring
+	log, edits, err := query(filename, src, args, r, *posFlag, *scopeFlag)
 	if err != nil {
 		return err
 	}
 
-	//map[filename]output
-	//where: output == diff || updated file
+	// map[filename]output
+	// where: output == diff || updated file
 	changes := make(map[string][]byte)
 
-	if l.ContainsErrors() && !*skipLogFlag {
-		printResults(r.Name(), l, changes)
+	if log.ContainsErrors() && !*skipLogFlag {
+		printResults(r.Name(), log, changes)
 		return nil
 	}
 
 	if *diffFlag {
-		//compute diff for each file changed
-		for f, e := range es {
+		// compute diff for each file changed
+		for f, e := range edits {
 			var p *doctor.Patch
 			var err error
 			if src != "" {
 				// TODO(reed): I suppose passing on stdin we can trust
-				// that len(es) == 1, but I'm skeptical...
+				// that len(edits) == 1, but I'm skeptical...
 				// if scope is passed then multiple files could be effected.
 				p, err = e.CreatePatch(strings.NewReader(src))
 			} else {
@@ -214,20 +188,20 @@ func attempt() error {
 			p.Write(f, f, &b)
 			changes[f] = b.Bytes()
 		}
-		printResults(r.Name(), l, changes)
+		printResults(r.Name(), log, changes)
 		return nil
 	}
 
-	//write all edits out to changes; something to work with
-	for file, _ := range es {
+	//write all edits out to new file contents in []byte; something to work with
+	for file, _ := range edits {
 		if src != "" {
-			str, err := doctor.ApplyToString(es[file], src)
+			str, err := doctor.ApplyToString(edits[file], src)
 			if err != nil {
 				return err
 			}
 			changes[file] = []byte(str)
 		} else {
-			changes[file], err = doctor.ApplyToFile(es[file], file)
+			changes[file], err = doctor.ApplyToFile(edits[file], file)
 			if err != nil {
 				return err
 			}
@@ -250,7 +224,7 @@ func attempt() error {
 
 	// At this point changes has updated files and user did not give write flag,
 	// so print refactored files.
-	printResults(r.Name(), l, changes)
+	printResults(r.Name(), log, changes)
 	return nil
 }
 
@@ -341,7 +315,7 @@ func parseScopes(scope string) []string {
 //
 func query(file string, src string, args []string, r doctor.Refactoring, pos string, scope string) (*doctor.Log, map[string]doctor.EditSet, error) {
 	if r == nil {
-		return nil, nil, fmt.Errorf("invalid refactoring")
+		return nil, nil, fmt.Errorf("no refactoring given or in wrong place, see -h")
 	}
 
 	ts, err := parsePositionToTextSelection(pos)
@@ -366,7 +340,7 @@ func query(file string, src string, args []string, r doctor.Refactoring, pos str
 		return nil, nil, fmt.Errorf("unable to set selection for %s at %s", file, pos)
 	}
 	if !r.Configure(args) {
-		return nil, nil, fmt.Errorf("unable to configure refactoring with args %s", args)
+		return nil, nil, fmt.Errorf("unable to configure refactoring with args")
 	}
 	r.Run()
 	l, e := r.GetResult()
