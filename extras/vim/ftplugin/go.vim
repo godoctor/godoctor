@@ -22,11 +22,11 @@ command! -nargs=1 -buffer Rename cal s:Rename(<f-args>)
 fun! s:Rename(name)
   let view = winsaveview()
   let cursor = line(".").",".col(".")
-  let cursor = cursor . ":" . cursor
+  let cursor = cursor.":".cursor
   silent execute "%! go-doctor -pos ".cursor." rename ".a:name.""
   if v:shell_error
     undo
-    echohl Error | echomsg "Rename encountered an error" | echohl None
+    echohl Error | echom "Rename encountered an error" | echohl None
   endif
   call winrestview(view)
 endfun

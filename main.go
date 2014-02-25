@@ -63,9 +63,12 @@ The <flag> arguments are
 
 type Response struct {
 	Reply string
-	Json  map[string]interface{}
+	Json  fields
 	Plain []string
 }
+
+//this got real old
+type fields map[string]interface{}
 
 func (r Response) String() string {
 	var s string
@@ -99,8 +102,9 @@ func (r Response) String() string {
 func main() {
 	err := attempt()
 	if err != nil {
-		r := Response{"Error", map[string]interface{}{"message": err.Error()}, []string{err.Error()}}
+		r := Response{"Error", fields{"message": err.Error()}, []string{err.Error()}}
 		fmt.Fprintf(os.Stderr, "%s\n", r)
+		os.Exit(2)
 	}
 }
 
@@ -236,17 +240,18 @@ func printResults(refactoring string, l *doctor.Log, changes map[string][]byte) 
 		c[file] = string(change)
 		contents = append(contents, string(change))
 	}
-	r := make(map[string]interface{})
-	r["log"] = l
-	r["name"] = refactoring
-	r["changes"] = c
+	r := fields{
+		"log":     l,
+		"name":    refactoring,
+		"changes": c,
+	}
 	repl := Response{"OK", r, contents}
 	fmt.Printf("%s\n", repl)
 }
 
 func printRefactoringParams(r doctor.Refactoring) {
 	resp := Response{"OK",
-		map[string]interface{}{"params": r.GetParams()},
+		fields{"params": r.GetParams()},
 		r.GetParams(),
 	}
 	fmt.Printf("%s\n", resp)
@@ -258,8 +263,9 @@ func printAllRefactorings(format string) {
 		names = append(names, name)
 	}
 
-	info := make(map[string]interface{})
-	info["refactorings"] = names
+	info := fields{
+		"refactorings": names,
+	}
 
 	r := Response{"OK", info, names}
 	fmt.Printf("%s\n", r)
