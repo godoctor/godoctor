@@ -204,7 +204,7 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 		t.Fatal(err)
 	}
 
-	ok := r.SetSelection(selection, []string{mainFile})
+	ok := r.SetSelection(selection, []string{mainFile}, "")
 	rlog := r.GetLog()
 	if result == FAIL_SELECTION && !ok {
 		return // We expected SetSelection to fail -- good
