@@ -1,3 +1,10 @@
+// Copyright 2014 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// This file defines a simple key value store intended for
+// usage as an in memory file store. It will accept chunks
+// or entire files and load for later usage.
 package doctor
 
 import (
@@ -6,7 +13,7 @@ import (
 	"io/ioutil"
 )
 
-// Cache is a key-value store intended to be used as an in memory file store.
+// Cache is a map of filenames to their contents (or chunk)
 type Cache map[string][]byte
 
 // Load will load data from the given reader and store it at given key
@@ -33,7 +40,7 @@ func (c Cache) LoadFile(fname string) error {
 	return nil
 }
 
-// Get value from cache at given key.
+// Get value from cache at given key (e.g. filename)
 func (c Cache) Get(key string) ([]byte, error) {
 	b, ok := c[key]
 	if !ok {
