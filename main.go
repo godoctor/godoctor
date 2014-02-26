@@ -39,17 +39,20 @@ var (
 
 func usage() {
 	fmt.Fprintf(os.Stderr,
-		`usage of `+os.Args[0]+`:`+"\n"+
-			os.Args[0]+` [<flag> ...] <file> <refactoring> <args> ...
+		`usage of `+os.Args[0]+`:
+
+  `+os.Args[0]+` [<flag> ...] <file> <refactoring> <args> ...
 
 The <refactoring> may be one of:
 %v
 
 <args> are <refactoring> specific and must be provided in order
 for a <refactoring> to occur. To see the <args> for a <refactoring> do:
-`+os.Args[0]+` -p <refactoring>`+"\n"+`
 
-The <flag> arguments are
+  `+os.Args[0]+` -p <refactoring>
+
+The <flag> arguments are:
+
 `,
 		func() (s string) {
 			for key, _ := range doctor.AllRefactorings() {
@@ -63,7 +66,7 @@ The <flag> arguments are
 
 type Response struct {
 	Reply string
-	Json  fields
+	JSON  fields
 	Plain []string
 }
 
@@ -81,8 +84,8 @@ func (r Response) String() string {
 			}
 		}
 	case "json":
-		r.Json["reply"] = r.Reply
-		b, err := json.MarshalIndent(r.Json, "", "\t")
+		r.JSON["reply"] = r.Reply
+		b, err := json.MarshalIndent(r.JSON, "", "\t")
 		s = string(b)
 		if err != nil {
 			s = ""
@@ -114,13 +117,18 @@ func attempt() error {
 	flag.Parse()
 	args := flag.Args()
 
-	if *helpFlag || (flag.NFlag() == 0 && flag.NArg() == 0) {
+	//TODO(reed) are we [ever] going to have a default to run w/o any args or flags?
+	if *helpFlag || flag.NFlag() == 0 {
 		usage()
 	}
 
 	if *listFlag {
 		printAllRefactorings(*formatFlag)
 		return nil
+	}
+
+	if flag.NArg() == 0 {
+		return fmt.Errorf("given flag requires args, see -h")
 	}
 
 	r := doctor.GetRefactoring(args[0])
