@@ -9,12 +9,43 @@ import (
 	"go/token"
 	"os"
 	"testing"
+
+	"code.google.com/p/go.tools/astutil"
 )
 
 const (
 	START = 0
 	END   = 100000000 //if there's this many statements, may god have mercy on your soul
 )
+
+func TestExprStuff(t *testing.T) {
+	c := getWrapper(t, `
+  package main
+
+  func foo(c int, nums []int) {
+    //START
+    a := c      //1
+    b = a       //2
+    b = a + 1   //3
+    c, a = a, c //4
+    b = a       //5
+    for a < c { //6
+      a += c    //7
+    }
+    return c    //8
+    //END
+  }`)
+
+	c.expectReaching(t, START)
+	c.expectReaching(t, 2, 1)
+	c.expectReaching(t, 4, 3, 1)
+	c.expectReaching(t, 6, 7, 5, 4)
+	c.expectReaching(t, 7, 7, 5, 4)
+	c.expectReaching(t, 8, 7, 5, 4)
+	c.expectReaching(t, END, 7, 5, 4)
+
+	//c.printAST()
+}
 
 func TestDoubleForBreak(t *testing.T) {
 	c := getWrapper(t, `
@@ -30,6 +61,7 @@ func TestDoubleForBreak(t *testing.T) {
     print("this") //4
     //END
   }`)
+
 	//            t, stmt, ...successors
 	c.expectSuccs(t, START, 1)
 	c.expectSuccs(t, 1, 2, 4)
@@ -181,12 +213,14 @@ func TestRange(t *testing.T) {
     //END
   }
   `)
+
 	c.expectSuccs(t, START, 1)
 	c.expectSuccs(t, 2, 3)
 	c.expectSuccs(t, 3, 4, END)
 	c.expectSuccs(t, 4, 5, 3)
 	c.expectSuccs(t, 6, 3)
 	c.expectSuccs(t, 8, END)
+	//TODO why does preds work for 8, 3 but not succs?
 
 	c.expectPreds(t, END, 8, 3)
 }
@@ -340,12 +374,13 @@ func TestDietyExistence(t *testing.T) {
 	//TODO ultimate stress test
 }
 
-//lo and behold how it's done -- caution: disgust may ensue
+// lo and behold how it's done -- caution: disgust may ensue
 type CFGWrapper struct {
-	cfg  *CFG
-	exp  map[int]ast.Stmt
-	fset *token.FileSet
-	f    *ast.File
+	cfg   *CFG
+	exp   map[int]ast.Stmt
+	stmts map[ast.Stmt]int
+	fset  *token.FileSet
+	f     *ast.File
 }
 
 // uses first function in given string to produce CFG
@@ -360,7 +395,9 @@ func getWrapper(t *testing.T, str string) *CFGWrapper {
 		return nil
 	}
 	cfg := FuncCFG(f.Decls[0].(*ast.FuncDecl)) //yes, so all test cases take first function
-	v, i := make(map[int]ast.Stmt), 1
+	v := make(map[int]ast.Stmt)
+	stmts := make(map[ast.Stmt]int)
+	i := 1
 	ast.Inspect(f.Decls[0].(*ast.FuncDecl), func(n ast.Node) bool {
 		switch x := n.(type) {
 		case ast.Stmt:
@@ -369,25 +406,75 @@ func getWrapper(t *testing.T, str string) *CFGWrapper {
 				return true
 			}
 			v[i] = x
+			stmts[x] = i
 			i++
-			//TODO skip over any statements w/i func... as our graph does
+			//TODO skip over any statements w/i inner func... as our graph does
 		}
 		return true
 	})
 	v[END] = cfg.end
 	v[START] = cfg.start
-	if len(v) != len(cfg.vMap) {
-		t.Errorf("Expected %d vertices, got %d --construction error", len(v), len(cfg.vMap))
+	if len(v) != len(cfg.bMap) {
+		t.Errorf("expected %d vertices, got %d --construction error", len(v), len(cfg.bMap))
 		//t.FailNow()
 	}
-	return &CFGWrapper{cfg, v, fset, f}
+	return &CFGWrapper{cfg, v, stmts, fset, f}
 }
 
-func (c *CFGWrapper) expectSuccs(t *testing.T, s int, expSuccs ...int) {
-	if _, ok := c.cfg.vMap[c.exp[s]]; !ok {
-		t.Error("Did not find parent", s)
+func (c *CFGWrapper) expIntsToStmts(args []int) map[ast.Stmt]bool {
+	stmts := make(map[ast.Stmt]bool)
+	for _, a := range args {
+		stmts[c.exp[a]] = true
 	}
-	//TODO O(n^2)
+	return stmts
+}
+
+func expectFromMaps(actual map[ast.Stmt]bool, exp map[ast.Stmt]bool) (dnf []ast.Stmt, found []ast.Stmt) {
+	for stmt, _ := range exp {
+		if _, ok := actual[stmt]; !ok {
+			dnf = append(dnf, stmt)
+		}
+		delete(actual, stmt)
+	}
+
+	for stmt, _ := range actual {
+		found = append(found, stmt)
+	}
+
+	return
+}
+
+func (c *CFGWrapper) expectReaching(t *testing.T, s int, exp ...int) {
+	if _, ok := c.cfg.bMap[c.exp[s]]; !ok {
+		t.Error("did not find parent", s)
+		return
+	}
+
+	// get reaching for stmt s as slice, put in map
+	actualReach := make(map[ast.Stmt]bool)
+	// TODO(reed): test outs
+	ins, _ := c.cfg.Reaching(c.exp[s])
+	for _, i := range ins {
+		actualReach[i] = true
+	}
+
+	expReach := c.expIntsToStmts(exp)
+	dnf, found := expectFromMaps(actualReach, expReach)
+
+	for _, stmt := range dnf {
+		t.Error("did not find", c.stmts[stmt], "in reaching for", s)
+	}
+
+	for _, stmt := range found {
+		t.Error("found", c.stmts[stmt], "as a reaching for", s)
+	}
+}
+
+func (c *CFGWrapper) expectSuccs(t *testing.T, s int, exp ...int) {
+	if _, ok := c.cfg.bMap[c.exp[s]]; !ok {
+		t.Error("did not find parent", s)
+		return
+	}
 
 	//get successors for stmt s as slice, put in map
 	actualSuccs := make(map[ast.Stmt]bool)
@@ -395,33 +482,22 @@ func (c *CFGWrapper) expectSuccs(t *testing.T, s int, expSuccs ...int) {
 		actualSuccs[v] = true
 	}
 
-	for _, a := range expSuccs {
-		if _, ok := actualSuccs[c.exp[a]]; !ok {
-			t.Error("Did not find", a, "in successors for", s)
-		} else {
-			delete(actualSuccs, c.exp[a])
-		}
+	expSuccs := c.expIntsToStmts(exp)
+	dnf, found := expectFromMaps(actualSuccs, expSuccs)
+
+	for _, stmt := range dnf {
+		t.Error("did not find", c.stmts[stmt], "in successors for", s)
 	}
 
-	//this asserts that the dingus writing the tests is in fact a dingus
-	//TODO omit for ambiguities (later)?
-	//also am I dumb or just plain stupid with this runtime?
-	if len(actualSuccs) > 0 {
-		for p, _ := range actualSuccs {
-			for k, v := range c.exp {
-				if p == v { //eventually it will...
-					t.Error("Found", k, "as successor for", s)
-				}
-			}
-		}
+	for _, stmt := range found {
+		t.Error("found", c.stmts[stmt], "as a successors for", s)
 	}
 }
 
-func (c *CFGWrapper) expectPreds(t *testing.T, s int, expPreds ...int) {
-	if _, ok := c.cfg.vMap[c.exp[s]]; !ok {
-		t.Error("Did not find parent", s)
+func (c *CFGWrapper) expectPreds(t *testing.T, s int, exp ...int) {
+	if _, ok := c.cfg.bMap[c.exp[s]]; !ok {
+		t.Error("did not find parent", s)
 	}
-	//TODO O(n^2) -- mostly small test cases, but potentially bad
 
 	//get predecessors for stmt s as slice, put in map
 	actualPreds := make(map[ast.Stmt]bool)
@@ -429,23 +505,15 @@ func (c *CFGWrapper) expectPreds(t *testing.T, s int, expPreds ...int) {
 		actualPreds[v] = true
 	}
 
-	for _, a := range expPreds {
-		if _, ok := actualPreds[c.exp[a]]; !ok {
-			t.Error("Did not find", a, "in predecessors for", s)
-		} else {
-			delete(actualPreds, c.exp[a])
-		}
+	expPreds := c.expIntsToStmts(exp)
+	dnf, found := expectFromMaps(actualPreds, expPreds)
+
+	for _, stmt := range dnf {
+		t.Error("did not find", c.stmts[stmt], "in predecessors for", s)
 	}
 
-	//re: me being an idiot
-	if len(actualPreds) > 0 {
-		for p, _ := range actualPreds {
-			for k, v := range c.exp {
-				if p == v { //eventually it will...
-					t.Error("Found", k, "as a predecessor for", s)
-				}
-			}
-		}
+	for _, stmt := range found {
+		t.Error("found", c.stmts[stmt], "as a predecessor for", s)
 	}
 }
 
@@ -465,72 +533,21 @@ func (c *CFGWrapper) printDOT() {
 mode="heir";
 splines="ortho";
 
-//`)
-	for _, v := range c.cfg.vMap {
-		for a, _ := range v.succs {
-			fmt.Fprintf(f, "\t\"%s\" -> \"%s\"\n", c.printVertex(v), c.printVertex(c.cfg.vMap[a]))
+`)
+	for _, v := range c.cfg.bMap {
+		for _, a := range v.succs {
+			fmt.Fprintf(f, "\t\"%s\" -> \"%s\"\n", c.printVertex(v), c.printVertex(c.cfg.bMap[a]))
 		}
 	}
 	fmt.Fprintf(f, "}\n")
 }
 
-func (c *CFGWrapper) printVertex(v *vertex) string {
+func (c *CFGWrapper) printVertex(v *block) string {
 	switch v.stmt {
 	case c.cfg.start:
 		return fmt.Sprintf("%s %p", "START", v.stmt)
 	case c.cfg.end:
 		return fmt.Sprintf("%s %p", "END", v.stmt)
 	}
-	return printStmt(v.stmt)
-}
-
-func printStmt(s ast.Stmt) string {
-	p := func(str string) string {
-		return fmt.Sprintf("%s %p", str, s)
-	}
-	switch s.(type) {
-	case *ast.CaseClause: //DONE
-		return p("CASE")
-	case *ast.CommClause: //DONE
-		return p("COMM")
-	case *ast.ForStmt: //DONE
-		return p("FOR")
-	case *ast.IfStmt: //DONE
-		return p("IF")
-	case *ast.AssignStmt: //DONE
-		return p("ASSIGN")
-	case *ast.BadStmt: //DONE
-		return p("BAD")
-	case *ast.BranchStmt: //DONE
-		return p("BRANCH")
-	case *ast.BlockStmt: //TODO where? use as entry?
-		return p("BLOCK")
-	case *ast.DeclStmt: //DONE
-		return p("DECL")
-	case *ast.DeferStmt: //TODO conditionals... done?
-		return p("DEFER")
-	case *ast.EmptyStmt: //DONE
-		return p("EMPTY")
-	case *ast.ExprStmt: //DONE
-		return p("EXPR")
-	case *ast.GoStmt: //DONE
-		return p("GO")
-	case *ast.IncDecStmt: //DONE
-		return p("INCDEC")
-	case *ast.LabeledStmt: //DONE
-		return p("LABELED")
-	case *ast.RangeStmt: //DONE
-		return p("RANGE")
-	case *ast.ReturnStmt: //DONE
-		return p("RETURN")
-	case *ast.SelectStmt: //DONE
-		return p("SELECT")
-	case *ast.SendStmt: //DONE
-		return p("SEND")
-	case *ast.SwitchStmt: //DONE
-		return p("SWITCH")
-	case *ast.TypeSwitchStmt: //DONE
-		return p("TYPESWITCH")
-	}
-	return ""
+	return fmt.Sprintf("%s %p", astutil.NodeDescription(v.stmt), v.stmt)
 }
