@@ -165,7 +165,6 @@ type block struct {
 	liveOut []ast.Stmt
 }
 
-// about the zero value thing...
 func newBlock(s ast.Stmt) *block {
 	return &block{s, nil, nil, nil, nil, nil, nil}
 }
@@ -690,12 +689,12 @@ func (b *builder) buildReaching() {
 // algo from ch 9.2, p.610 Dragonbook, v2.2,
 // "Iterative algorithm to compute reaching definitions":
 //
-// OUT[ENTRY] = {};
-// for(each basic block B other than ENTRY) OUT[B} = {};
-// for(changes to any OUT occur)
-//    for(each basic block B other than ENTRY) {
-//      IN[B] = Union(P a pred of B) OUT[P];
-//      OUT[B] = gen[b] Union (IN[B] - kill[b]);
+// IN[EXIT] = {};
+// for(each basic block B other than EXIT) IN[B} = {};
+// for(changes to any IN occur)
+//    for(each basic block B other than EXIT) {
+//      OUT[B] = Union(S a successor of B) IN[S];
+//      IN[B] = gen[b] Union (OUT[B] - kill[b]);
 //    }
 //
 // TODO(reed): refactor refactor refactor
@@ -704,8 +703,8 @@ func (b *builder) buildLiveVariable() {
 	ins := make(map[ast.Stmt]*bitset.BitSet)
 	outs := make(map[ast.Stmt]*bitset.BitSet)
 
-	// OUT[ENTRY] = {};
-	outs[b.end] = bitset.New(0)
+	// IN[EXIT] = {};
+	ins[b.end] = bitset.New(0)
 
 	// mblocks will be all of the cfg blocks except ENTRY
 	var mblocks []ast.Stmt
