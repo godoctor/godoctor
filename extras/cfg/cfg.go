@@ -79,95 +79,27 @@ func (c *CFG) Succs(s ast.Stmt) []ast.Stmt {
 }
 
 func (c *CFG) Reaching(s ast.Stmt) ([]ast.Stmt, []ast.Stmt) {
-
 	// TODO(reed): check if built, then do this if not (save this somehow)?
 	// TODO(reed): fix: func params?
-	// TODO(reed): all the dfbuilder shit was a nice thought and all but it is a little much don't ya think?
-	// TODO(reed): compute GEN & KILL sets before building?
-	df := newDFBuilder(c)
-	ins, outs := df.buildReaching()
-
-	return ins[s], outs[s]
+	return c.bMap[s].in, c.bMap[s].out
 }
 
-// cfg is a previously constructed control flow graph
-//
-// gens maps a given statement to its GEN bitset,
-// not all statements have a GEN set. Since blocks
-// are represented in the CFG as only one statement per
-// block, all single assignment statements will only have
-// one bit set. For a dual assignment, 2, and so on.
-//
-// kills maps a given statement to its KILL bitset,
-// where kills[stmt] is the ∪(kills for each expr in stmt)
-//
-// okills maps actual ast.Objects (i.e. variables) to their
-// kill sets
-type dfbuilder struct {
-	cfg    *CFG
-	gens   map[ast.Stmt]*bitset.BitSet
-	kills  map[ast.Stmt]*bitset.BitSet
-	okills map[*ast.Object]*bitset.BitSet
-	ins    map[ast.Stmt]*bitset.BitSet
-	outs   map[ast.Stmt]*bitset.BitSet
-}
+// buildGenKill builds the GEN and KILL bitsets for each block in a builder's cfg.
+// Used to compute reaching definitions.
+func (b *builder) buildGenKill() {
+	okills := make(map[*ast.Object]*bitset.BitSet)
 
-// newDFBuilder returns a builder to be used for
-// data flow analysis for a given CFG
-func newDFBuilder(cfg *CFG) *dfbuilder {
-	return &dfbuilder{
-		cfg,
-		make(map[ast.Stmt]*bitset.BitSet),
-		make(map[ast.Stmt]*bitset.BitSet),
-		make(map[*ast.Object]*bitset.BitSet),
-		make(map[ast.Stmt]*bitset.BitSet),
-		make(map[ast.Stmt]*bitset.BitSet),
-	}
-}
-
-// Reaching will return a slice of all statements that reach the given statement
-//
-// algo from ch 9.2, p.607 Dragonbook, v2.2,
-// "Iterative algorithm to compute reaching definitions":
-//
-// OUT[ENTRY] = {};
-// for(each basic block B other than ENTRY) OUT[B} = {};
-// for(changes to any OUT occur)
-//    for(each basic block B other than ENTRY) {
-//      IN[B] = Union(P a pred of B) OUT[P];
-//      OUT[B] = gen[b] Union (IN[B] - kill[b]);
-//    }
-//
-func (df *dfbuilder) buildReaching() (in map[ast.Stmt][]ast.Stmt, out map[ast.Stmt][]ast.Stmt) {
-	// initialize all sets to empty set
-	// move unordered map into list (ranging over a map is diff order each time)
-	stmts := make([]ast.Stmt, 0, len(df.cfg.bMap)-1)
-
-	// i.e.
-	// OUT[ENTRY] = {};
-	// for(each basic block B other than ENTRY) OUT[B} = {};
-	for stmt, _ := range df.cfg.bMap {
-		df.gens[stmt] = bitset.New(0)
-		df.kills[stmt] = bitset.New(0)
-		df.ins[stmt] = bitset.New(0)
-		df.outs[stmt] = bitset.New(0)
-		if stmt != df.cfg.start {
-			stmts = append(stmts, stmt)
-		}
+	for stmt, _ := range b.bMap {
+		b.gen[stmt] = bitset.New(0)
+		b.kill[stmt] = bitset.New(0)
+		b.blocks = append(b.blocks, stmt)
 	}
 
-	// keep track of which statement is which index
-	// TODO(reed): I think this is actually taken care of with stmts and i, but
-	// for some reason my brain is not functioning well enough to think of it
-	indices := make(map[uint]ast.Stmt)
-
-	// for(changes to any OUT occur)
-	for change := true; change; { // best do-while impersonation I got
-		change = false
-		var i uint
-
-		// for(each basic block B other than ENTRY) {
-		for _, stmt := range stmts {
+	// Iterate over all blocks twice, because a block may not know the entirety of what
+	// it kills until all blocks have been iterated over.
+	for i := 0; i < 2; i++ {
+		for j, stmt := range b.blocks {
+			j := uint(j)
 			var exprs []ast.Expr
 			// extract all "producing" statements; assignments
 			switch stmt := stmt.(type) {
@@ -184,73 +116,97 @@ func (df *dfbuilder) buildReaching() (in map[ast.Stmt][]ast.Stmt, out map[ast.St
 			}
 
 			for _, e := range exprs {
-				// extract actual expression identifiers and compute gen-kill for statement
-
-				// TODO(reed): should this be computed beforehand? It feels rather convenient to
-				// leave it here since a block may not know of what it kills until the 2nd pass; after
-				// each block has set its kill set with itself. On that note, yes, these can be computed
-				// accurately in O(n^2) time consistently, and maybe as such should be extracted since
-				// the change loop will most likely be taken > 2 times. For now, this works, tomorrow, it's
-				// not quite good enough.
 				switch e := e.(type) {
 				// TODO other types of exprs?
 				case *ast.Ident:
 					if e.Name == "_" {
 						break
 					}
-					if _, ok := df.okills[e.Obj]; !ok {
-						df.okills[e.Obj] = bitset.New(0)
+					if _, ok := okills[e.Obj]; !ok {
+						okills[e.Obj] = bitset.New(0)
 					}
-					df.gens[stmt].Set(i)
-					df.okills[e.Obj].Set(i)
-					// TODO(reed): this worked fine w/o difference b/c: (OUT[B] = gen[b] Union (IN[B] - kill[b])
-					df.kills[stmt] = df.kills[stmt].Union(df.okills[e.Obj]).Difference(df.gens[stmt])
-					indices[i] = stmt
-					i++
+					b.gen[stmt].Set(j)
+					okills[e.Obj].Set(j)
+					b.kill[stmt] = b.kill[stmt].Union(okills[e.Obj]).Difference(b.gen[stmt])
 				}
 			}
+		}
+	}
+}
+
+// buildReaching will compute the reaching definitions for each block
+// in the builder's cfg. precondition: buildGenKill() must have been called
+// previously.
+//
+// algo from ch 9.2, p.607 Dragonbook, v2.2,
+// "Iterative algorithm to compute reaching definitions":
+//
+// OUT[ENTRY] = {};
+// for(each basic block B other than ENTRY) OUT[B} = {};
+// for(changes to any OUT occur)
+//    for(each basic block B other than ENTRY) {
+//      IN[B] = Union(P a pred of B) OUT[P];
+//      OUT[B] = gen[b] Union (IN[B] - kill[b]);
+//    }
+//
+// TODO(reed): refactor refactor refactor
+func (b *builder) buildReaching() {
+
+	ins := make(map[ast.Stmt]*bitset.BitSet)
+	outs := make(map[ast.Stmt]*bitset.BitSet)
+
+	// OUT[ENTRY] = {};
+	outs[b.start] = bitset.New(0)
+
+	// mblocks will be all of the cfg blocks except ENTRY
+	var mblocks []ast.Stmt
+
+	// for(each basic block B other than ENTRY) OUT[B} = {};
+	for i := 0; i < len(b.blocks); i++ {
+		stmt := b.blocks[i]
+		ins[stmt] = bitset.New(0)
+		outs[stmt] = bitset.New(0)
+		if stmt != b.start {
+			mblocks = append(mblocks, stmt)
+		}
+	}
+
+	// for(changes to any OUT occur)
+	for change := true; change; { // best do-while impersonation I got
+		change = false
+
+		// for(each basic block B other than ENTRY) {
+		for _, stmt := range mblocks {
 
 			// IN[B] = Union(P a pred of B) OUT[P];
-			for _, p := range df.cfg.Preds(stmt) {
-				df.ins[stmt].InPlaceUnion(df.outs[p])
+			for _, p := range b.bMap[stmt].preds {
+				ins[stmt].InPlaceUnion(outs[p])
 			}
+
+			old := outs[stmt].Clone()
 
 			// OUT[B] = gen[b] Union (IN[B] - kill[b]);
-			old := df.outs[stmt].Clone()
-			df.outs[stmt] = df.gens[stmt].Union(df.ins[stmt].Difference(df.kills[stmt]))
-			change = change || !old.Equal(df.outs[stmt])
+			outs[stmt] = b.gen[stmt].Union(ins[stmt].Difference(b.kill[stmt]))
+
+			change = change || !old.Equal(outs[stmt])
 		}
 	}
-
-	ins := make(map[ast.Stmt][]ast.Stmt)
-	outs := make(map[ast.Stmt][]ast.Stmt)
 
 	// map bits in IN and OUT back to corresponding statements
-	for _, stmt := range stmts {
-		var i uint = 0
-		var ok bool
-		for true {
-			i, ok = df.ins[stmt].NextSet(i)
-			if !ok { // no more bits set
-				break
+	for _, stmt := range b.blocks {
+		block := b.bMap[stmt]
+		for i, ok := uint(0), true; ok; i++ {
+			if i, ok = ins[stmt].NextSet(i); ok {
+				block.in = append(block.in, b.blocks[i])
 			}
-			ins[stmt] = append(ins[stmt], indices[i])
-			i++
 		}
 
-		i = 0
-		ok = false
-		for true {
-			i, ok = df.outs[stmt].NextSet(i)
-			if !ok { // no more bits set
-				break
+		for i, ok := uint(0), true; ok; i++ {
+			if i, ok = outs[stmt].NextSet(i); ok {
+				block.out = append(block.out, b.blocks[i])
 			}
-			outs[stmt] = append(outs[stmt], indices[i])
-			i++
 		}
 	}
-
-	return ins, outs
 }
 
 // Blocks are represented inside of a map of statements
@@ -278,11 +234,16 @@ func (df *dfbuilder) buildReaching() (in map[ast.Stmt][]ast.Stmt, out map[ast.St
 // dHead, dTail are analagous to the head and tail of the defer
 // stack that will be called upon return of control, directly
 // after any return statements and before the actual end node.
+//
+// gen, kill are the GEN and KILL sets, used for reaching and
+// live variable data flow analysis
 type builder struct {
 	bMap            map[ast.Stmt]*block
 	edges, branches []ast.Stmt
 	start, end      *ast.BadStmt
 	dHead, dTail    *ast.DeferStmt
+	blocks          []ast.Stmt
+	gen, kill       map[ast.Stmt]*bitset.BitSet
 }
 
 // Create a more reasonable zero value builder; ready to go
@@ -291,6 +252,8 @@ func newCFGBuilder() *builder {
 		nil, nil,
 		&ast.BadStmt{}, &ast.BadStmt{},
 		nil, nil,
+		nil,
+		make(map[ast.Stmt]*bitset.BitSet), make(map[ast.Stmt]*bitset.BitSet),
 	}
 }
 
@@ -304,6 +267,8 @@ func (b *builder) build(s []ast.Stmt) *CFG {
 	} else {
 		b.buildEdges(b.end)
 	}
+	b.buildGenKill()
+	b.buildReaching()
 	return &CFG{b.bMap, b.start, b.end}
 }
 
@@ -314,11 +279,13 @@ type block struct {
 	stmt  ast.Stmt
 	preds []ast.Stmt
 	succs []ast.Stmt
+	in    []ast.Stmt
+	out   []ast.Stmt
 }
 
 // about the zero value thing...
 func newBlock(s ast.Stmt) *block {
-	return &block{s, nil, nil}
+	return &block{s, nil, nil, nil, nil}
 }
 
 // flowTo will add an edge to the graph between the given
