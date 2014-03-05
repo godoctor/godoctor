@@ -44,6 +44,11 @@ func TestExprStuff(t *testing.T) {
 	c.expectReaching(t, 8, 7, 5, 4)
 	c.expectReaching(t, END, 7, 5, 4)
 
+	//TODO not sure if these are right
+	c.expectLive(t, 5, 7)
+	c.expectLive(t, 3, 4, 5)
+	c.expectLive(t, 1, 2, 4)
+
 	//c.printAST()
 }
 
@@ -442,6 +447,32 @@ func expectFromMaps(actual map[ast.Stmt]bool, exp map[ast.Stmt]bool) (dnf []ast.
 	}
 
 	return
+}
+
+func (c *CFGWrapper) expectLive(t *testing.T, s int, exp ...int) {
+	if _, ok := c.cfg.bMap[c.exp[s]]; !ok {
+		t.Error("did not find parent", s)
+		return
+	}
+
+	// get reaching for stmt s as slice, put in map
+	actualLive := make(map[ast.Stmt]bool)
+	// TODO(reed): test outs
+	_, outs := c.cfg.Live(c.exp[s])
+	for _, i := range outs {
+		actualLive[i] = true
+	}
+
+	expLive := c.expIntsToStmts(exp)
+	dnf, found := expectFromMaps(actualLive, expLive)
+
+	for _, stmt := range dnf {
+		t.Error("did not find", c.stmts[stmt], "as a live variable for", s)
+	}
+
+	for _, stmt := range found {
+		t.Error("found", c.stmts[stmt], "as a live variable for", s)
+	}
 }
 
 func (c *CFGWrapper) expectReaching(t *testing.T, s int, exp ...int) {

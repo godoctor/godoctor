@@ -84,129 +84,8 @@ func (c *CFG) Reaching(s ast.Stmt) ([]ast.Stmt, []ast.Stmt) {
 	return c.bMap[s].in, c.bMap[s].out
 }
 
-// buildGenKill builds the GEN and KILL bitsets for each block in a builder's cfg.
-// Used to compute reaching definitions.
-func (b *builder) buildGenKill() {
-	okills := make(map[*ast.Object]*bitset.BitSet)
-
-	for stmt, _ := range b.bMap {
-		b.gen[stmt] = bitset.New(0)
-		b.kill[stmt] = bitset.New(0)
-		b.blocks = append(b.blocks, stmt)
-	}
-
-	// Iterate over all blocks twice, because a block may not know the entirety of what
-	// it kills until all blocks have been iterated over.
-	for i := 0; i < 2; i++ {
-		for j, stmt := range b.blocks {
-			j := uint(j)
-			var exprs []ast.Expr
-			// extract all "producing" statements; assignments
-			switch stmt := stmt.(type) {
-			// TODO other stmts we need? Decl?
-			case *ast.AssignStmt:
-				exprs = stmt.Lhs
-			case *ast.RangeStmt:
-				if stmt.Key != nil {
-					exprs = append(exprs, stmt.Key)
-				}
-				if stmt.Value != nil {
-					exprs = append(exprs, stmt.Value)
-				}
-			}
-
-			for _, e := range exprs {
-				switch e := e.(type) {
-				// TODO other types of exprs?
-				case *ast.Ident:
-					if e.Name == "_" {
-						break
-					}
-					if _, ok := okills[e.Obj]; !ok {
-						okills[e.Obj] = bitset.New(0)
-					}
-					b.gen[stmt].Set(j)
-					okills[e.Obj].Set(j)
-					b.kill[stmt] = b.kill[stmt].Union(okills[e.Obj]).Difference(b.gen[stmt])
-				}
-			}
-		}
-	}
-}
-
-// buildReaching will compute the reaching definitions for each block
-// in the builder's cfg. precondition: buildGenKill() must have been called
-// previously.
-//
-// algo from ch 9.2, p.607 Dragonbook, v2.2,
-// "Iterative algorithm to compute reaching definitions":
-//
-// OUT[ENTRY] = {};
-// for(each basic block B other than ENTRY) OUT[B} = {};
-// for(changes to any OUT occur)
-//    for(each basic block B other than ENTRY) {
-//      IN[B] = Union(P a pred of B) OUT[P];
-//      OUT[B] = gen[b] Union (IN[B] - kill[b]);
-//    }
-//
-// TODO(reed): refactor refactor refactor
-func (b *builder) buildReaching() {
-
-	ins := make(map[ast.Stmt]*bitset.BitSet)
-	outs := make(map[ast.Stmt]*bitset.BitSet)
-
-	// OUT[ENTRY] = {};
-	outs[b.start] = bitset.New(0)
-
-	// mblocks will be all of the cfg blocks except ENTRY
-	var mblocks []ast.Stmt
-
-	// for(each basic block B other than ENTRY) OUT[B} = {};
-	for i := 0; i < len(b.blocks); i++ {
-		stmt := b.blocks[i]
-		ins[stmt] = bitset.New(0)
-		outs[stmt] = bitset.New(0)
-		if stmt != b.start {
-			mblocks = append(mblocks, stmt)
-		}
-	}
-
-	// for(changes to any OUT occur)
-	for change := true; change; { // best do-while impersonation I got
-		change = false
-
-		// for(each basic block B other than ENTRY) {
-		for _, stmt := range mblocks {
-
-			// IN[B] = Union(P a pred of B) OUT[P];
-			for _, p := range b.bMap[stmt].preds {
-				ins[stmt].InPlaceUnion(outs[p])
-			}
-
-			old := outs[stmt].Clone()
-
-			// OUT[B] = gen[b] Union (IN[B] - kill[b]);
-			outs[stmt] = b.gen[stmt].Union(ins[stmt].Difference(b.kill[stmt]))
-
-			change = change || !old.Equal(outs[stmt])
-		}
-	}
-
-	// map bits in IN and OUT back to corresponding statements
-	for _, stmt := range b.blocks {
-		block := b.bMap[stmt]
-		for i, ok := uint(0), true; ok; i++ {
-			if i, ok = ins[stmt].NextSet(i); ok {
-				block.in = append(block.in, b.blocks[i])
-			}
-		}
-
-		for i, ok := uint(0), true; ok; i++ {
-			if i, ok = outs[stmt].NextSet(i); ok {
-				block.out = append(block.out, b.blocks[i])
-			}
-		}
-	}
+func (c *CFG) Live(s ast.Stmt) ([]ast.Stmt, []ast.Stmt) {
+	return c.bMap[s].liveIn, c.bMap[s].liveOut
 }
 
 // Blocks are represented inside of a map of statements
@@ -269,6 +148,7 @@ func (b *builder) build(s []ast.Stmt) *CFG {
 	}
 	b.buildGenKill()
 	b.buildReaching()
+	b.buildLiveVariable()
 	return &CFG{b.bMap, b.start, b.end}
 }
 
@@ -276,16 +156,18 @@ func (b *builder) build(s []ast.Stmt) *CFG {
 // predecessors and successors stored separately
 // for later convenience
 type block struct {
-	stmt  ast.Stmt
-	preds []ast.Stmt
-	succs []ast.Stmt
-	in    []ast.Stmt
-	out   []ast.Stmt
+	stmt    ast.Stmt
+	preds   []ast.Stmt
+	succs   []ast.Stmt
+	in      []ast.Stmt
+	out     []ast.Stmt
+	liveIn  []ast.Stmt
+	liveOut []ast.Stmt
 }
 
 // about the zero value thing...
 func newBlock(s ast.Stmt) *block {
-	return &block{s, nil, nil, nil, nil}
+	return &block{s, nil, nil, nil, nil, nil, nil}
 }
 
 // flowTo will add an edge to the graph between the given
@@ -674,4 +556,204 @@ func (b *builder) buildBlock(owner ast.Stmt, block []ast.Stmt) *builder {
 		b.buildStmt(cur, next) // magic
 	}
 	return b
+}
+
+// buildGenKill builds the GEN and KILL bitsets for each block in a builder's cfg.
+// Used to compute reaching definitions and live variable analysis.
+func (b *builder) buildGenKill() {
+	okills := make(map[*ast.Object]*bitset.BitSet)
+
+	for stmt, _ := range b.bMap {
+		b.gen[stmt] = bitset.New(0)
+		b.kill[stmt] = bitset.New(0)
+		b.blocks = append(b.blocks, stmt)
+	}
+
+	// Iterate over all blocks twice, because a block may not know the entirety of what
+	// it kills until all blocks have been iterated over.
+	for i := 0; i < 2; i++ {
+		for j, stmt := range b.blocks {
+			j := uint(j)
+			var exprs []ast.Expr
+			// extract all "producing" statements; assignments
+			switch stmt := stmt.(type) {
+			// TODO other stmts we need? Decl?
+			case *ast.AssignStmt:
+				exprs = stmt.Lhs
+			case *ast.RangeStmt:
+				if stmt.Key != nil {
+					exprs = append(exprs, stmt.Key)
+				}
+				if stmt.Value != nil {
+					exprs = append(exprs, stmt.Value)
+				}
+			}
+
+			for _, e := range exprs {
+				switch e := e.(type) {
+				// TODO other types of exprs?
+				case *ast.Ident:
+					if e.Name == "_" {
+						break
+					}
+					if _, ok := okills[e.Obj]; !ok {
+						okills[e.Obj] = bitset.New(0)
+					}
+					b.gen[stmt].Set(j)
+					okills[e.Obj].Set(j)
+					b.kill[stmt] = b.kill[stmt].Union(okills[e.Obj]).Difference(b.gen[stmt])
+				}
+			}
+		}
+	}
+}
+
+// buildReaching will compute the reaching definitions for each block
+// in the builder's cfg. precondition: buildGenKill() must have been called
+// previously.
+//
+// algo from ch 9.2, p.607 Dragonbook, v2.2,
+// "Iterative algorithm to compute reaching definitions":
+//
+// OUT[ENTRY] = {};
+// for(each basic block B other than ENTRY) OUT[B} = {};
+// for(changes to any OUT occur)
+//    for(each basic block B other than ENTRY) {
+//      IN[B] = Union(P a pred of B) OUT[P];
+//      OUT[B] = gen[b] Union (IN[B] - kill[b]);
+//    }
+//
+// TODO(reed): refactor refactor refactor
+func (b *builder) buildReaching() {
+
+	ins := make(map[ast.Stmt]*bitset.BitSet)
+	outs := make(map[ast.Stmt]*bitset.BitSet)
+
+	// OUT[ENTRY] = {};
+	outs[b.start] = bitset.New(0)
+
+	// mblocks will be all of the cfg blocks except ENTRY
+	var mblocks []ast.Stmt
+
+	// for(each basic block B other than ENTRY) OUT[B} = {};
+	for i := 0; i < len(b.blocks); i++ {
+		stmt := b.blocks[i]
+		ins[stmt] = bitset.New(0)
+		outs[stmt] = bitset.New(0)
+		if stmt != b.start {
+			mblocks = append(mblocks, stmt)
+		}
+	}
+
+	// for(changes to any OUT occur)
+	for change := true; change; { // best do-while impersonation I got
+		change = false
+
+		// for(each basic block B other than ENTRY) {
+		for _, stmt := range mblocks {
+
+			// IN[B] = Union(P a pred of B) OUT[P];
+			for _, p := range b.bMap[stmt].preds {
+				ins[stmt].InPlaceUnion(outs[p])
+			}
+
+			old := outs[stmt].Clone()
+
+			// OUT[B] = gen[b] Union (IN[B] - kill[b]);
+			outs[stmt] = b.gen[stmt].Union(ins[stmt].Difference(b.kill[stmt]))
+
+			change = change || !old.Equal(outs[stmt])
+		}
+	}
+
+	// map bits in IN and OUT back to corresponding statements
+	for _, stmt := range b.blocks {
+		block := b.bMap[stmt]
+		for i, ok := uint(0), true; ok; i++ {
+			if i, ok = ins[stmt].NextSet(i); ok {
+				block.in = append(block.in, b.blocks[i])
+			}
+		}
+
+		for i, ok := uint(0), true; ok; i++ {
+			if i, ok = outs[stmt].NextSet(i); ok {
+				block.out = append(block.out, b.blocks[i])
+			}
+		}
+	}
+}
+
+// buildReaching will compute the reaching definitions for each block
+// in the builder's cfg. precondition: buildGenKill() must have been called
+// previously.
+//
+// algo from ch 9.2, p.610 Dragonbook, v2.2,
+// "Iterative algorithm to compute reaching definitions":
+//
+// OUT[ENTRY] = {};
+// for(each basic block B other than ENTRY) OUT[B} = {};
+// for(changes to any OUT occur)
+//    for(each basic block B other than ENTRY) {
+//      IN[B] = Union(P a pred of B) OUT[P];
+//      OUT[B] = gen[b] Union (IN[B] - kill[b]);
+//    }
+//
+// TODO(reed): refactor refactor refactor
+func (b *builder) buildLiveVariable() {
+
+	ins := make(map[ast.Stmt]*bitset.BitSet)
+	outs := make(map[ast.Stmt]*bitset.BitSet)
+
+	// OUT[ENTRY] = {};
+	outs[b.end] = bitset.New(0)
+
+	// mblocks will be all of the cfg blocks except ENTRY
+	var mblocks []ast.Stmt
+
+	// for(each basic block B other than ENTRY) OUT[B} = {};
+	for i := 0; i < len(b.blocks); i++ {
+		stmt := b.blocks[i]
+		ins[stmt] = bitset.New(0)
+		outs[stmt] = bitset.New(0)
+		if stmt != b.end {
+			mblocks = append(mblocks, stmt)
+		}
+	}
+
+	// for(changes to any OUT occur)
+	for change := true; change; { // best do-while impersonation I got
+		change = false
+
+		// for(each basic block B other than EXIT) {
+		for _, stmt := range mblocks {
+
+			// IN[B] = Union(P a pred of B) OUT[P];
+			for _, s := range b.bMap[stmt].succs {
+				outs[stmt].InPlaceUnion(ins[s])
+			}
+
+			old := ins[stmt].Clone()
+
+			// OUT[B] = gen[b] Union (IN[B] - kill[b]);
+			ins[stmt] = b.gen[stmt].Union(outs[stmt].Difference(b.kill[stmt]))
+
+			change = change || !old.Equal(ins[stmt])
+		}
+	}
+
+	// map bits in IN and OUT back to corresponding statements
+	for _, stmt := range b.blocks {
+		block := b.bMap[stmt]
+		for i, ok := uint(0), true; ok; i++ {
+			if i, ok = ins[stmt].NextSet(i); ok {
+				block.liveIn = append(block.liveIn, b.blocks[i])
+			}
+		}
+
+		for i, ok := uint(0), true; ok; i++ {
+			if i, ok = outs[stmt].NextSet(i); ok {
+				block.liveOut = append(block.liveOut, b.blocks[i])
+			}
+		}
+	}
 }
