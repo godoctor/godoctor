@@ -99,6 +99,33 @@ func TestFor(t *testing.T) {
 	c.expectPreds(t, END, 5)
 }
 
+func TestForContinue(t *testing.T) {
+	c := getWrapper(t, `
+  package main
+
+  func foo(c int) {
+    //START
+    for i := 0; i < c; i++ { //2, 1, 3
+      println(i) //4
+      if i > 1 { //5
+        continue //6
+      } else {
+        break    //7
+      }
+    }
+    println(c) //8
+    //END
+  }`)
+
+	c.expectSuccs(t, START, 1)
+	c.expectSuccs(t, 2, 1)
+	c.expectSuccs(t, 1, 4, 8)
+	c.expectSuccs(t, 6, 3)
+	c.expectSuccs(t, 7, 8)
+
+	c.expectPreds(t, END, 8)
+}
+
 func TestIfElse(t *testing.T) {
 	c := getWrapper(t, `
   package main
@@ -252,6 +279,29 @@ func TestTypeSwitchDefault(t *testing.T) {
 	c.expectPreds(t, END, 8, 6, 4)
 	//TODO
 }
+
+//func TestTypeSwitchNoDefault(t *testing.T) {
+//c := getWrapper(t, `
+//package main
+
+//func foo(s ast.Stmt) {
+////START
+//switch x := 1; s := s.(type) { //1, 2
+//case *ast.AssignStmt: //3
+//print("assign") //4
+//case *ast.ForStmt: //5
+//print("for") //6
+//default: //7
+//print("default") //8
+//}
+////END
+//}
+//`)
+//c.expectSuccs(t, 2, 3, 5, 7)
+
+//c.expectPreds(t, END, 8, 6, 4)
+////TODO
+//}
 
 func TestSwitch(t *testing.T) {
 	c := getWrapper(t, `
