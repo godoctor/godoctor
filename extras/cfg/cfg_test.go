@@ -49,6 +49,8 @@ func TestExprStuff(t *testing.T) {
 	c.expectLive(t, 3, 4, 5)
 	c.expectLive(t, 1, 2, 4)
 
+	//e.expectLive(t, 4, 'a', 'c')
+
 	//c.printAST()
 }
 
