@@ -33,7 +33,12 @@ func TestExprStuff(t *testing.T) {
       a += c    //7
     }
     a, c = c, a //8
-    return a    //9
+    c = b       //9
+    // f := func() int {
+      // return 0
+    // }
+    //a = f()     //10
+    return a    //11
     //END
   }`)
 
@@ -46,11 +51,15 @@ func TestExprStuff(t *testing.T) {
 	c.expectReaching(t, 9, 8, 5)
 
 	//TODO not sure if these are right
-	c.expectLive(t, 1, "a")
-	//c.expectLive(t, 3, 4, 5)
-	//c.expectLive(t, 1, 2, 4)
-
-	//e.expectLive(t, 4, 'a', 'c')
+	c.expectLive(t, START, "c")
+	c.expectLive(t, 1, "a", "c")
+	c.expectLive(t, 2, "a", "c")
+	c.expectLive(t, 3, "a", "c")
+	c.expectLive(t, 4, "a", "c")
+	c.expectLive(t, 5, "a", "b", "c")
+	c.expectLive(t, 8, "a", "b")
+	c.expectLive(t, 9, "a")
+	c.expectLive(t, END)
 
 	//c.printAST()
 }
@@ -523,15 +532,15 @@ func (c *CFGWrapper) expectLive(t *testing.T, s int, exp ...string) {
 	// get live for stmt s as slice, put in map
 	actualLive := make(map[*ast.Object]bool)
 
-	// TODO(reed): test outs
 	_, outs := c.cfg.Live(c.exp[s])
 	for _, o := range outs {
 		actualLive[o] = true
 	}
 
-	for a, _ := range actualLive {
-		fmt.Println(objMap[a])
-	}
+	// TODO(reed): appears to be duplicates? is this the testing's fault?
+	//for a, _ := range actualLive {
+	//fmt.Println(objMap[a])
+	//}
 
 	expLive := make(map[*ast.Object]bool)
 	for _, e := range exp {

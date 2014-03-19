@@ -41,6 +41,9 @@ type liveVars struct {
 	out map[*block][]*ast.Object
 }
 
+// builds reaching definitions for a given control flow graph
+// returns a pointer to a reaching object which contains its
+// IN and OUT as a slice of stmts for each block
 func buildReaching(c *CFG) *reaching {
 	var blocks []*block
 	for _, block := range c.bMap {
@@ -57,6 +60,10 @@ func buildReaching(c *CFG) *reaching {
 	return reach.build()
 }
 
+// builds live variables for a given control flow graph
+// returns a pointer to a livesVars object which contains its
+// IN and OUT as a slice of objects for each block, where each
+// object has information about its name and declaration
 func buildLiveVars(c *CFG) *liveVars {
 	var blocks []*block
 	for _, block := range c.bMap {
@@ -108,18 +115,17 @@ func (r *reachingBuilder) buildGenKill() {
 			}
 
 			for _, e := range exprs {
-				switch e := e.(type) {
-				// TODO other types of exprs?
-				case *ast.Ident:
-					if e.Name == "_" {
+				idents := extractExprIdents(e)
+				for _, i := range idents {
+					if i.Name == "_" {
 						continue
 					}
-					if _, ok := okills[e.Obj]; !ok {
-						okills[e.Obj] = bitset.New(0)
+					if _, ok := okills[i.Obj]; !ok {
+						okills[i.Obj] = bitset.New(0)
 					}
 					r.gen[block].Set(j)
-					okills[e.Obj].Set(j)
-					r.kill[block] = r.kill[block].Union(okills[e.Obj]).Difference(r.gen[block])
+					okills[i.Obj].Set(j)
+					r.kill[block] = r.kill[block].Union(okills[i.Obj]).Difference(r.gen[block])
 					oind++
 				}
 			}
@@ -203,7 +209,14 @@ func (r *reachingBuilder) build() *reaching {
 	return &reaching{in, out}
 }
 
-// TODO goal: map bits back to objects, not statements
+// goal: map bits back to objects
+// builds DEF and USE bitsets for use in liveVarBuilder.build()
+//
+// def[B] as the set of variables _defined_ (i.e., definitely
+// assigned values in B prior to any use of that variable in B, and
+//
+// use[B] as the set of variables whose values may be used in B prior
+// to any defintion of the variable
 func (lv *liveVarBuilder) buildDefUse() {
 	// prime the gen-kill sets
 	for _, b := range lv.blocks {
@@ -232,23 +245,22 @@ func (lv *liveVarBuilder) buildDefUse() {
 			}
 
 			for _, e := range defs {
-				switch e := e.(type) {
-				// TODO other types of exprs?
-				case *ast.Ident:
-					if e.Name == "_" {
+				idents := extractExprIdents(e)
+				for _, i := range idents {
+					if i.Name == "_" {
 						continue
 					}
-					k, ok := objIndices[e.Obj]
+					k, ok := objIndices[i.Obj]
 					if !ok {
 						k = uint(len(lv.objs))
-						objIndices[e.Obj] = k
-						lv.objs = append(lv.objs, e.Obj)
+						objIndices[i.Obj] = k
+						lv.objs = append(lv.objs, i.Obj)
 					}
 					lv.def[block].Set(k)
 				}
 			}
 
-			uses := ExtractUseStmtIdents(block.stmt)
+			uses := extractUseStmtIdents(block.stmt)
 
 			for _, u := range uses {
 				if u.Name == "_" { // TODO is this possible?
@@ -266,12 +278,14 @@ func (lv *liveVarBuilder) buildDefUse() {
 	}
 }
 
-func ExtractUseStmtIdents(stmt ast.Stmt) []*ast.Ident {
+// Extracts USE idents from a given statement.
+// i.e. Assignment and Range only produce their RHS idents.
+func extractUseStmtIdents(stmt ast.Stmt) []*ast.Ident {
 	var idents []*ast.Ident
 	var exprs []ast.Expr
 
 	switch stmt := stmt.(type) {
-	//case *ast.AssignStmt:
+	//case *ast.AssignStmt: // THESE ARE USEFUL FOR LHS U RHS IDENTS
 	//exprs = append(stmt.Lhs, stmt.Rhs...)
 	//case *ast.RangeStmt: // Body sent separate
 	//exprs = append(exprs, stmt.Key, stmt.Value, stmt.X)
@@ -306,16 +320,15 @@ func ExtractUseStmtIdents(stmt ast.Stmt) []*ast.Ident {
 		exprs = append(exprs, stmt.Tag)
 	}
 	for _, e := range exprs {
-		idents = append(idents, ExtractExprIdents(e)...)
+		idents = append(idents, extractExprIdents(e)...)
 	}
 	return idents
 }
 
 // An expression is represented by a tree consisting of one
 // or more of the following concrete expression nodes.
-//
-// TODO(reed): find out if this runs 4 eva
-func ExtractExprIdents(expr ast.Expr) []*ast.Ident {
+// This extracts the variable idents from the expression.
+func extractExprIdents(expr ast.Expr) []*ast.Ident {
 	var idents []*ast.Ident
 	var exprs []ast.Expr
 
@@ -353,25 +366,25 @@ func ExtractExprIdents(expr ast.Expr) []*ast.Ident {
 		// case *ast.FuncLit: // only function names
 	}
 	for _, e := range exprs {
-		idents = append(idents, ExtractExprIdents(e)...)
+		idents = append(idents, extractExprIdents(e)...)
 	}
 
 	return idents
 }
 
-// buildReaching will compute the reaching definitions for each block
-// in the builder's cfg. precondition: buildGenKill() must have been called
-// previously.
+// build will compute the live variables for each block
+// in the builder's cfg.
+// precondition: buildDefUse() must have been called previously.
 //
 // algo from ch 9.2, p.610 Dragonbook, v2.2,
-// "Iterative algorithm to compute reaching definitions":
+// "Iterative algorithm to compute live variables":
 //
 // IN[EXIT] = {};
 // for(each basic block B other than EXIT) IN[B} = {};
 // for(changes to any IN occur)
 //    for(each basic block B other than EXIT) {
 //      OUT[B] = Union(S a successor of B) IN[S];
-//      IN[B] = gen[b] Union (OUT[B] - kill[b]);
+//      IN[B] = use[b] Union (OUT[B] - def[b]);
 //    }
 //
 // TODO(reed): refactor refactor refactor
@@ -401,7 +414,7 @@ func (lv *liveVarBuilder) build() *liveVars {
 		// for(each basic block B other than EXIT) {
 		for _, block := range blocks {
 
-			// IN[B] = Union(P a pred of B) OUT[P];
+			// OUT[B] = Union(S a succ of B) IN[S]
 			for _, s := range block.succs {
 				s := lv.cfg.bMap[s]
 				outs[block].InPlaceUnion(ins[s])
@@ -409,8 +422,8 @@ func (lv *liveVarBuilder) build() *liveVars {
 
 			old := ins[block].Clone()
 
-			// OUT[B] = gen[b] Union (IN[B] - kill[b]);
-			ins[block] = lv.def[block].Union(outs[block].Difference(lv.use[block]))
+			// IN[B] = use[B] U (OUT[B] - def[B])
+			ins[block] = lv.use[block].Union(outs[block].Difference(lv.def[block]))
 
 			change = change || !old.Equal(ins[block])
 		}
@@ -419,16 +432,16 @@ func (lv *liveVarBuilder) build() *liveVars {
 	in := make(map[*block][]*ast.Object)
 	out := make(map[*block][]*ast.Object)
 
-	// map bits in IN and OUT back to corresponding statements
+	// map bits in IN and OUT back to corresponding objects
 	for _, block := range lv.blocks {
-		for i, ok := uint(0), true; ok; i++ {
-			if i, ok = ins[block].NextSet(i); ok {
+		for i := uint(0); i < ins[block].Len(); i++ {
+			if ins[block].Test(i) {
 				in[block] = append(in[block], lv.objs[i])
 			}
 		}
 
-		for i, ok := uint(0), true; ok; i++ {
-			if i, ok = outs[block].NextSet(i); ok {
+		for i := uint(0); i < outs[block].Len(); i++ {
+			if outs[block].Test(i) {
 				out[block] = append(out[block], lv.objs[i])
 			}
 		}
