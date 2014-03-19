@@ -25,14 +25,15 @@ func TestExprStuff(t *testing.T) {
   func foo(c int, nums []int) {
     //START
     a := c      //1
-    b = a       //2
+    b := a      //2
     b = a + 1   //3
     c, a = a, c //4
     b = a       //5
     for a < c { //6
       a += c    //7
     }
-    return c    //8
+    a, c = c, a //8
+    return a    //9
     //END
   }`)
 
@@ -42,12 +43,12 @@ func TestExprStuff(t *testing.T) {
 	c.expectReaching(t, 6, 7, 5, 4)
 	c.expectReaching(t, 7, 7, 5, 4)
 	c.expectReaching(t, 8, 7, 5, 4)
-	c.expectReaching(t, END, 7, 5, 4)
+	c.expectReaching(t, 9, 8, 5)
 
 	//TODO not sure if these are right
-	c.expectLive(t, 5, 7)
-	c.expectLive(t, 3, 4, 5)
-	c.expectLive(t, 1, 2, 4)
+	c.expectLive(t, 1, "a")
+	//c.expectLive(t, 3, 4, 5)
+	//c.expectLive(t, 1, 2, 4)
 
 	//e.expectLive(t, 4, 'a', 'c')
 
@@ -436,6 +437,7 @@ type CFGWrapper struct {
 	cfg   *CFG
 	exp   map[int]ast.Stmt
 	stmts map[ast.Stmt]int
+	objs  map[string]*ast.Object
 	fset  *token.FileSet
 	f     *ast.File
 }
@@ -454,9 +456,12 @@ func getWrapper(t *testing.T, str string) *CFGWrapper {
 	cfg := FuncCFG(f.Decls[0].(*ast.FuncDecl)) //yes, so all test cases take first function
 	v := make(map[int]ast.Stmt)
 	stmts := make(map[ast.Stmt]int)
+	objs := make(map[string]*ast.Object)
 	i := 1
 	ast.Inspect(f.Decls[0].(*ast.FuncDecl), func(n ast.Node) bool {
 		switch x := n.(type) {
+		case *ast.Ident:
+			objs[x.Name] = x.Obj
 		case ast.Stmt:
 			switch x.(type) {
 			case *ast.BlockStmt:
@@ -475,7 +480,7 @@ func getWrapper(t *testing.T, str string) *CFGWrapper {
 		t.Errorf("expected %d vertices, got %d --construction error", len(v), len(cfg.bMap))
 		//t.FailNow()
 	}
-	return &CFGWrapper{cfg, v, stmts, fset, f}
+	return &CFGWrapper{cfg, v, stmts, objs, fset, f}
 }
 
 func (c *CFGWrapper) expIntsToStmts(args []int) map[ast.Stmt]bool {
@@ -486,12 +491,14 @@ func (c *CFGWrapper) expIntsToStmts(args []int) map[ast.Stmt]bool {
 	return stmts
 }
 
+// give generics
 func expectFromMaps(actual map[ast.Stmt]bool, exp map[ast.Stmt]bool) (dnf []ast.Stmt, found []ast.Stmt) {
 	for stmt, _ := range exp {
 		if _, ok := actual[stmt]; !ok {
 			dnf = append(dnf, stmt)
+		} else {
+			delete(actual, stmt)
 		}
-		delete(actual, stmt)
 	}
 
 	for stmt, _ := range actual {
@@ -501,29 +508,55 @@ func expectFromMaps(actual map[ast.Stmt]bool, exp map[ast.Stmt]bool) (dnf []ast.
 	return
 }
 
-func (c *CFGWrapper) expectLive(t *testing.T, s int, exp ...int) {
+func (c *CFGWrapper) expectLive(t *testing.T, s int, exp ...string) {
 	if _, ok := c.cfg.bMap[c.exp[s]]; !ok {
 		t.Error("did not find parent", s)
 		return
 	}
 
-	// get reaching for stmt s as slice, put in map
-	actualLive := make(map[ast.Stmt]bool)
+	// for names
+	objMap := make(map[*ast.Object]string)
+	for name, obj := range c.objs {
+		objMap[obj] = name
+	}
+
+	// get live for stmt s as slice, put in map
+	actualLive := make(map[*ast.Object]bool)
+
 	// TODO(reed): test outs
 	_, outs := c.cfg.Live(c.exp[s])
-	for _, i := range outs {
-		actualLive[i] = true
+	for _, o := range outs {
+		actualLive[o] = true
 	}
 
-	expLive := c.expIntsToStmts(exp)
-	dnf, found := expectFromMaps(actualLive, expLive)
-
-	for _, stmt := range dnf {
-		t.Error("did not find", c.stmts[stmt], "as a live variable for", s)
+	for a, _ := range actualLive {
+		fmt.Println(objMap[a])
 	}
 
-	for _, stmt := range found {
-		t.Error("found", c.stmts[stmt], "as a live variable for", s)
+	expLive := make(map[*ast.Object]bool)
+	for _, e := range exp {
+		expLive[c.objs[e]] = true
+	}
+
+	var dnf, found []*ast.Object
+	for e, _ := range expLive {
+		if _, ok := actualLive[e]; !ok {
+			dnf = append(dnf, e)
+		} else {
+			delete(actualLive, e)
+		}
+	}
+
+	for e, _ := range actualLive {
+		found = append(found, e)
+	}
+
+	for _, obj := range dnf {
+		t.Error("did not find", objMap[obj], "as a live variable for", s)
+	}
+
+	for _, obj := range found {
+		t.Error("found", objMap[obj], "as a live variable for", s)
 	}
 }
 
