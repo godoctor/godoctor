@@ -22,8 +22,6 @@ import (
 // TODO(reed): I should probably provide a better description of the algorithm,
 // and I will once it is stable and has been heavily refactored.
 
-// TODO(reed): DFS Visit function?
-// TODO(reed): transitive closure function?
 // TODO(reed): end/begin checker funcs? end/begin exported setter funcs?
 // TODO(reed): fix: defer functions are finicky, mainly due to how
 // they are to be handled within conditionals/fors. The base
@@ -41,6 +39,11 @@ import (
 // given to construct the graph. They are useful for return
 // and defer statement handling as well as declaring a singular
 // entry (and exit) node.
+//
+// reaching and live are structs that hold IN and OUT maps for
+// each block in the CFG, only to be computed as needed.
+
+// CFG defines a statement level control flow graph, to obtain, see MakeCFG()
 type CFG struct {
 	bMap       map[ast.Stmt]*block
 	start, end *ast.BadStmt
@@ -52,9 +55,8 @@ type CFG struct {
 // Generally, these statements are assumed to have come from a *ast.BlockStmt
 // so as to have some sense of "flow" but any list of statements will do.
 // They will be iterated over in depth first manner.
-//
-// TODO(reed): don't hook up defers to end unless we have a return or end of func?
 func MakeCFG(s []ast.Stmt) *CFG {
+	// TODO(reed): don't hook up defers to end unless we have a return or end of func?
 	return newCFGBuilder().build(s)
 }
 
@@ -65,20 +67,33 @@ func FuncCFG(f *ast.FuncDecl) *CFG {
 }
 
 // Preds returns a slice of all immediate predecessors to the given statement
-// TODO if map would be more convenient, do speak
 func (c *CFG) Preds(s ast.Stmt) []ast.Stmt {
 	// TODO remove START/END? return err if no stmt?
 	return c.bMap[s].preds
 }
 
 // Succs returns a slice of all immediate successors to the given statement
-// TODO if map would be more convenient, do speak
 func (c *CFG) Succs(s ast.Stmt) []ast.Stmt {
 	// TODO remove START/END? return err if no stmt?
 	return c.bMap[s].succs
 }
 
-func (c *CFG) Reaching(s ast.Stmt) ([]ast.Stmt, []ast.Stmt) {
+// Reaching returns the IN and OUT set of reaching definitions at a given statement
+// as slices of statements.
+//
+// WARNING: currently may return START and/or END nodes. TODO ?
+//
+// Reaching definitions, per dragon book, v2.2, pp 601:
+//
+// "A definition d reaches a point p if there is a path from the point
+// immediately following d to p, such that d is not "killed" along that path.
+// We kill a definition of a variable x if there is any other definition of x
+// anywhere along the path. Intuitively, if a definition d of some variable x
+// reaches point p, then d might be the place at which the value of x used at
+// p was last defined."
+//
+// TODO(reed): aliases
+func (c *CFG) Reaching(s ast.Stmt) (in []ast.Stmt, out []ast.Stmt) {
 	if c.reaching == nil {
 		c.reaching = buildReaching(c)
 	}
@@ -91,8 +106,19 @@ func (c *CFG) Reaching(s ast.Stmt) ([]ast.Stmt, []ast.Stmt) {
 	return c.reaching.in[block], c.reaching.out[block]
 }
 
-//TODO(reed): this doesn't work right
-func (c *CFG) Live(s ast.Stmt) ([]*ast.Object, []*ast.Object) {
+// Live returns the IN and OUT set of live variables at a given statement
+// as slices of ast objects which map back only to identifiers that are
+// defined within the context of the statements that were analyzed to construct
+// the cfg.
+//
+// Live Variable Analysis, per dragon book, v2.2 pp 608:
+//
+// "In live-variable analysis we wish to know for variable x and point p whether
+// the value of x at p could be used along some path in the flow graph starting at
+// p. If so, we say x is live at p; otherwise, x is dead at p."
+//
+// TODO(reed): aliases, named literal declarations, funcs declared in scope
+func (c *CFG) Live(s ast.Stmt) (in []*ast.Object, out []*ast.Object) {
 	if c.live == nil {
 		c.live = buildLiveVars(c)
 	}

@@ -34,11 +34,7 @@ func TestExprStuff(t *testing.T) {
     }
     a, c = c, a //8
     c = b       //9
-    // f := func() int {
-      // return 0
-    // }
-    //a = f()     //10
-    return a    //11
+    return a    //10
     //END
   }`)
 
@@ -62,6 +58,66 @@ func TestExprStuff(t *testing.T) {
 	c.expectLive(t, END)
 
 	//c.printAST()
+}
+
+func TestExractFuncExample(t *testing.T) {
+	c := getWrapper(t, `
+  package main
+
+  func foo() {
+    a := 3      //1
+    b := a - 1  //2
+    c := 1      //3
+
+    // BEGIN EXTRACT
+    for a < b { //4
+      a += b    //5
+    }
+    x := a + b  //6
+    // END EXTRACT
+    
+    z := x + c  //7
+  }`)
+
+	// only analyzes LIVE[OUT] for now...
+	// but of criticial importance, worst case for EXTRACT FUNC:
+	c.expectLive(t, 3, "a", "b", "c")
+	c.expectLive(t, 6, "x", "c")
+
+	// So in extracted function, "c" never gets used so we don't need to
+	// pass it as a parameter nor return it since the value never changes
+	// within our extracted function.
+	// Yet, it's still live for the duration of the extracted function.
+	// TODO Clever ideas
+	//
+	//    current ideas:
+	//      B = BEGIN EXTRACT
+	//      E = END EXTRACT
+	//      PARAMS[EXTRACTED] = LIVE[IN][B] ∩ USE[EXTRACTED]
+	//      RETURN[EXTRACTED] = LIVE[OUT][E] ∩ ? - ?
+	//
+	//      or generate LIVE[IN][B] and LIVE[OUT][E] for extracted function
+	//      only in the context of the extracted function
+	//
+	// extracted function should be (best case):
+	//
+	//  func bar(a, b int) int {
+	//    for a < b {
+	//      a += b
+	//    }
+	//    x := a + b
+	//    return x // or "return a + b" if you really want to analyze
+	//  }
+	//
+	// caller should then be:
+	//
+	//  func foo() {
+	//    a := 3
+	//    b := a - 1
+	//    c := 1
+	//    x := bar(a, b)
+	//    z := x + c
+	//  }
 }
 
 func TestDoubleForBreak(t *testing.T) {

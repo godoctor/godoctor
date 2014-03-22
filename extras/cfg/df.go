@@ -2,6 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// This file contains data flow analyses that can be performed on a
+// previously constructed control flow graph. For details, dig in.
+
 package cfg
 
 import (
@@ -83,6 +86,12 @@ func buildLiveVars(c *CFG) *liveVars {
 
 // buildGenKill builds the GEN and KILL bitsets for each block in a builder's cfg.
 // Used to compute reaching definitions
+//
+// The GEN set contains all the definitions inside the block that are
+// "visible" immediately after the block -- we refer to them as downwards exposed.
+//
+// The KILL set is simply the union of all the definitions killed by the
+// individual statements.
 func (r *reachingBuilder) buildGenKill() {
 	okills := make(map[*ast.Object]*bitset.BitSet)
 
@@ -92,10 +101,10 @@ func (r *reachingBuilder) buildGenKill() {
 		r.kill[b] = bitset.New(0)
 	}
 
-	// Iterate over all blocks twice, because a block may not know the entirety of what
-	// it kills until all blocks have been iterated over.
 	oind := 0
 
+	// Iterate over all blocks twice, because a block may not know the entirety of what
+	// it kills until all blocks have been iterated over.
 	for i := 0; i < 2; i++ {
 		for j, block := range r.blocks {
 			j := uint(j)
@@ -114,8 +123,9 @@ func (r *reachingBuilder) buildGenKill() {
 				}
 			}
 
+			// for multiple assignments
 			for _, e := range exprs {
-				idents := extractExprIdents(e)
+				idents := extractExprIdents(e) // only want idents
 				for _, i := range idents {
 					if i.Name == "_" {
 						continue
@@ -123,8 +133,9 @@ func (r *reachingBuilder) buildGenKill() {
 					if _, ok := okills[i.Obj]; !ok {
 						okills[i.Obj] = bitset.New(0)
 					}
-					r.gen[block].Set(j)
-					okills[i.Obj].Set(j)
+					r.gen[block].Set(j)  // GEN this obj
+					okills[i.Obj].Set(j) // KILL this obj for everyone else
+					// our kills are KILL[obj] - GEN[B]
 					r.kill[block] = r.kill[block].Union(okills[i.Obj]).Difference(r.gen[block])
 					oind++
 				}
@@ -231,6 +242,7 @@ func (lv *liveVarBuilder) buildDefUse() {
 	for i := 0; i < 2; i++ {
 		for _, block := range lv.blocks {
 			var defs []ast.Expr
+			// extract all LHS expressions to look for idents
 			switch stmt := block.stmt.(type) {
 			// TODO other stmts we need? Decl?
 			case *ast.AssignStmt:
@@ -244,12 +256,15 @@ func (lv *liveVarBuilder) buildDefUse() {
 				}
 			}
 
+			// find idents in LHS expressions, add to DEF
 			for _, e := range defs {
 				idents := extractExprIdents(e)
 				for _, i := range idents {
 					if i.Name == "_" {
 						continue
 					}
+					// if we have it already, use that index
+					// if we don't, add it to our slice and save its index
 					k, ok := objIndices[i.Obj]
 					if !ok {
 						k = uint(len(lv.objs))
@@ -260,12 +275,14 @@ func (lv *liveVarBuilder) buildDefUse() {
 				}
 			}
 
+			// extracts all RHS idents from any expressions w/i stmt
 			uses := extractUseStmtIdents(block.stmt)
 
 			for _, u := range uses {
 				if u.Name == "_" { // TODO is this possible?
 					continue
 				}
+				// should have already seen it, but just in case...
 				k, ok := objIndices[u.Obj]
 				if !ok {
 					k = uint(len(lv.objs))
