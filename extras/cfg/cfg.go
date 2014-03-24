@@ -154,9 +154,6 @@ func (c *CFG) Live(s ast.Stmt) (in []*ast.Object, out []*ast.Object) {
 // dHead, dTail are analagous to the head and tail of the defer
 // stack that will be called upon return of control, directly
 // after any return statements and before the actual end node.
-//
-// gen, kill are the GEN and KILL sets, used for reaching and
-// live variable data flow analysis
 type builder struct {
 	bMap            map[ast.Stmt]*block
 	edges, branches []ast.Stmt
@@ -183,9 +180,6 @@ func (b *builder) build(s []ast.Stmt) *CFG {
 	} else {
 		b.buildEdges(b.end)
 	}
-	//b.buildGenKill()
-	//b.buildReaching()
-	//b.buildLiveVariable()
 	return &CFG{b.bMap, b.start, b.end, nil, nil}
 }
 
@@ -214,15 +208,6 @@ func (b *builder) flowTo(src, dest ast.Stmt) *builder {
 	v := b.block(src)
 	w := b.block(dest)
 
-	// allows us to keep track of end and begin's succs/preds
-	// without returning them as badStmt
-	// TODO(reed): gotta be a way to exclude these suckers
-	//if src == b.start || src == b.end {
-	//src = nil
-	//}
-	//if dest == b.start || dest == b.end {
-	//dest = nil
-	//}
 	v.succs = append(v.succs, dest)
 	w.preds = append(w.preds, src)
 	return b
@@ -242,7 +227,7 @@ func (b *builder) block(s ast.Stmt) *block {
 // pushDefer will add a defer statement to the front of the
 // defer statements to be handled at any return or at the end of the CFG.
 //
-// TODO defers in conditionals and fors = mindfreak
+// TODO(reed): fix: defers in conditionals and fors = mindfreak
 func (b *builder) pushDefer(d *ast.DeferStmt) *builder {
 	if b.dHead == nil {
 		b.dHead = d
@@ -263,19 +248,19 @@ func (b *builder) pushDefer(d *ast.DeferStmt) *builder {
 func (b *builder) buildStmt(cur, next ast.Stmt) *builder {
 	b.edges = nil // reset for each statement
 
-	switch s := cur.(type) {
+	switch cur := cur.(type) {
 	case *ast.IfStmt:
-		b.buildIf(s, next)
+		b.buildIf(cur, next)
 	case *ast.ForStmt, *ast.RangeStmt:
-		b.buildFor(s, next)
+		b.buildFor(cur, next)
 	case *ast.SwitchStmt, *ast.SelectStmt, *ast.TypeSwitchStmt:
-		b.buildSwitch(s, next)
+		b.buildSwitch(cur, next)
 	case *ast.BranchStmt:
-		b.buildBranch(s)
+		b.buildBranch(cur)
 	case *ast.LabeledStmt:
-		b.flowTo(cur, s.Stmt).buildStmt(s.Stmt, next)
+		b.flowTo(cur, cur.Stmt).buildStmt(cur.Stmt, next)
 	case *ast.ReturnStmt:
-		b.buildReturn(s)
+		b.buildReturn(cur)
 	default:
 		b.flowTo(cur, next)
 	}
@@ -309,7 +294,7 @@ func (b *builder) buildBranch(br *ast.BranchStmt) *builder {
 	return b
 }
 
-// buildEdges makes current block edges to flow to given statement.
+// buildEdges makes current block edges flow to given statement.
 func (b *builder) buildEdges(next ast.Stmt) *builder {
 	for _, e := range b.edges {
 		b.flowTo(e, next)
@@ -416,7 +401,7 @@ func (b *builder) buildFor(stmt ast.Stmt, next ast.Stmt) *builder {
 }
 
 // buildSwitch builds a multi-way branch statement, e.g.
-// switch, type switch and select. Sets [# of case] edges.
+// switch, type switch and select. # edges relies on case bodies.
 func (b *builder) buildSwitch(sw, next ast.Stmt) *builder {
 	// composition of expected statement sw:
 	//

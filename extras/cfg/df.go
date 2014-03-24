@@ -20,6 +20,12 @@ type DFbuilder interface {
 	build()
 }
 
+// cfg is a constructed CFG to analyze.
+//
+// blocks is a slice of the blocks in cfg.bMap, except the START,
+// for enumerating (i.e. indexing)
+//
+// gen, kill are each blocks' GEN and KILL bitsets.
 type reachingBuilder struct {
 	cfg       *CFG
 	blocks    []*block
@@ -27,6 +33,14 @@ type reachingBuilder struct {
 }
 
 // TODO(reed): DRY...
+// cfg is a constructed CFG to analyze.
+//
+// blocks is a slice of the blocks in cfg.bMap, except the END,
+// for enumerating (i.e. indexing).
+//
+// objs is a list of all unique ast.Objects found in a CFG, for indexing in bitset.
+//
+// def, use are each blocks' DEF and USE bitsets.
 type liveVarBuilder struct {
 	cfg      *CFG
 	blocks   []*block
@@ -34,19 +48,21 @@ type liveVarBuilder struct {
 	def, use map[*block]*bitset.BitSet
 }
 
+// reaching is the result of building reaching definitions.
 type reaching struct {
 	in  map[*block][]ast.Stmt
 	out map[*block][]ast.Stmt
 }
 
+// liveVars is the result of building live variable analysis.
 type liveVars struct {
 	in  map[*block][]*ast.Object
 	out map[*block][]*ast.Object
 }
 
-// builds reaching definitions for a given control flow graph
-// returns a pointer to a reaching object which contains its
-// IN and OUT as a slice of stmts for each block
+// buildReaching builds reaching definitions for a given control flow graph,
+// returning a pointer to a reaching object which contains its
+// IN and OUT as a slice of stmts for each block.
 func buildReaching(c *CFG) *reaching {
 	var blocks []*block
 	for _, block := range c.bMap {
@@ -63,10 +79,10 @@ func buildReaching(c *CFG) *reaching {
 	return reach.build()
 }
 
-// builds live variables for a given control flow graph
-// returns a pointer to a livesVars object which contains its
+// buildLiveVars builds live variables for a given control flow graph,
+// returning a pointer to a livesVars object which contains its
 // IN and OUT as a slice of objects for each block, where each
-// object has information about its name and declaration
+// object has information about its name and declaration.
 func buildLiveVars(c *CFG) *liveVars {
 	var blocks []*block
 	for _, block := range c.bMap {
@@ -257,8 +273,8 @@ func (lv *liveVarBuilder) buildDefUse() {
 			}
 
 			// find idents in LHS expressions, add to DEF
-			for _, e := range defs {
-				idents := extractExprIdents(e)
+			for _, d := range defs {
+				idents := extractExprIdents(d)
 				for _, i := range idents {
 					if i.Name == "_" {
 						continue
@@ -271,6 +287,7 @@ func (lv *liveVarBuilder) buildDefUse() {
 						objIndices[i.Obj] = k
 						lv.objs = append(lv.objs, i.Obj)
 					}
+
 					lv.def[block].Set(k)
 				}
 			}
@@ -279,16 +296,18 @@ func (lv *liveVarBuilder) buildDefUse() {
 			uses := extractUseStmtIdents(block.stmt)
 
 			for _, u := range uses {
-				if u.Name == "_" { // TODO is this possible?
+				if u.Name == "_" { // TODO is this possible? since it's valid, I believe so
 					continue
 				}
-				// should have already seen it, but just in case...
+				// if we have it already, use that index
+				// if we don't, add it to our slice and save its index (e.g. func args)
 				k, ok := objIndices[u.Obj]
 				if !ok {
 					k = uint(len(lv.objs))
 					objIndices[u.Obj] = k
 					lv.objs = append(lv.objs, u.Obj)
 				}
+
 				lv.use[block].Set(k)
 			}
 		}
@@ -415,7 +434,7 @@ func (lv *liveVarBuilder) build() *liveVars {
 	blocks := make([]*block, 0, len(lv.blocks)-1)
 
 	// IN[EXIT] = {};
-	// for(each basic block B other than ENTRY) OUT[B} = {};
+	// for(each basic block B other than EXIT) IN[B} = {};
 	for _, block := range lv.blocks {
 		ins[block] = bitset.New(0)
 		outs[block] = bitset.New(0)
@@ -424,7 +443,7 @@ func (lv *liveVarBuilder) build() *liveVars {
 		}
 	}
 
-	// for(changes to any OUT occur)
+	// for(changes to any IN occur)
 	for change := true; change; { // best do-while impersonation I got
 		change = false
 
