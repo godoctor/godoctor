@@ -124,37 +124,19 @@ func (r *reachingBuilder) buildGenKill() {
 	for i := 0; i < 2; i++ {
 		for j, block := range r.blocks {
 			j := uint(j)
-			var exprs []ast.Expr
-			// extract all "producing" statements; assignments
-			switch stmt := block.stmt.(type) {
-			// TODO other stmts we need? Decl?
-			case *ast.AssignStmt:
-				exprs = stmt.Lhs
-			case *ast.RangeStmt:
-				if stmt.Key != nil {
-					exprs = append(exprs, stmt.Key)
-				}
-				if stmt.Value != nil {
-					exprs = append(exprs, stmt.Value)
-				}
-			}
 
-			// for multiple assignments
-			for _, e := range exprs {
-				idents := extractExprIdents(e) // only want idents
-				for _, i := range idents {
-					if i.Name == "_" {
-						continue
-					}
-					if _, ok := okills[i.Obj]; !ok {
-						okills[i.Obj] = bitset.New(0)
-					}
-					r.gen[block].Set(j)  // GEN this obj
-					okills[i.Obj].Set(j) // KILL this obj for everyone else
-					// our kills are KILL[obj] - GEN[B]
-					r.kill[block] = r.kill[block].Union(okills[i.Obj]).Difference(r.gen[block])
-					oind++
+			// extracts left hand side idents for Assign and Range only
+			defs := extractDefStmtIdents(block.stmt)
+
+			for _, d := range defs {
+				if _, ok := okills[d.Obj]; !ok {
+					okills[d.Obj] = bitset.New(0)
 				}
+				r.gen[block].Set(j)  // GEN this obj
+				okills[d.Obj].Set(j) // KILL this obj for everyone else
+				// our kills are KILL[obj] - GEN[B]
+				r.kill[block] = r.kill[block].Union(okills[d.Obj]).Difference(r.gen[block])
+				oind++
 			}
 		}
 	}
@@ -257,48 +239,23 @@ func (lv *liveVarBuilder) buildDefUse() {
 	// it kills until all blocks have been iterated over.
 	for i := 0; i < 2; i++ {
 		for _, block := range lv.blocks {
-			var defs []ast.Expr
-			// extract all LHS expressions to look for idents
-			switch stmt := block.stmt.(type) {
-			// TODO other stmts we need? Decl?
-			case *ast.AssignStmt:
-				defs = stmt.Lhs
-			case *ast.RangeStmt:
-				if stmt.Key != nil {
-					defs = append(defs, stmt.Key)
-				}
-				if stmt.Value != nil {
-					defs = append(defs, stmt.Value)
-				}
-			}
+			// DEF, USE idents... we need objects
+			defs, uses := extractDefUse(block.stmt)
 
-			// find idents in LHS expressions, add to DEF
 			for _, d := range defs {
-				idents := extractExprIdents(d)
-				for _, i := range idents {
-					if i.Name == "_" {
-						continue
-					}
-					// if we have it already, use that index
-					// if we don't, add it to our slice and save its index
-					k, ok := objIndices[i.Obj]
-					if !ok {
-						k = uint(len(lv.objs))
-						objIndices[i.Obj] = k
-						lv.objs = append(lv.objs, i.Obj)
-					}
-
-					lv.def[block].Set(k)
+				// if we have it already, use that index
+				// if we don't, add it to our slice and save its index
+				k, ok := objIndices[d.Obj]
+				if !ok {
+					k = uint(len(lv.objs))
+					objIndices[d.Obj] = k
+					lv.objs = append(lv.objs, d.Obj)
 				}
-			}
 
-			// extracts all RHS idents from any expressions w/i stmt
-			uses := extractUseStmtIdents(block.stmt)
+				lv.def[block].Set(k)
+			}
 
 			for _, u := range uses {
-				if u.Name == "_" { // TODO is this possible? since it's valid, I believe so
-					continue
-				}
 				// if we have it already, use that index
 				// if we don't, add it to our slice and save its index (e.g. func args)
 				k, ok := objIndices[u.Obj]
@@ -312,6 +269,151 @@ func (lv *liveVarBuilder) buildDefUse() {
 			}
 		}
 	}
+}
+
+// build will compute the live variables for each block
+// in the builder's cfg.
+// precondition: buildDefUse() must have been called previously.
+//
+// algo from ch 9.2, p.610 Dragonbook, v2.2,
+// "Iterative algorithm to compute live variables":
+//
+// IN[EXIT] = {};
+// for(each basic block B other than EXIT) IN[B} = {};
+// for(changes to any IN occur)
+//    for(each basic block B other than EXIT) {
+//      OUT[B] = Union(S a successor of B) IN[S];
+//      IN[B] = use[b] Union (OUT[B] - def[b]);
+//    }
+//
+// TODO(reed): refactor refactor refactor
+func (lv *liveVarBuilder) build() *liveVars {
+
+	// each bitset will map to a bit that represents an *ast.Object
+	ins := make(map[*block]*bitset.BitSet)
+	outs := make(map[*block]*bitset.BitSet)
+
+	// mblocks will be all of the cfg blocks except EXIT
+	blocks := make([]*block, 0, len(lv.blocks)-1)
+
+	// IN[EXIT] = {};
+	// for(each basic block B other than EXIT) IN[B} = {};
+	for _, block := range lv.blocks {
+		ins[block] = bitset.New(0)
+		outs[block] = bitset.New(0)
+		if block != lv.cfg.bMap[lv.cfg.end] {
+			blocks = append(blocks, block)
+		}
+	}
+
+	// for(changes to any IN occur)
+	for change := true; change; { // best do-while impersonation I got
+		change = false
+
+		// for(each basic block B other than EXIT) {
+		for _, block := range blocks {
+
+			// OUT[B] = Union(S a succ of B) IN[S]
+			for _, s := range block.succs {
+				s := lv.cfg.bMap[s]
+				outs[block].InPlaceUnion(ins[s])
+			}
+
+			old := ins[block].Clone()
+
+			// IN[B] = use[B] U (OUT[B] - def[B])
+			ins[block] = lv.use[block].Union(outs[block].Difference(lv.def[block]))
+
+			change = change || !old.Equal(ins[block])
+		}
+	}
+
+	in := make(map[*block][]*ast.Object)
+	out := make(map[*block][]*ast.Object)
+
+	// map bits in IN and OUT back to corresponding objects
+	for _, block := range lv.blocks {
+		for i := uint(0); i < ins[block].Len(); i++ {
+			if ins[block].Test(i) {
+				in[block] = append(in[block], lv.objs[i])
+			}
+		}
+
+		for i := uint(0); i < outs[block].Len(); i++ {
+			if outs[block].Test(i) {
+				out[block] = append(out[block], lv.objs[i])
+			}
+		}
+	}
+	return &liveVars{in, out}
+}
+
+// Extracts the DEF and USE sets of variables for a given list of statements.
+//
+// def as the set of variables _defined_ (i.e., definitely
+// assigned values in B prior to any use of that variable in B, and
+//
+// use as the set of variables whose values may be used in B prior
+// to any defintion of the variable
+//
+// i.e. DEF is LHS identifiers only, USE is all identifiers NOT on the LHS
+func ExtractDefUse(stmts []ast.Stmt) (def []*ast.Object, use []*ast.Object) {
+	defmap := make(map[*ast.Object]bool)
+	usemap := make(map[*ast.Object]bool)
+
+	for _, stmt := range stmts {
+		// DEF and USE identifiers, we need objects
+		defs, uses := extractDefUse(stmt)
+
+		// find idents in LHS expressions, add to DEF
+		for _, d := range defs {
+			if _, ok := defmap[d.Obj]; ok {
+				continue
+			}
+			defmap[d.Obj] = true
+			def = append(def, d.Obj)
+		}
+
+		for _, u := range uses {
+			// if we have it already, use that index
+			// if we don't, add it to our slice and save its index (e.g. func args)
+			if _, ok := usemap[u.Obj]; ok {
+				continue
+			}
+			usemap[u.Obj] = true
+			use = append(use, u.Obj)
+		}
+	}
+	return use, def
+}
+
+// for brevity's sake, return both
+func extractDefUse(stmt ast.Stmt) (def []*ast.Ident, use []*ast.Ident) {
+	return extractDefStmtIdents(stmt), extractUseStmtIdents(stmt)
+}
+
+func extractDefStmtIdents(stmt ast.Stmt) []*ast.Ident {
+	var idents []*ast.Ident
+	var defs []ast.Expr
+	// extract all LHS expressions to look for idents
+	switch stmt := stmt.(type) {
+	// TODO other stmts we need? Decl?
+	case *ast.AssignStmt:
+		defs = stmt.Lhs
+	case *ast.RangeStmt:
+		if stmt.Key != nil {
+			defs = append(defs, stmt.Key)
+		}
+		if stmt.Value != nil {
+			defs = append(defs, stmt.Value)
+		}
+	}
+
+	// find idents in LHS expressions, add to DEF
+	for _, d := range defs {
+		idents = append(idents, extractExprIdents(d)...)
+	}
+	return idents
 }
 
 // Extracts USE idents from a given statement.
@@ -405,82 +507,13 @@ func extractExprIdents(expr ast.Expr) []*ast.Ident {
 		idents = append(idents, extractExprIdents(e)...)
 	}
 
+	for i := 0; i < len(idents); i++ {
+		ident := idents[i]
+		if ident.Name == "_" { // remove these
+			idents = append(idents[:i], idents[i+1:]...)
+			i--
+		}
+	}
+
 	return idents
-}
-
-// build will compute the live variables for each block
-// in the builder's cfg.
-// precondition: buildDefUse() must have been called previously.
-//
-// algo from ch 9.2, p.610 Dragonbook, v2.2,
-// "Iterative algorithm to compute live variables":
-//
-// IN[EXIT] = {};
-// for(each basic block B other than EXIT) IN[B} = {};
-// for(changes to any IN occur)
-//    for(each basic block B other than EXIT) {
-//      OUT[B] = Union(S a successor of B) IN[S];
-//      IN[B] = use[b] Union (OUT[B] - def[b]);
-//    }
-//
-// TODO(reed): refactor refactor refactor
-func (lv *liveVarBuilder) build() *liveVars {
-
-	// each bitset will map to a bit that represents an *ast.Object
-	ins := make(map[*block]*bitset.BitSet)
-	outs := make(map[*block]*bitset.BitSet)
-
-	// mblocks will be all of the cfg blocks except EXIT
-	blocks := make([]*block, 0, len(lv.blocks)-1)
-
-	// IN[EXIT] = {};
-	// for(each basic block B other than EXIT) IN[B} = {};
-	for _, block := range lv.blocks {
-		ins[block] = bitset.New(0)
-		outs[block] = bitset.New(0)
-		if block != lv.cfg.bMap[lv.cfg.end] {
-			blocks = append(blocks, block)
-		}
-	}
-
-	// for(changes to any IN occur)
-	for change := true; change; { // best do-while impersonation I got
-		change = false
-
-		// for(each basic block B other than EXIT) {
-		for _, block := range blocks {
-
-			// OUT[B] = Union(S a succ of B) IN[S]
-			for _, s := range block.succs {
-				s := lv.cfg.bMap[s]
-				outs[block].InPlaceUnion(ins[s])
-			}
-
-			old := ins[block].Clone()
-
-			// IN[B] = use[B] U (OUT[B] - def[B])
-			ins[block] = lv.use[block].Union(outs[block].Difference(lv.def[block]))
-
-			change = change || !old.Equal(ins[block])
-		}
-	}
-
-	in := make(map[*block][]*ast.Object)
-	out := make(map[*block][]*ast.Object)
-
-	// map bits in IN and OUT back to corresponding objects
-	for _, block := range lv.blocks {
-		for i := uint(0); i < ins[block].Len(); i++ {
-			if ins[block].Test(i) {
-				in[block] = append(in[block], lv.objs[i])
-			}
-		}
-
-		for i := uint(0); i < outs[block].Len(); i++ {
-			if outs[block].Test(i) {
-				out[block] = append(out[block], lv.objs[i])
-			}
-		}
-	}
-	return &liveVars{in, out}
 }
