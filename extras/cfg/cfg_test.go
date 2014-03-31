@@ -665,7 +665,7 @@ func (c *CFGWrapper) expectUses(t *testing.T, start int, end int, exp ...string)
 	}
 
 	var stmts []ast.Stmt
-	for i := start; i < end; i++ {
+	for i := start; i <= end; i++ {
 		stmts = append(stmts, c.exp[i])
 	}
 
@@ -711,7 +711,7 @@ func (c *CFGWrapper) expectDefs(t *testing.T, start int, end int, exp ...string)
 	}
 
 	var stmts []ast.Stmt
-	for i := start; i < end; i++ {
+	for i := start; i <= end; i++ {
 		stmts = append(stmts, c.exp[i])
 	}
 

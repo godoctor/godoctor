@@ -380,7 +380,7 @@ func ExtractDefUse(stmts []ast.Stmt) (def []*ast.Object, use []*ast.Object) {
 			}
 		}
 	}
-	return use, def
+	return def, use
 }
 
 // for brevity's sake, return both
