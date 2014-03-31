@@ -9,7 +9,8 @@ package doctor
 
 import (
 	"go/ast"
-
+	"regexp"
+	//"fmt"
 	"code.google.com/p/go.tools/go/types"
 )
 
@@ -25,7 +26,12 @@ func (r *RenameRefactoring) Name() string {
 }
 
 func (r *RenameRefactoring) SetNewName(newName string) {
-	r.newName = newName
+
+	if r.isIdentifierValid(newName) {
+		r.newName = newName
+	} else {
+		r.log.Log(FATAL_ERROR, "newname  is not  valid Go identifer")
+	}
 }
 
 func (r *RenameRefactoring) GetParams() []string {
@@ -53,8 +59,6 @@ func (r *RenameRefactoring) Run() {
 		return
 	}
 
-	// TODO: Check if r.newName is a valid Go identifier
-
 	switch ident := r.selectedNode.(type) {
 	case *ast.Ident:
 		r.rename(ident)
@@ -65,92 +69,54 @@ func (r *RenameRefactoring) Run() {
 	}
 }
 
+func (r *RenameRefactoring) isIdentifierValid(newName string) bool {
+
+	matched, err := regexp.MatchString("^[A-Za-z_][0-9A-Za-z_]*$", newName)
+	if matched && err == nil {
+		return true
+	}
+	return false
+}
+
 func (r *RenameRefactoring) rename(ident *ast.Ident) {
 
-	search := &SearchEngine{r.program}
-	searchResult, err := search.FindOccurrences(ident)
-	if err != nil {
-		r.log.Log(FATAL_ERROR, err.Error())
-		return
-	}
-
-	r.addOccurrences(searchResult)
-	//TODO: r.checkForErrors()
-	return
-
-}
-
-//TODO pkgs not identified
-/*else if r.findIfPackage(ident) {
-          	if r.IsExportable(ident) {
-
-                  fmt.Println("package is exportable")
-                  allOccurrences = r. findOccurrences(true,ident)
-                   r.addOccurrences(allOccurrences)
-               } else {
-                fmt.Println("package is not exportable")
-                  allOccurrences = r. findOccurrences(false,ident)
-                   r.addOccurrences(allOccurrences)
-                  }
-
-	    }
-*/
-
-/*
-// Finds all of the references to a single declaration in one AST
-// (unlike findOccurrences, which searches the entire package)
-func (r *RenameRefactoring) findOccurrencesofVar(ident *ast.Ident) []OffsetLength {
-
-	var result []OffsetLength
-
-	decl := r.pkgInfo.ObjectOf(ident)
-	if decl == nil {
-		r.log.Log(FATAL_ERROR, "Unable to find declaration")
-		return []OffsetLength{}
-	}
-
-	ast.Inspect(r.file, func(n ast.Node) bool {
-		switch thisIdent := n.(type) {
-		case *ast.Ident:
-			if r.pkgInfo.ObjectOf(thisIdent) == decl {
-				offset := r.program.Fset.Position(thisIdent.NamePos).Offset
-				length := utf8.RuneCountInString(thisIdent.Name)
-				result = append(result, OffsetLength{offset, length})
-			}
+	if !r.IdentifierExists(ident) {
+		search := &SearchEngine{r.program}
+		searchResult, err := search.FindOccurrences(ident)
+		if err != nil {
+			r.log.Log(FATAL_ERROR, err.Error())
+			return
 		}
 
-		return true
-	})
-	return result
+		r.addOccurrences(searchResult)
+		//TODO: r.checkForErrors()
+		return
+	} else {
+
+		r.log.Log(FATAL_ERROR, "newname already exists in scope,please select other value for the newname")
+	}
+
 }
-*/
 
-/*
-//finds if selected identifier is name of a funciton
-func (r *RenameRefactoring) findIfFunction(ident *ast.Ident) bool {
-	var isafunction bool = false
+//IdentifierExists checks if there already exists an Identifier with the newName,with in the scope of the oldname.
+func (r *RenameRefactoring) IdentifierExists(ident *ast.Ident) bool {
 
-	obj := r.pkgInfo.ObjectOf(ident)
+	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
+
 	if obj == nil {
-		r.log.Log(FATAL_ERROR, "Unable to find declaration")
+		r.log.Log(FATAL_ERROR, "Unable to find declaration of selected identifier")
 		return false
 	}
 
-	switch sig := types.Object.Type(obj).(type) {
-	case *types.Signature:
-		recv := sig.Recv()
-		if recv == nil {
-			isafunction = true
+	identscope := obj.Parent()
 
-		}
-
-	default:
-		// TODO error
+	if identscope.LookupParent(r.newName) != nil {
+		return true
 	}
 
-	return isafunction
+	return false
 }
-*/
+
 
 //addOccurrences Adds all the Occurences to the editset
 func (r *RenameRefactoring) addOccurrences(allOccurrences map[string][]OffsetLength) {
