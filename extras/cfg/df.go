@@ -367,21 +367,17 @@ func ExtractDefUse(stmts []ast.Stmt) (def []*ast.Object, use []*ast.Object) {
 
 		// find idents in LHS expressions, add to DEF
 		for _, d := range defs {
-			if _, ok := defmap[d.Obj]; ok {
-				continue
+			if _, ok := defmap[d.Obj]; !ok {
+				defmap[d.Obj] = true
+				def = append(def, d.Obj)
 			}
-			defmap[d.Obj] = true
-			def = append(def, d.Obj)
 		}
 
 		for _, u := range uses {
-			// if we have it already, use that index
-			// if we don't, add it to our slice and save its index (e.g. func args)
-			if _, ok := usemap[u.Obj]; ok {
-				continue
+			if _, ok := usemap[u.Obj]; !ok {
+				usemap[u.Obj] = true
+				use = append(use, u.Obj)
 			}
-			usemap[u.Obj] = true
-			use = append(use, u.Obj)
 		}
 	}
 	return use, def

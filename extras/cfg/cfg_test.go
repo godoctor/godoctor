@@ -38,6 +38,9 @@ func TestExprStuff(t *testing.T) {
     //END
   }`)
 
+	c.expectDefs(t, START, 2, "a", "b")
+	c.expectUses(t, START, 2, "c", "a")
+
 	c.expectReaching(t, START)
 	c.expectReaching(t, 2, 1)
 	c.expectReaching(t, 4, 3, 1)
@@ -649,6 +652,98 @@ func (c *CFGWrapper) expectReaching(t *testing.T, s int, exp ...int) {
 	for _, stmt := range found {
 		t.Error("found", c.stmts[stmt], "as a reaching for", s)
 	}
+}
+
+func (c *CFGWrapper) expectUses(t *testing.T, start int, end int, exp ...string) {
+	if _, ok := c.cfg.bMap[c.exp[start]]; !ok {
+		t.Error("did not find start", start)
+		return
+	}
+	if _, ok := c.cfg.bMap[c.exp[end]]; !ok {
+		t.Error("did not find end", end)
+		return
+	}
+
+	var stmts []ast.Stmt
+	for i := start; i < end; i++ {
+		stmts = append(stmts, c.exp[i])
+	}
+
+	_, uses := ExtractDefUse(stmts)
+
+	actualDef := make(map[*ast.Object]bool)
+	for _, u := range uses {
+		actualDef[u] = true
+	}
+
+	expDef := make(map[*ast.Object]bool)
+	for _, e := range exp {
+		expDef[c.objs[e]] = true
+	}
+
+	var dnf []*ast.Object
+
+	for d, _ := range expDef {
+		if _, ok := actualDef[d]; !ok {
+			dnf = append(dnf, d)
+		} else {
+			delete(actualDef, d)
+		}
+	}
+
+	for _, d := range dnf {
+		t.Error("Did not find", d.Name, "in definitions")
+	}
+	for f, _ := range actualDef {
+		t.Error("Found", f.Name, "in definitions")
+	}
+
+}
+
+func (c *CFGWrapper) expectDefs(t *testing.T, start int, end int, exp ...string) {
+	if _, ok := c.cfg.bMap[c.exp[start]]; !ok {
+		t.Error("did not find start", start)
+		return
+	}
+	if _, ok := c.cfg.bMap[c.exp[end]]; !ok {
+		t.Error("did not find end", end)
+		return
+	}
+
+	var stmts []ast.Stmt
+	for i := start; i < end; i++ {
+		stmts = append(stmts, c.exp[i])
+	}
+
+	defs, _ := ExtractDefUse(stmts)
+
+	actualDef := make(map[*ast.Object]bool)
+	for _, d := range defs {
+		actualDef[d] = true
+	}
+
+	expDef := make(map[*ast.Object]bool)
+	for _, e := range exp {
+		expDef[c.objs[e]] = true
+	}
+
+	var dnf []*ast.Object
+
+	for d, _ := range expDef {
+		if _, ok := actualDef[d]; !ok {
+			dnf = append(dnf, d)
+		} else {
+			delete(actualDef, d)
+		}
+	}
+
+	for _, d := range dnf {
+		t.Error("Did not find", d.Name, "in uses")
+	}
+	for f, _ := range actualDef {
+		t.Error("Found", f.Name, "in uses")
+	}
+
 }
 
 func (c *CFGWrapper) expectSuccs(t *testing.T, s int, exp ...int) {
