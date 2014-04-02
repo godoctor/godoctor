@@ -5,13 +5,15 @@
 package doctor
 
 import (
-	"code.google.com/p/go.tools/go/loader"
-	"code.google.com/p/go.tools/go/types"
-	"fmt"
+         "fmt"
 	"go/ast"
 	"regexp"
 	"strings"
 	"unicode/utf8"
+          
+	"code.google.com/p/go.tools/go/loader"
+	"code.google.com/p/go.tools/go/types"
+	
 )
 
 type SearchEngine struct {
@@ -38,7 +40,7 @@ func (r *SearchEngine) FindDeclarationsAcrossInterfaces(ident *ast.Ident) (decls
 	pkgInfo := r.pkgInfo(r.fileContaining(ident))
 	obj := pkgInfo.ObjectOf(ident)
 	if obj == nil {
-		err = fmt.Errorf("Unable to find declaration of %s", ident.Name)
+		err = fmt.Errorf("unable to find declaration of %s", ident.Name)
 		return
 	}
 
@@ -240,7 +242,7 @@ func (r *SearchEngine) containsType(ts []types.Type, t types.Type) bool {
 func (r *SearchEngine) FindOccurrences(ident *ast.Ident) (allOccurrences map[string][]OffsetLength, err error) {
 	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
 	if obj == nil {
-		err = fmt.Errorf("Unable to find declaration of %s", ident.Name)
+		err = fmt.Errorf("unable to find declaration of %s", ident.Name)
 		return
 	}
 
@@ -251,7 +253,7 @@ func (r *SearchEngine) FindOccurrences(ident *ast.Ident) (allOccurrences map[str
 			return
 		}
 	}
-	//allOccurrences = r.findOccurrences(decls)
+	
 	result := r.findOccurrences(decls)
 	allOccurrences = r.FindOccurrencesinComments(ident.Name, decls, result)
 	return
@@ -335,6 +337,48 @@ func (r *SearchEngine) allPackages() []*loader.PackageInfo {
 	return pkgs
 }
 
+
+// FindOccurrencesincomments checks if identifier occurs as a part in comments,if true then
+// all the source locations of identifier  in comments are returned.
+
+func (r *SearchEngine) FindOccurrencesinComments(name string, decls []types.Object, result map[string][]OffsetLength) map[string][]OffsetLength {
+
+	for _, pkgInfo := range r.getPackages(decls) {
+		for _, f := range pkgInfo.Files {
+			for _, comment := range f.Comments {
+
+				if strings.Contains(comment.List[0].Text, name) {
+					result = r.findoccurrencesincomments(f, comment, name, result)
+                	        }
+			}
+		}
+	}
+	return result
+}
+
+//findoccurrencesincomments finds the source location of identifier in comments , adds them to the already
+// existng occurrences of identifier(result) and returns the result.
+
+func (r *SearchEngine) findoccurrencesincomments(f *ast.File, comment *ast.CommentGroup, name string, result map[string][]OffsetLength) map[string][]OffsetLength {
+
+	var whitespaceindex int = 1
+
+	re := regexp.MustCompile("[^0-9A-Za-z_]hello[^0-9A-Za-z_]|//hello[^0-9A-Za-z_]|/*hello[^0-9A-Za-z_]|[^0-9A-Za-z_]hello$")
+	matchcount := strings.Count(comment.List[0].Text, name)
+
+	for _, matchindex := range re.FindAllStringIndex(comment.List[0].Text, matchcount) {
+
+		offset := r.program.Fset.Position(comment.List[0].Slash).Offset + matchindex[0] + whitespaceindex
+		length := utf8.RuneCountInString(name)
+		filename := r.program.Fset.Position(f.Pos()).Filename
+		result[filename] = append(result[filename], OffsetLength{offset, length})
+
+	}
+
+	return result
+}
+
+
 /* -=-=- Utility Methods -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 // TODO: These are duplicated from refactoring.go
 
@@ -362,47 +406,4 @@ func (r *SearchEngine) pkgInfo(file *ast.File) *loader.PackageInfo {
 	return nil
 }
 
-// FindOccurrencesincomments checks if identifier occurs as a part in comments,if true then
-// all the source locations of identifier  in comments are returned.
 
-func (r *SearchEngine) FindOccurrencesinComments(name string, decls []types.Object, result map[string][]OffsetLength) map[string][]OffsetLength {
-
-	for _, pkgInfo := range r.getPackages(decls) {
-		for _, f := range pkgInfo.Files {
-			for _, comment := range f.Comments {
-
-				if strings.Contains(comment.List[0].Text, name) {
-
-					result = r.findoccurrencesincomments(f, comment, name, result)
-
-				}
-
-			}
-
-		}
-
-	}
-	return result
-}
-
-//findoccurrencesincomments finds the source location of identifier in comments , adds them to the already
-// existng occurrences of identifier and returns.
-
-func (r *SearchEngine) findoccurrencesincomments(f *ast.File, comment *ast.CommentGroup, name string, result map[string][]OffsetLength) map[string][]OffsetLength {
-
-	var whitespaceindex int = 1
-
-	re := regexp.MustCompile("[^0-9A-Za-z_]hello[^0-9A-Za-z_]|//hello[^0-9A-Za-z_]|/*hello[^0-9A-Za-z_]|[^0-9A-Za-z_]hello$")
-	matchcount := strings.Count(comment.List[0].Text, name)
-
-	for _, matchindex := range re.FindAllStringIndex(comment.List[0].Text, matchcount) {
-
-		offset := r.program.Fset.Position(comment.List[0].Slash).Offset + matchindex[0] + whitespaceindex
-		length := utf8.RuneCountInString(name)
-		filename := r.program.Fset.Position(f.Pos()).Filename
-		result[filename] = append(result[filename], OffsetLength{offset, length})
-
-	}
-
-	return result
-}

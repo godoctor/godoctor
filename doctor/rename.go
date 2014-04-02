@@ -10,7 +10,7 @@ package doctor
 import (
 	"go/ast"
 	"regexp"
-	//"fmt"
+
 	"code.google.com/p/go.tools/go/types"
 )
 
@@ -30,7 +30,7 @@ func (r *RenameRefactoring) SetNewName(newName string) {
 	if r.isIdentifierValid(newName) {
 		r.newName = newName
 	} else {
-		r.log.Log(FATAL_ERROR, "newname  is not  valid Go identifer")
+		r.log.Log(FATAL_ERROR, "Please select a valid Go identifier")
 	}
 }
 
@@ -91,10 +91,9 @@ func (r *RenameRefactoring) rename(ident *ast.Ident) {
 		r.addOccurrences(searchResult)
 		//TODO: r.checkForErrors()
 		return
-	} else {
+	} 
 
-		r.log.Log(FATAL_ERROR, "newname already exists in scope,please select other value for the newname")
-	}
+      r.log.Log(FATAL_ERROR, "newname already exists in scope,please select other value for the newname")
 
 }
 
@@ -104,7 +103,7 @@ func (r *RenameRefactoring) IdentifierExists(ident *ast.Ident) bool {
 	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
 
 	if obj == nil {
-		r.log.Log(FATAL_ERROR, "Unable to find declaration of selected identifier")
+		r.log.Log(FATAL_ERROR, "unable to find declaration of selected identifier")
 		return false
 	}
 
@@ -118,7 +117,7 @@ func (r *RenameRefactoring) IdentifierExists(ident *ast.Ident) bool {
 }
 
 
-//addOccurrences Adds all the Occurences to the editset
+//addOccurrences adds all the Occurences to the editset
 func (r *RenameRefactoring) addOccurrences(allOccurrences map[string][]OffsetLength) {
 	for filename, occurrences := range allOccurrences {
 		for _, occurrence := range occurrences {
