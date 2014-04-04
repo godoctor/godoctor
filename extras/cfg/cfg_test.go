@@ -1,4 +1,4 @@
-//something something
+// Make sure these work
 
 package cfg
 
@@ -15,113 +15,8 @@ import (
 
 const (
 	START = 0
-	END   = 100000000 //if there's this many statements, may god have mercy on your soul
+	END   = 100000000 // if there's this many statements, may god have mercy on your soul
 )
-
-func TestExprStuff(t *testing.T) {
-	c := getWrapper(t, `
-  package main
-
-  func foo(c int, nums []int) {
-    //START
-    a := c      //1
-    b := a      //2
-    b = a + 1   //3
-    c, a = a, c //4
-    b = a       //5
-    for a < c { //6
-      a += c    //7
-    }
-    a, c = c, a //8
-    c = b       //9
-    return a    //10
-    //END
-  }`)
-
-	c.expectDefs(t, START, 2, "a", "b")
-	c.expectUses(t, START, 2, "c", "a")
-
-	c.expectReaching(t, START)
-	c.expectReaching(t, 2, 1)
-	c.expectReaching(t, 4, 3, 1)
-	c.expectReaching(t, 6, 7, 5, 4)
-	c.expectReaching(t, 7, 7, 5, 4)
-	c.expectReaching(t, 8, 7, 5, 4)
-	c.expectReaching(t, 9, 8, 5)
-
-	//TODO not sure if these are right
-	c.expectLive(t, START, "c")
-	c.expectLive(t, 1, "a", "c")
-	c.expectLive(t, 2, "a", "c")
-	c.expectLive(t, 3, "a", "c")
-	c.expectLive(t, 4, "a", "c")
-	c.expectLive(t, 5, "a", "b", "c")
-	c.expectLive(t, 8, "a", "b")
-	c.expectLive(t, 9, "a")
-	c.expectLive(t, END)
-
-	//c.printAST()
-}
-
-func TestExractFuncExample(t *testing.T) {
-	c := getWrapper(t, `
-  package main
-
-  func foo() {
-    a := 3      //1
-    b := a - 1  //2
-    c := 1      //3
-
-    // BEGIN EXTRACT
-    for a < b { //4
-      a += b    //5
-    }
-    x := a + b  //6
-    // END EXTRACT
-    
-    z := x + c  //7
-  }`)
-
-	// only analyzes LIVE[OUT] for now...
-	// but of criticial importance, worst case for EXTRACT FUNC:
-	c.expectLive(t, 3, "a", "b", "c")
-	c.expectLive(t, 6, "x", "c")
-
-	// So in extracted function, "c" never gets used so we don't need to
-	// pass it as a parameter nor return it since the value never changes
-	// within our extracted function.
-	// Yet, it's still live for the duration of the extracted function.
-	// TODO Clever ideas
-	//
-	//    current ideas:
-	//      B = BEGIN EXTRACT
-	//      E = END EXTRACT
-	//      PARAMS[EXTRACTED] = LIVE[IN][B] ∩ USE[EXTRACTED]
-	//      RETURN[EXTRACTED] = LIVE[OUT][E] ∩ ? - ?
-	//
-	//      or generate LIVE[IN][B] and LIVE[OUT][E] for extracted function
-	//      only in the context of the extracted function
-	//
-	// extracted function should be (best case):
-	//
-	//  func bar(a, b int) int {
-	//    for a < b {
-	//      a += b
-	//    }
-	//    x := a + b
-	//    return x // or "return a + b" if you really want to analyze
-	//  }
-	//
-	// caller should then be:
-	//
-	//  func foo() {
-	//    a := 3
-	//    b := a - 1
-	//    c := 1
-	//    x := bar(a, b)
-	//    z := x + c
-	//  }
-}
 
 func TestDoubleForBreak(t *testing.T) {
 	c := getWrapper(t, `
@@ -155,18 +50,20 @@ func TestFor(t *testing.T) {
 
   func foo(c int) {
     //START
-    for i := 0; i < c; i++ { //2, 1, 3
+    for i := 0; i < c; i++ { // 2, 1, 3
       println(i) //4
     }
     println(c) //5
     //END
   }`)
 
-	c.expectSuccs(t, START, 1)
+	c.expectSuccs(t, START, 2)
 	c.expectSuccs(t, 2, 1)
 	c.expectSuccs(t, 1, 4, 5)
 	c.expectSuccs(t, 4, 3)
+	c.expectSuccs(t, 3, 1)
 
+	c.expectPreds(t, 5, 1)
 	c.expectPreds(t, END, 5)
 }
 
@@ -176,22 +73,23 @@ func TestForContinue(t *testing.T) {
 
   func foo(c int) {
     //START
-    for i := 0; i < c; i++ { //2, 1, 3
-      println(i) //4
-      if i > 1 { //5
-        continue //6
+    for i := 0; i < c; i++ { // 2, 1, 3
+      println(i) // 4
+      if i > 1 { // 5
+        continue // 6
       } else {
-        break    //7
+        break    // 7
       }
     }
-    println(c) //8
+    println(c) // 8
     //END
   }`)
 
-	c.expectSuccs(t, START, 1)
+	c.expectSuccs(t, START, 2)
 	c.expectSuccs(t, 2, 1)
 	c.expectSuccs(t, 1, 4, 8)
 	c.expectSuccs(t, 6, 3)
+	c.expectSuccs(t, 3, 1)
 	c.expectSuccs(t, 7, 8)
 
 	c.expectPreds(t, END, 8)
@@ -203,21 +101,20 @@ func TestIfElse(t *testing.T) {
 
   func foo(c int) {
     //START
-    if c := 1; c > 0 { //1, 2
-      print("there") //3
+    if c := 1; c > 0 { // 2, 1
+      print("there") // 3
     } else {
-      print("nowhere") //4
+      print("nowhere") // 4
     }
     //END
   }`)
 
-	c.expectSuccs(t, START, 1)
-	c.expectSuccs(t, 1, 2)
-	c.expectSuccs(t, 2, 3, 4)
+	c.expectSuccs(t, START, 2)
+	c.expectSuccs(t, 2, 1)
+	c.expectSuccs(t, 1, 3, 4)
 
-	c.expectPreds(t, 4, 2)
+	c.expectPreds(t, 4, 1)
 	c.expectPreds(t, END, 4, 3)
-	//TODO
 }
 
 func TestIfNoElse(t *testing.T) {
@@ -226,10 +123,10 @@ func TestIfNoElse(t *testing.T) {
 
   func foo(c int) {
     //START
-    if c > 0 && true { //1
-      println("here") //2
+    if c > 0 && true { // 1
+      println("here") // 2
     }
-    print("there") //3
+    print("there") // 3
     //END
   }
   `)
@@ -269,33 +166,29 @@ func TestIfElseIf(t *testing.T) {
 
 func TestDefer(t *testing.T) {
 	c := getWrapper(t, `
-  package main
+package main
 
-  func foo() {
-    //START
-    print("this") //1
-    defer print("one") //2
-    if 1 != 0 { //3
-      defer print("two") //4
-      return //5
-    }
-    print("that") //6
-    defer print("three") //7
-    return //8
-    //END
+func foo() {
+  //START
+  print("this") //1
+  defer print("one") //2
+  if 1 != 0 { //3
+    defer print("two") //4
+    return //5
   }
-  `)
+  print("that") //6
+  defer print("three") //7
+  return //8
+  //END
+}
+`)
 	c.expectSuccs(t, 3, 5, 6)
-	c.expectSuccs(t, 5, 4)
+	c.expectSuccs(t, 5, END)
 
-	c.expectPreds(t, 7, 8)
-	c.expectPreds(t, 4, 7, 5)
-	c.expectPreds(t, 2, 4)
-	c.expectPreds(t, 5, 3)
-	//TODO
+	c.expectPreds(t, 8, 6)
+	c.expectDefers(t, 2, 4, 7)
 }
 
-//TODO little heavy, unit test better
 func TestRange(t *testing.T) {
 	c := getWrapper(t, `
   package main
@@ -318,12 +211,12 @@ func TestRange(t *testing.T) {
   `)
 
 	c.expectSuccs(t, START, 1)
+	c.expectSuccs(t, 1, 2)
 	c.expectSuccs(t, 2, 3)
 	c.expectSuccs(t, 3, 4, END)
 	c.expectSuccs(t, 4, 5, 3)
 	c.expectSuccs(t, 6, 3)
 	c.expectSuccs(t, 8, END)
-	//TODO why does preds work for 8, 3 but not succs?
 
 	c.expectPreds(t, END, 8, 3)
 }
@@ -334,7 +227,7 @@ func TestTypeSwitchDefault(t *testing.T) {
 
   func foo(s ast.Stmt) {
     //START
-    switch s.(type) { //1, 2
+    switch s.(type) { // 1, 2
     case *ast.AssignStmt: //3
       print("assign") //4
     case *ast.ForStmt: //5
@@ -345,34 +238,33 @@ func TestTypeSwitchDefault(t *testing.T) {
     //END
   }
   `)
+
 	c.expectSuccs(t, 2, 3, 5, 7)
 
 	c.expectPreds(t, END, 8, 6, 4)
-	//TODO
 }
 
-//func TestTypeSwitchNoDefault(t *testing.T) {
-//c := getWrapper(t, `
-//package main
+func TestTypeSwitchNoDefault(t *testing.T) {
+	c := getWrapper(t, `
+  package main
 
-//func foo(s ast.Stmt) {
-////START
-//switch x := 1; s := s.(type) { //1, 2
-//case *ast.AssignStmt: //3
-//print("assign") //4
-//case *ast.ForStmt: //5
-//print("for") //6
-//default: //7
-//print("default") //8
-//}
-////END
-//}
-//`)
-//c.expectSuccs(t, 2, 3, 5, 7)
+  func foo(s ast.Stmt) {
+  //START
+  switch x := 1; s := s.(type) { // 2, 1, 3
+  case *ast.AssignStmt: // 4
+    print("assign") // 5
+  case *ast.ForStmt: // 6
+    print("for") // 7
+  }
+  //END
+  }
+`)
 
-//c.expectPreds(t, END, 8, 6, 4)
-////TODO
-//}
+	c.expectSuccs(t, START, 2)
+	c.expectSuccs(t, 2, 1)
+	c.expectSuccs(t, 1, 3)
+	c.expectSuccs(t, 3, 4, 6, END)
+}
 
 func TestSwitch(t *testing.T) {
 	c := getWrapper(t, `
@@ -402,14 +294,11 @@ func TestSwitch(t *testing.T) {
   }
   `)
 	c.expectSuccs(t, START, 1)
-	c.expectSuccs(t, 1, 2)
-	c.expectSuccs(t, 2, 3)
-	c.expectSuccs(t, 3, 4, 7, 10, 11, 15)
-	//TODO finish
+	c.expectSuccs(t, 1, 3)
+	c.expectSuccs(t, 3, 2)
+	c.expectSuccs(t, 2, 4, 7, 10, 11, 15)
 
-	//preds meow...
 	c.expectPreds(t, END, 16, 14, 13, 10, 9, 8)
-	//TODO finish
 }
 
 func TestLabeledFallthrough(t *testing.T) {
@@ -438,10 +327,42 @@ func TestLabeledFallthrough(t *testing.T) {
 	c.expectSuccs(t, 4, 7)
 	c.expectSuccs(t, 7, 8)
 	c.expectSuccs(t, 8, 9)
-	c.expectSuccs(t, 9, 10)
+	c.expectSuccs(t, 9, 11)
 	c.expectSuccs(t, 10, 11)
 
 	c.expectPreds(t, END, 11)
+}
+
+func TestSelectDefault(t *testing.T) {
+	c := getWrapper(t, `
+  package main
+
+  func foo(c int) {
+    //START
+    ch := make(chan int) // 1
+
+    // go func() { // 2
+      // for i := 0; i < c; i++ { // 4, 3, 5
+        // ch <- c // 6
+      // }
+    // }()
+
+    select { // 2
+    case got := <- ch: // 3, 4
+      print(got) // 5
+    default: // 6
+      print("done") // 7
+    }
+    //END
+  }`)
+
+	c.expectSuccs(t, START, 1)
+	c.expectSuccs(t, 1, 2)
+	c.expectSuccs(t, 2, 3, 6)
+	c.expectSuccs(t, 3, 4)
+	c.expectSuccs(t, 4, 5)
+
+	c.expectPreds(t, END, 5, 7)
 }
 
 // TODO modify ast.Inspect for go statements
@@ -473,31 +394,49 @@ func TestDietyExistence(t *testing.T) {
   package main
 
   func foo(c int) {
-    b := 7
-  hello:
-    for c < b {
-      for {
-        if c&2 == 2 {
-          continue hello
-          println(even)
-        } else if c&1 == 1 {
-          defer println(sup)
-          println(odd)
-          break
+    b := 7 // 1
+  hello: // 2
+    for c < b { // 3
+      for { // 4
+        if c&2 == 2 { // 5
+          continue hello // 6
+          println("even") // 7
+        } else if c&1 == 1 { // 8
+          defer println("sup") // 9
+          println("odd") // 10
+          break // 11
         } else {
-          println("something wrong")
-          goto ending
+          println("something wrong") // 12
+          goto ending // 13
         }
-        println("something")
+        println("something") // 14
       }
-      println("poo")
+      println("poo") // 15
     }
-    println("hello")
-    ending:
+    println("hello") // 16
+    ending: // 17
   }
   `)
+
 	c.expectSuccs(t, START, 1)
-	//TODO ultimate stress test
+	c.expectSuccs(t, 1, 2)
+	c.expectSuccs(t, 2, 3)
+	c.expectSuccs(t, 3, 4, 16)
+	c.expectSuccs(t, 4, 5, 15)
+	c.expectSuccs(t, 5, 6, 8)
+	c.expectSuccs(t, 6, 3)
+	c.expectSuccs(t, 7, 14)
+	c.expectSuccs(t, 8, 10, 12)
+
+	c.expectDefers(t, 9)
+
+	c.expectSuccs(t, 10, 11)
+	c.expectSuccs(t, 11, 15)
+	c.expectSuccs(t, 12, 13)
+	c.expectSuccs(t, 13, 17)
+	c.expectSuccs(t, 14, 4)
+	c.expectSuccs(t, 15, 3)
+	c.expectSuccs(t, 16, 17)
 }
 
 // lo and behold how it's done -- caution: disgust may ensue
@@ -521,7 +460,7 @@ func getWrapper(t *testing.T, str string) *CFGWrapper {
 		t.FailNow()
 		return nil
 	}
-	cfg := FuncCFG(f.Decls[0].(*ast.FuncDecl)) //yes, so all test cases take first function
+	cfg := FromFunc(f.Decls[0].(*ast.FuncDecl)) //yes, so all test cases take first function
 	v := make(map[int]ast.Stmt)
 	stmts := make(map[ast.Stmt]int)
 	objs := make(map[string]*ast.Object)
@@ -542,253 +481,95 @@ func getWrapper(t *testing.T, str string) *CFGWrapper {
 		}
 		return true
 	})
-	v[END] = cfg.end
-	v[START] = cfg.start
-	if len(v) != len(cfg.bMap) {
-		t.Errorf("expected %d vertices, got %d --construction error", len(v), len(cfg.bMap))
-		//t.FailNow()
+	v[END] = cfg.Exit
+	v[START] = cfg.Entry
+	if len(v) != len(cfg.blocks)+len(cfg.Defers) {
+		t.Logf("expected %d vertices, got %d --construction error", len(v), len(cfg.blocks))
 	}
 	return &CFGWrapper{cfg, v, stmts, objs, fset, f}
 }
 
-func (c *CFGWrapper) expIntsToStmts(args []int) map[ast.Stmt]bool {
-	stmts := make(map[ast.Stmt]bool)
+func (c *CFGWrapper) expIntsToStmts(args []int) map[ast.Stmt]struct{} {
+	stmts := make(map[ast.Stmt]struct{})
 	for _, a := range args {
-		stmts[c.exp[a]] = true
+		stmts[c.exp[a]] = struct{}{}
 	}
 	return stmts
 }
 
 // give generics
-func expectFromMaps(actual map[ast.Stmt]bool, exp map[ast.Stmt]bool) (dnf []ast.Stmt, found []ast.Stmt) {
+func expectFromMaps(actual, exp map[ast.Stmt]struct{}) (dnf, found map[ast.Stmt]struct{}) {
 	for stmt, _ := range exp {
-		if _, ok := actual[stmt]; !ok {
-			dnf = append(dnf, stmt)
-		} else {
+		if _, ok := actual[stmt]; ok {
+			delete(exp, stmt)
 			delete(actual, stmt)
 		}
 	}
 
-	for stmt, _ := range actual {
-		found = append(found, stmt)
-	}
-
-	return
+	return exp, actual
 }
 
-func (c *CFGWrapper) expectLive(t *testing.T, s int, exp ...string) {
-	if _, ok := c.cfg.bMap[c.exp[s]]; !ok {
-		t.Error("did not find parent", s)
-		return
+func (c *CFGWrapper) expectDefers(t *testing.T, exp ...int) {
+	actualDefers := make(map[ast.Stmt]struct{})
+	for _, d := range c.cfg.Defers {
+		actualDefers[d] = struct{}{}
 	}
 
-	// for names
-	objMap := make(map[*ast.Object]string)
-	for name, obj := range c.objs {
-		objMap[obj] = name
+	expDefers := c.expIntsToStmts(exp)
+	dnf, found := expectFromMaps(actualDefers, expDefers)
+
+	for stmt, _ := range dnf {
+		t.Error("did not find", c.stmts[stmt], "in defers")
 	}
 
-	// get live for stmt s as slice, put in map
-	actualLive := make(map[*ast.Object]bool)
-
-	_, outs := c.cfg.Live(c.exp[s])
-	for _, o := range outs {
-		actualLive[o] = true
+	for stmt, _ := range found {
+		t.Error("found", c.stmts[stmt], "as a defer")
 	}
-
-	// TODO(reed): appears to be duplicates? is this the testing's fault?
-	//for a, _ := range actualLive {
-	//fmt.Println(objMap[a])
-	//}
-
-	expLive := make(map[*ast.Object]bool)
-	for _, e := range exp {
-		expLive[c.objs[e]] = true
-	}
-
-	var dnf, found []*ast.Object
-	for e, _ := range expLive {
-		if _, ok := actualLive[e]; !ok {
-			dnf = append(dnf, e)
-		} else {
-			delete(actualLive, e)
-		}
-	}
-
-	for e, _ := range actualLive {
-		found = append(found, e)
-	}
-
-	for _, obj := range dnf {
-		t.Error("did not find", objMap[obj], "as a live variable for", s)
-	}
-
-	for _, obj := range found {
-		t.Error("found", objMap[obj], "as a live variable for", s)
-	}
-}
-
-func (c *CFGWrapper) expectReaching(t *testing.T, s int, exp ...int) {
-	if _, ok := c.cfg.bMap[c.exp[s]]; !ok {
-		t.Error("did not find parent", s)
-		return
-	}
-
-	// get reaching for stmt s as slice, put in map
-	actualReach := make(map[ast.Stmt]bool)
-	// TODO(reed): test outs
-	ins, _ := c.cfg.Reaching(c.exp[s])
-	for _, i := range ins {
-		actualReach[i] = true
-	}
-
-	expReach := c.expIntsToStmts(exp)
-	dnf, found := expectFromMaps(actualReach, expReach)
-
-	for _, stmt := range dnf {
-		t.Error("did not find", c.stmts[stmt], "in reaching for", s)
-	}
-
-	for _, stmt := range found {
-		t.Error("found", c.stmts[stmt], "as a reaching for", s)
-	}
-}
-
-func (c *CFGWrapper) expectUses(t *testing.T, start int, end int, exp ...string) {
-	if _, ok := c.cfg.bMap[c.exp[start]]; !ok {
-		t.Error("did not find start", start)
-		return
-	}
-	if _, ok := c.cfg.bMap[c.exp[end]]; !ok {
-		t.Error("did not find end", end)
-		return
-	}
-
-	var stmts []ast.Stmt
-	for i := start; i <= end; i++ {
-		stmts = append(stmts, c.exp[i])
-	}
-
-	_, uses := ExtractDefUse(stmts)
-
-	actualDef := make(map[*ast.Object]bool)
-	for _, u := range uses {
-		actualDef[u] = true
-	}
-
-	expDef := make(map[*ast.Object]bool)
-	for _, e := range exp {
-		expDef[c.objs[e]] = true
-	}
-
-	var dnf []*ast.Object
-
-	for d, _ := range expDef {
-		if _, ok := actualDef[d]; !ok {
-			dnf = append(dnf, d)
-		} else {
-			delete(actualDef, d)
-		}
-	}
-
-	for _, d := range dnf {
-		t.Error("Did not find", d.Name, "in definitions")
-	}
-	for f, _ := range actualDef {
-		t.Error("Found", f.Name, "in definitions")
-	}
-
-}
-
-func (c *CFGWrapper) expectDefs(t *testing.T, start int, end int, exp ...string) {
-	if _, ok := c.cfg.bMap[c.exp[start]]; !ok {
-		t.Error("did not find start", start)
-		return
-	}
-	if _, ok := c.cfg.bMap[c.exp[end]]; !ok {
-		t.Error("did not find end", end)
-		return
-	}
-
-	var stmts []ast.Stmt
-	for i := start; i <= end; i++ {
-		stmts = append(stmts, c.exp[i])
-	}
-
-	defs, _ := ExtractDefUse(stmts)
-
-	actualDef := make(map[*ast.Object]bool)
-	for _, d := range defs {
-		actualDef[d] = true
-	}
-
-	expDef := make(map[*ast.Object]bool)
-	for _, e := range exp {
-		expDef[c.objs[e]] = true
-	}
-
-	var dnf []*ast.Object
-
-	for d, _ := range expDef {
-		if _, ok := actualDef[d]; !ok {
-			dnf = append(dnf, d)
-		} else {
-			delete(actualDef, d)
-		}
-	}
-
-	for _, d := range dnf {
-		t.Error("Did not find", d.Name, "in uses")
-	}
-	for f, _ := range actualDef {
-		t.Error("Found", f.Name, "in uses")
-	}
-
 }
 
 func (c *CFGWrapper) expectSuccs(t *testing.T, s int, exp ...int) {
-	if _, ok := c.cfg.bMap[c.exp[s]]; !ok {
+	if _, ok := c.cfg.blocks[c.exp[s]]; !ok {
 		t.Error("did not find parent", s)
 		return
 	}
 
 	//get successors for stmt s as slice, put in map
-	actualSuccs := make(map[ast.Stmt]bool)
+	actualSuccs := make(map[ast.Stmt]struct{})
 	for _, v := range c.cfg.Succs(c.exp[s]) {
-		actualSuccs[v] = true
+		actualSuccs[v] = struct{}{}
 	}
 
 	expSuccs := c.expIntsToStmts(exp)
 	dnf, found := expectFromMaps(actualSuccs, expSuccs)
 
-	for _, stmt := range dnf {
+	for stmt, _ := range dnf {
 		t.Error("did not find", c.stmts[stmt], "in successors for", s)
 	}
 
-	for _, stmt := range found {
+	for stmt, _ := range found {
 		t.Error("found", c.stmts[stmt], "as a successors for", s)
 	}
 }
 
 func (c *CFGWrapper) expectPreds(t *testing.T, s int, exp ...int) {
-	if _, ok := c.cfg.bMap[c.exp[s]]; !ok {
+	if _, ok := c.cfg.blocks[c.exp[s]]; !ok {
 		t.Error("did not find parent", s)
 	}
 
 	//get predecessors for stmt s as slice, put in map
-	actualPreds := make(map[ast.Stmt]bool)
+	actualPreds := make(map[ast.Stmt]struct{})
 	for _, v := range c.cfg.Preds(c.exp[s]) {
-		actualPreds[v] = true
+		actualPreds[v] = struct{}{}
 	}
 
 	expPreds := c.expIntsToStmts(exp)
 	dnf, found := expectFromMaps(actualPreds, expPreds)
 
-	for _, stmt := range dnf {
+	for stmt, _ := range dnf {
 		t.Error("did not find", c.stmts[stmt], "in predecessors for", s)
 	}
 
-	for _, stmt := range found {
+	for stmt, _ := range found {
 		t.Error("found", c.stmts[stmt], "as a predecessor for", s)
 	}
 }
@@ -810,9 +591,9 @@ mode="heir";
 splines="ortho";
 
 `)
-	for _, v := range c.cfg.bMap {
+	for _, v := range c.cfg.blocks {
 		for _, a := range v.succs {
-			fmt.Fprintf(f, "\t\"%s\" -> \"%s\"\n", c.printVertex(v), c.printVertex(c.cfg.bMap[a]))
+			fmt.Fprintf(f, "\t\"%s\" -> \"%s\"\n", c.printVertex(v), c.printVertex(c.cfg.blocks[a]))
 		}
 	}
 	fmt.Fprintf(f, "}\n")
@@ -820,10 +601,12 @@ splines="ortho";
 
 func (c *CFGWrapper) printVertex(v *block) string {
 	switch v.stmt {
-	case c.cfg.start:
-		return fmt.Sprintf("%s %p", "START", v.stmt)
-	case c.cfg.end:
-		return fmt.Sprintf("%s %p", "END", v.stmt)
+	case c.cfg.Entry:
+		return fmt.Sprintf("%s %p", "ENTRY", v.stmt)
+	case c.cfg.Exit:
+		return fmt.Sprintf("%s %p", "EXIT", v.stmt)
+	case nil:
+		return ""
 	}
 	return fmt.Sprintf("%s %p", astutil.NodeDescription(v.stmt), v.stmt)
 }

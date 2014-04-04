@@ -178,7 +178,7 @@ func attempt() error {
 	changes := make(map[string][]byte)
 
 	if log.ContainsErrors() && !*skipLogFlag {
-		printResults(r.Description().Name, log, changes)
+		//printResults(r.Description().Name, log, changes)
 		return nil
 	}
 
@@ -370,6 +370,5 @@ func query(file string, src string, args []string, r doctor.Refactoring, pos str
 		Args:       args,
 	}
 	result := r.Run(config)
-	fmt.Println(result.Log)
 	return result.Log, result.Edits, nil
 }

@@ -11,20 +11,20 @@ import (
 
 func ExampleCFG() {
 	src := `
-        package main
+    package main
 
-        import "fmt"
+    import "fmt"
 
-        func main() {
-          for {
-            if 1 > 0 {
-              fmt.Println("my computer works")
-            } else {
-              fmt.Println("something has gone terribly wrong")
-            }
-          }
+    func main() {
+      for {
+        if 1 > 0 {
+          fmt.Println("my computer works")
+        } else {
+          fmt.Println("something has gone terribly wrong")
         }
-      `
+      }
+    }
+  `
 
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, "", src, 0)
@@ -34,7 +34,8 @@ func ExampleCFG() {
 	}
 
 	funcOne := f.Decls[1].(*ast.FuncDecl)
-	c := cfg.FuncCFG(funcOne)
+	c := cfg.FromFunc(funcOne)
+	_ = c.Blocks() // for 100% coverage ;)
 
 	ast.Inspect(f, func(n ast.Node) bool {
 		switch stmt := n.(type) {

@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 // Package cfg contains an implementation for constructing a
-// statement-level Control Flow Graph (CFG) for Go code.
+// statement-level Control Flow Graph (CFG) for Go source code.
 package cfg
 
 import (
@@ -11,506 +11,351 @@ import (
 	"go/token"
 )
 
-// It is intended for use to construct control flow graphs from
-// an abstract syntax tree, however, any list of statements will do.
-// This is done by traversing a list of statements (likely
-// from a block) depth-first and creating an adjacency list,
-// implemented as a hash map of blocks, with no explicit
-// edge objects. Adjacent blocks are stored as predecessors
-// and successors separately for control flow information.
-//
-// TODO(reed): I should probably provide a better description of the algorithm,
-// and I will once it is stable and has been heavily refactored.
+// This package can be used to construct a control flow graph from an abstract syntax tree (go/ast).
+// This is done by traversing a list of statements (likely from a block)
+// depth-first and creating an adjacency list, implemented as a map of blocks.
+// Adjacent blocks are stored as predecessors and successors separately for
+// control flow information. Any defers encountered while traversing the ast
+// will be added to a slice that can be accessed from CFG. Their behavior is such
+// that they may or may not be flowed to, potentially multiple times, after Exit.
+// This behavior is dependant upon in what control structure they were found,
+// i.e. if/for body may never be flowed to.
 
-// TODO(reed): end/begin checker funcs? end/begin exported setter funcs?
-// TODO(reed): fix: defer functions are finicky, mainly due to how
-// they are to be handled within conditionals/fors. The base
-// case is taken care of... thought needs to be had for special cases.
+// TODO(you): defers are lazily done currently. If needed, could likely use a more robust
+//  implementation wherein they are represented as a graph after Exit.
+// TODO(reed): closures, go func() ?
 
-// blocks are represented inside of a map of statements
-// to blocks, where the block is a representation of a
-// statement with knowledge of its neighbors in the graph.
-// Note: typically CFG's are constructed using the idea of
-// a block of statements that are flowed to in sequence, however
-// in this construction each block maps to one ast.Stmt.
-//
-// start, end are the beginning and end nodes, and are not
-// actually members of the underlying []ast.Stmt that were
-// given to construct the graph. They are useful for return
-// and defer statement handling as well as declaring a singular
-// entry (and exit) node.
-//
-// reaching and live are structs that hold IN and OUT maps for
-// each block in the CFG, only to be computed as needed.
-
-// CFG defines a statement level control flow graph, to obtain, see MakeCFG()
+// CFG defines a control flow graph with statement-level granularity, in which
+// there is a 1-1 correspondence between a block in the CFG and an ast.Stmt.
 type CFG struct {
-	bMap       map[ast.Stmt]*block
-	start, end *ast.BadStmt
-	reaching   *reaching
-	live       *liveVars
+	// Sentinel nodes for single-entry, single-exit CFG. Not in original AST.
+	Entry, Exit *ast.BadStmt
+	// All defers found in CFG, disjoint from blocks. May be flowed to after Exit.
+	Defers []*ast.DeferStmt
+	blocks map[ast.Stmt]*block
 }
 
-// MakeCFG returns the control-flow graph for the specified statements.
-// Generally, these statements are assumed to have come from a *ast.BlockStmt
-// so as to have some sense of "flow" but any list of statements will do.
-// They will be iterated over in depth first manner.
-func MakeCFG(s []ast.Stmt) *CFG {
-	// TODO(reed): don't hook up defers to end unless we have a return or end of func?
-	return newCFGBuilder().build(s)
-}
-
-// FuncCFG is a convenience wrapper function for creating a CFG
-// from a given function.
-func FuncCFG(f *ast.FuncDecl) *CFG {
-	return MakeCFG(f.Body.List)
-}
-
-// Preds returns a slice of all immediate predecessors to the given statement
-func (c *CFG) Preds(s ast.Stmt) []ast.Stmt {
-	// TODO remove START/END? return err if no stmt?
-	return c.bMap[s].preds
-}
-
-// Succs returns a slice of all immediate successors to the given statement
-func (c *CFG) Succs(s ast.Stmt) []ast.Stmt {
-	// TODO remove START/END? return err if no stmt?
-	return c.bMap[s].succs
-}
-
-// Reaching returns the IN and OUT set of reaching definitions at a given statement
-// as slices of statements.
-//
-// WARNING: currently may return START and/or END nodes. TODO ?
-//
-// Reaching definitions, per dragon book, v2.2, pp 601:
-//
-// "A definition d reaches a point p if there is a path from the point
-// immediately following d to p, such that d is not "killed" along that path.
-// We kill a definition of a variable x if there is any other definition of x
-// anywhere along the path. Intuitively, if a definition d of some variable x
-// reaches point p, then d might be the place at which the value of x used at
-// p was last defined."
-//
-// TODO(reed): aliases
-func (c *CFG) Reaching(s ast.Stmt) (in []ast.Stmt, out []ast.Stmt) {
-	if c.reaching == nil {
-		c.reaching = buildReaching(c)
-	}
-	// I guess, internally, "block" will be easier to follow / extend.
-	// Currently, this seems a little more like self-abuse...
-	block := c.bMap[s]
-	if block == nil {
-		return nil, nil // TODO(reed): err?
-	}
-	return c.reaching.in[block], c.reaching.out[block]
-}
-
-// Live returns the IN and OUT set of live variables at a given statement
-// as slices of ast objects which map back only to identifiers that are
-// defined within the context of the statements that were analyzed to construct
-// the cfg.
-//
-// Live Variable Analysis, per dragon book, v2.2 pp 608:
-//
-// "In live-variable analysis we wish to know for variable x and point p whether
-// the value of x at p could be used along some path in the flow graph starting at
-// p. If so, we say x is live at p; otherwise, x is dead at p."
-//
-// TODO(reed): aliases, named literal declarations, funcs declared in scope
-func (c *CFG) Live(s ast.Stmt) (in []*ast.Object, out []*ast.Object) {
-	if c.live == nil {
-		c.live = buildLiveVars(c)
-	}
-	block := c.bMap[s]
-	if block == nil {
-		return nil, nil
-	}
-	return c.live.in[block], c.live.out[block]
-}
-
-// Blocks are represented inside of a map of statements
-// to blocks, where the block is a representation of a
-// statement with knowledge of its neighbors in the graph.
-//
-// edges are all of the current leaf nodes that need to be
-// hooked up in some manner at the next block iteration.
-// e.g. if/else has 2 (typically) leaf nodes, most statements
-// only produce one.
-//
-// branches are all of the branch statements that have been
-// found while building yet are yet to be handled. In order
-// to be handled properly, branches need to be passed up the tree
-// until an appropriate statement has been found to handle them.
-// e.g. unlabeled break inside of an if inside of a for loop
-// must be handled at the block level for the for loop
-//
-// start, end are the beginning and end nodes, and are not
-// actually members of the underlying []ast.Stmt that were
-// given to construct the graph. They are useful for return
-// and defer statement handling as well as declaring a singular
-// entry (and exit) node.
-//
-// dHead, dTail are analagous to the head and tail of the defer
-// stack that will be called upon return of control, directly
-// after any return statements and before the actual end node.
-type builder struct {
-	bMap            map[ast.Stmt]*block
-	edges, branches []ast.Stmt
-	start, end      *ast.BadStmt
-	dHead, dTail    *ast.DeferStmt
-}
-
-// Create a more reasonable zero value builder; ready to go
-func newCFGBuilder() *builder {
-	return &builder{make(map[ast.Stmt]*block),
-		nil, nil,
-		&ast.BadStmt{}, &ast.BadStmt{},
-		nil, nil,
-	}
-}
-
-// build runs buildBlock and then appropriately
-// hooks up the defers (if present) and end,
-// returning only the data that we need in a CFG.
-func (b *builder) build(s []ast.Stmt) *CFG {
-	b.buildBlock(b.start, s)
-	if b.dHead != nil {
-		b.flowTo(b.dTail, b.end).buildEdges(b.dHead)
-	} else {
-		b.buildEdges(b.end)
-	}
-	return &CFG{b.bMap, b.start, b.end, nil, nil}
-}
-
-// block maps directly to an ast.Stmt, with
-// predecessors and successors stored separately
-// for later convenience
 type block struct {
 	stmt  ast.Stmt
 	preds []ast.Stmt
 	succs []ast.Stmt
 }
 
-func newBlock(s ast.Stmt) *block {
-	return &block{stmt: s}
+// FromStmts returns the control-flow graph for the given sequence of statements.
+func FromStmts(s []ast.Stmt) *CFG {
+	return newBuilder().build(s)
 }
 
-// flowTo will add an edge to the graph between the given
-// src and destination statements, in the process adding
-// dest as a successor to src and src a predecessor to dest.
-// If dest is nil: add src as edge to handle at higher level.
-func (b *builder) flowTo(src, dest ast.Stmt) *builder {
-	if dest == nil {
-		b.edges = append(b.edges, src)
-		return b
+// FromFunc is a convenience function for creating a CFG from a given function declaration.
+func FromFunc(f *ast.FuncDecl) *CFG {
+	return FromStmts(f.Body.List)
+}
+
+// Preds returns a slice of all immediate predecessors for the given statement.
+// May include Entry node.
+func (c *CFG) Preds(s ast.Stmt) []ast.Stmt {
+	return c.blocks[s].preds
+}
+
+// Succs returns a slice of all immediate successors to the given statement.
+// May include Exit node.
+func (c *CFG) Succs(s ast.Stmt) []ast.Stmt {
+	return c.blocks[s].succs
+}
+
+// Blocks returns a slice of all blocks in a CFG, including the Entry and Exit nodes.
+// The blocks are in no particular order.
+func (c *CFG) Blocks() []ast.Stmt {
+	blocks := make([]ast.Stmt, 0, len(c.blocks))
+	for s, _ := range c.blocks {
+		blocks = append(blocks, s)
 	}
-	v := b.block(src)
-	w := b.block(dest)
-
-	v.succs = append(v.succs, dest)
-	w.preds = append(w.preds, src)
-	return b
+	return blocks
 }
 
-// block returns a block for the given statement,
-// creating one and inserting it into cfg if it doesn't already exist.
+type builder struct {
+	blocks      map[ast.Stmt]*block
+	prev        []ast.Stmt        // blocks to hook up to current block
+	branches    []*ast.BranchStmt // accumulated branches from current inner blocks
+	entry, exit *ast.BadStmt      // single-entry, single-exit nodes
+	defers      []*ast.DeferStmt  // all defers encountered
+}
+
+func newBuilder() *builder {
+	return &builder{
+		blocks: make(map[ast.Stmt]*block),
+		entry:  new(ast.BadStmt),
+		exit:   new(ast.BadStmt),
+	}
+}
+
+// build runs buildBlock on the given block (traversing nested statements), and
+// adds entry and exit nodes.
+func (b *builder) build(s []ast.Stmt) *CFG {
+	b.prev = []ast.Stmt{b.entry}
+	b.buildBlock(s)
+	b.addSucc(b.exit)
+
+	return &CFG{
+		blocks: b.blocks,
+		Entry:  b.entry,
+		Exit:   b.exit,
+		Defers: b.defers,
+	}
+}
+
+// addSucc adds a control flow edge from all previous blocks to the block for
+// the given statement.
+func (b *builder) addSucc(current ast.Stmt) {
+	cur := b.block(current)
+
+	for _, p := range b.prev {
+		p := b.block(p)
+		p.succs = append(p.succs, cur.stmt)
+		cur.preds = append(cur.preds, p.stmt)
+	}
+}
+
+// block returns a block for the given statement, creating one and inserting it
+// into the CFG if it doesn't already exist.
 func (b *builder) block(s ast.Stmt) *block {
-	bl, ok := b.bMap[s]
+	bl, ok := b.blocks[s]
 	if !ok {
-		bl = newBlock(s)
-		b.bMap[s] = bl
+		bl = &block{stmt: s}
+		b.blocks[s] = bl
 	}
 	return bl
 }
 
-// pushDefer will add a defer statement to the front of the
-// defer statements to be handled at any return or at the end of the CFG.
-//
-// TODO(reed): fix: defers in conditionals and fors = mindfreak
-func (b *builder) pushDefer(d *ast.DeferStmt) *builder {
-	if b.dHead == nil {
-		b.dHead = d
-		b.dTail = d
-		b.flowTo(d, b.end)
-	} else {
-		b.flowTo(d, b.dHead)
-		b.dHead = d
+// buildStmt adds the given statement and all nested statements to the control
+// flow graph under construction. Upon completion, b.prev is set to all
+// control flow exits generated from traversing cur.
+func (b *builder) buildStmt(cur ast.Stmt) {
+	if dfr, ok := cur.(*ast.DeferStmt); ok {
+		b.defers = append(b.defers, dfr)
+		return // never flow to or from defer
 	}
-	return b
-}
 
-// buildStmt will handle most types of statements,
-// connecting the current statement to the next in
-// the graph. It will also delegate any control structures
-// that aren't so simple to the appropriate function to
-// handle. Each buildXxx method will define its own edges.
-func (b *builder) buildStmt(cur, next ast.Stmt) *builder {
-	b.edges = nil // reset for each statement
-
+	// Each buildXxx method will flow the previous blocks to itself appropiately and also
+	// set the appropriate blocks to flow from at the end of the method.
 	switch cur := cur.(type) {
 	case *ast.IfStmt:
-		b.buildIf(cur, next)
+		b.buildIf(cur)
 	case *ast.ForStmt, *ast.RangeStmt:
-		b.buildFor(cur, next)
+		b.buildLoop(cur)
 	case *ast.SwitchStmt, *ast.SelectStmt, *ast.TypeSwitchStmt:
-		b.buildSwitch(cur, next)
+		b.buildSwitch(cur)
 	case *ast.BranchStmt:
 		b.buildBranch(cur)
 	case *ast.LabeledStmt:
-		b.flowTo(cur, cur.Stmt).buildStmt(cur.Stmt, next)
+		b.addSucc(cur)
+		b.prev = []ast.Stmt{cur}
+		b.buildStmt(cur.Stmt)
 	case *ast.ReturnStmt:
-		b.buildReturn(cur)
-	default:
-		b.flowTo(cur, next)
+		b.addSucc(cur)
+		b.prev = []ast.Stmt{cur}
+		b.addSucc(b.exit)
+		b.prev = nil
+	default: // most statements have straight-line control flow
+		b.addSucc(cur)
+		b.prev = []ast.Stmt{cur}
 	}
-	return b.buildEdges(next) // connect all new edges from buildXxx
 }
 
-// buildReturn hooks up return to the defer stack if it
-// exists, otherwise the end. No edges.
-//
-// TODO this makes assumption that control flow is only in function?
-func (b *builder) buildReturn(s ast.Stmt) *builder {
-	if b.dHead != nil {
-		b.flowTo(s, b.dHead)
-	} else {
-		b.flowTo(s, b.end)
-	}
-	return b
-}
+func (b *builder) buildBranch(br *ast.BranchStmt) {
+	b.addSucc(br)
+	b.prev = []ast.Stmt{br}
 
-// buildBranch builds goto, break and continue statements.
-// fallthrough is handled in the switch builder.
-// No edges. Adds breaks/continue to branches to be handle appropriately later.
-func (b *builder) buildBranch(br *ast.BranchStmt) *builder {
 	switch br.Tok {
+	case token.FALLTHROUGH:
+		// successors handled in buildSwitch, so skip this here
 	case token.GOTO:
-		b.flowTo(br, br.Label.Obj.Decl.(ast.Stmt))
-	case token.FALLTHROUGH: // these will get handled in traverseSwitch
-	default: // break/continue
-		b.branches = append(b.branches, br)
+		b.addSucc(br.Label.Obj.Decl.(ast.Stmt)) // flow to label
+	case token.BREAK, token.CONTINUE:
+		b.branches = append(b.branches, br) // to handle at switch/for/etc level
 	}
-	return b
+	b.prev = nil // successors handled elsewhere
 }
 
-// buildEdges makes current block edges flow to given statement.
-func (b *builder) buildEdges(next ast.Stmt) *builder {
-	for _, e := range b.edges {
-		b.flowTo(e, next)
-	}
-	return b
-}
-
-// buildIf builds an IfStmt. It sets b.edges to the two successors.
-func (b *builder) buildIf(f *ast.IfStmt, next ast.Stmt) *builder {
-	var cur ast.Stmt = f
+func (b *builder) buildIf(f *ast.IfStmt) {
 	if f.Init != nil {
-		b.flowTo(f, f.Init)
-		cur = f.Init
+		b.addSucc(f.Init)
+		b.prev = []ast.Stmt{f.Init}
 	}
+	b.addSucc(f)
 
-	// We have to keep track of all edges from each block we parse
-	// within this method in order to return later.
-	var edges []ast.Stmt
+	b.prev = []ast.Stmt{f}
+	b.buildBlock(f.Body.List) // build then
 
-	// build then
-	edges = append(edges, b.buildBlock(cur, f.Body.List).edges...)
+	ctrlExits := b.prev // aggregate of b.prev from each condition
 
 	switch s := f.Else.(type) {
-	case *ast.BlockStmt:
-		//     if
-		//    /  \
-		// then   else
-		edges = append(edges, b.buildBlock(cur, s.List).edges...)
-	case *ast.IfStmt:
-		//     if
-		//    /  \
-		// then   else if
-		//        /   \
-		//      then   ?
-		b.flowTo(cur, s)
-		edges = append(edges, b.buildIf(s, next).edges...)
-	default:
-		//     if
-		//    / |
-		// then |
-		edges = append(edges, b.flowTo(f, next).edges...)
+	case *ast.BlockStmt: // build else
+		b.prev = []ast.Stmt{f}
+		b.buildBlock(s.List)
+		ctrlExits = append(ctrlExits, b.prev...)
+	case *ast.IfStmt: // build else if
+		b.prev = []ast.Stmt{f}
+		b.addSucc(s)
+		b.buildIf(s)
+		ctrlExits = append(ctrlExits, b.prev...)
+	case nil: // no else
+		ctrlExits = append(ctrlExits, f)
 	}
-	b.edges = edges
-	return b
+
+	b.prev = ctrlExits
 }
 
-// buildFor builds a loop (ForStmt or RangeStmt). It requires
-// traversing its body as well as hooking up any unlabeled
-// branches or labeled branches meant for this statement.
-// Returns the for as edge.
-func (b *builder) buildFor(stmt ast.Stmt, next ast.Stmt) *builder {
-	var post ast.Stmt // post statement in for loop
+// buildLoop builds CFG blocks for a ForStmt or RangeStmt, including nested statements.
+// Upon return, b.prev set to for and any appropriate breaks.
+func (b *builder) buildLoop(stmt ast.Stmt) {
+	// flows as such (range same w/o init & post):
+	// previous -> [ init -> ] for -> body -> [ post -> ] for -> next
+
+	var post ast.Stmt = stmt // post in for loop, or for stmt itself; body flows to this
 
 	switch stmt := stmt.(type) {
 	case *ast.ForStmt:
-		// e.g. for [ init ]; ; [post] {
-		//        Body
-		//      }
-		//
-		// flows [ init -> ] for -> body -> [ post -> ] for -> next
 		if stmt.Init != nil {
-			b.flowTo(stmt.Init, stmt)
+			b.addSucc(stmt.Init)
+			b.prev = []ast.Stmt{stmt.Init}
 		}
+		b.addSucc(stmt)
 
-		b.buildBlock(stmt, stmt.Body.List)
-
-		// all edges either flow back to for or post, so hook up edges here
 		if stmt.Post != nil {
 			post = stmt.Post
-			b.buildEdges(stmt.Post).flowTo(stmt.Post, stmt)
-		} else {
-			b.buildEdges(stmt)
+			b.prev = []ast.Stmt{post}
+			b.addSucc(stmt)
 		}
+
+		b.prev = []ast.Stmt{stmt}
+		b.buildBlock(stmt.Body.List)
 	case *ast.RangeStmt:
-		// e.g. for i, _ := range {
-		//        Body
-		//      }
-		// flows same as ForStmt w/o init or post
-		b.buildBlock(stmt, stmt.Body.List).buildEdges(stmt)
+		b.addSucc(stmt)
+		b.prev = []ast.Stmt{stmt}
+		b.buildBlock(stmt.Body.List)
 	}
 
-	// ForStmt is only edge at this point, any breaks will be added next.
-	b.edges = []ast.Stmt{stmt}
+	b.addSucc(post)
+
+	ctrlExits := []ast.Stmt{stmt}
 
 	// handle any branches; if no label or for me: handle and remove from branches.
 	for i := 0; i < len(b.branches); i++ {
-		br := b.branches[i].(*ast.BranchStmt)
+		br := b.branches[i]
 		if br.Label == nil || br.Label.Obj.Decl.(*ast.LabeledStmt).Stmt == stmt {
-			switch br.Tok {
+			switch br.Tok { // can only be one of these two cases
 			case token.CONTINUE:
-				if post != nil {
-					b.flowTo(br, post)
-				} else {
-					b.flowTo(br, stmt)
-				}
+				b.prev = []ast.Stmt{br}
+				b.addSucc(post) // connect to .Post statement if present, for stmt otherwise
 			case token.BREAK:
-				b.flowTo(br, next)
+				ctrlExits = append(ctrlExits, br)
 			}
 			b.branches = append(b.branches[:i], b.branches[i+1:]...)
 			i-- // removed in place, so go back to this i
 		}
 	}
-	return b
+
+	b.prev = ctrlExits // for stmt and any appropriate break statements
 }
 
-// buildSwitch builds a multi-way branch statement, e.g.
-// switch, type switch and select. # edges relies on case bodies.
-func (b *builder) buildSwitch(sw, next ast.Stmt) *builder {
-	// composition of expected statement sw:
+// buildSwitch builds a multi-way branch statement, i.e. switch, type switch or select.
+// Upon return, each case's control exits set as b.prev.
+func (b *builder) buildSwitch(sw ast.Stmt) {
+	// composition of statement sw:
 	//
-	//    switch: *ast.SwitchStmt || *ast.TypeSwitchStmt || *ast.SelectStmt
+	//    sw: *ast.SwitchStmt || *ast.TypeSwitchStmt || *ast.SelectStmt
 	//      Body.List: []*ast.CaseClause || []ast.CommClause
 	//        clause: []ast.Stmt
-	//
-	// current behavior is:
-	//        switch
-	//      /   |    \
-	//    case case [default]
-	//      |   |     |
-	//  []stmt []stmt []stmt
-	//       \  |   /
-	//         next
 
-	var cur ast.Stmt = sw
-
-	switch s := cur.(type) {
-	case *ast.SwitchStmt:
-		// i.e. switch [ x := 0; ] x { }
-		if s.Init != nil {
-			b.flowTo(s, s.Init)
-			cur = s.Init
-		}
-	case *ast.TypeSwitchStmt:
-		// i.e. switch [ x := 0; ] t := x.(type) { }
-		if s.Init != nil {
-			b.flowTo(s, s.Init)
-			cur = s.Init
-		}
-		b.flowTo(cur, s.Assign)
-		cur = s.Assign
-	}
-
-	defaultCase := false
 	var cases []ast.Stmt // case 1:, case 2:, ...
 
 	switch sw := sw.(type) {
-	case *ast.TypeSwitchStmt:
+	case *ast.SwitchStmt: // i.e. switch [ x := 0; ] [ x ] { }
+		if sw.Init != nil {
+			b.addSucc(sw.Init)
+			b.prev = []ast.Stmt{sw.Init}
+		}
+		b.addSucc(sw)
+		b.prev = []ast.Stmt{sw}
+
 		cases = sw.Body.List
-	case *ast.SwitchStmt:
+	case *ast.TypeSwitchStmt: // i.e. switch [ x := 0; ] t := x.(type) { }
+		if sw.Init != nil {
+			b.addSucc(sw.Init)
+			b.prev = []ast.Stmt{sw.Init}
+		}
+		b.addSucc(sw)
+		b.prev = []ast.Stmt{sw}
+		b.addSucc(sw.Assign)
+		b.prev = []ast.Stmt{sw.Assign}
+
 		cases = sw.Body.List
-	case *ast.SelectStmt:
+	case *ast.SelectStmt: // i.e. select { }
+		b.addSucc(sw)
+		b.prev = []ast.Stmt{sw}
+
 		cases = sw.Body.List
 	}
 
-	var edges []ast.Stmt // edge(s) of each case
+	var caseExits []ast.Stmt // aggregate of b.prev's resulting from each case
+	swPrev := b.prev         // save for each case's previous; Switch or Assign
+	var ft *ast.BranchStmt   // fallthrough to handle from previous case, if any
+	defaultCase := false
 
-	for i, clause := range cases {
-		b.flowTo(cur, clause)
+	for _, clause := range cases {
+		b.prev = swPrev
+		b.addSucc(clause)
+		b.prev = []ast.Stmt{clause}
+		if ft != nil {
+			b.prev = append(b.prev, ft)
+		}
 
 		var caseBody []ast.Stmt
 
 		// both of the following cases are guaranteed in spec
-		switch cl := clause.(type) {
-		case *ast.CaseClause: // switch/type switch
-			// i.e. case: [expr,expr,...]:
-			if cl.List == nil {
+		switch clause := clause.(type) {
+		case *ast.CaseClause: // i.e. case: [expr,expr,...]:
+			if clause.List == nil {
 				defaultCase = true
 			}
-			caseBody = cl.Body
-		case *ast.CommClause: // select
-			// i.e. case c <- chan:
-			if cl.Comm == nil {
+			caseBody = clause.Body
+		case *ast.CommClause: // i.e. case c <- chan:
+			if clause.Comm == nil {
 				defaultCase = true
 			} else {
-				b.flowTo(cl, cl.Comm)
-				clause = cl.Comm
+				b.addSucc(clause.Comm)
+				b.prev = []ast.Stmt{clause.Comm}
 			}
-			caseBody = cl.Body
+			caseBody = clause.Body
 		}
 
-		if ft := fallThrough(caseBody); ft != nil {
-			b.flowTo(ft, cases[i+1])
-		}
+		b.buildBlock(caseBody)
 
-		edges = append(edges, b.buildBlock(clause, caseBody).edges...)
+		if ft = fallThrough(caseBody); ft == nil {
+			caseExits = append(caseExits, b.prev...)
+		}
 	}
-	b.edges = edges
 
 	if !defaultCase {
-		// if default case exists, then assume switch will flow there.
-		// if no default, switch may never execute any case and therefore
-		// control could go from switch to next statement in block.
-		//
-		// i.e.
-		//  -- switch {
-		//  |  case:
-		//  |  }
-		//  -->nextStmt
-		b.flowTo(cur, next)
+		caseExits = append(caseExits, swPrev...)
 	}
 
 	// handle any breaks that are unlabeled or for me
 	for i := 0; i < len(b.branches); i++ {
-		if br := b.branches[i].(*ast.BranchStmt); br.Tok == token.BREAK &&
-			(br.Label == nil || br.Label.Obj.Decl.(*ast.LabeledStmt).Stmt == cur) {
-
-			b.flowTo(br, next)
+		br := b.branches[i]
+		if br.Tok == token.BREAK && (br.Label == nil || br.Label.Obj.Decl.(*ast.LabeledStmt).Stmt == sw) {
+			caseExits = append(caseExits, br)
 			b.branches = append(b.branches[:i], b.branches[i+1:]...)
 			i-- // we removed in place, so go back to this index
 		}
 	}
 
-	return b
+	b.prev = caseExits // control exits of each case and breaks
 }
 
-// fallThrough returns the fallthrough stmt at the end of stmts, if any.
+// fallThrough returns the fallthrough stmt at the end of stmts, if one exists,
+// and nil otherwise.
 func fallThrough(stmts []ast.Stmt) *ast.BranchStmt {
 	if len(stmts) < 1 {
 		return nil
@@ -519,8 +364,7 @@ func fallThrough(stmts []ast.Stmt) *ast.BranchStmt {
 	// fallthrough can only be last statement in clause (possibly labeled)
 	ft := stmts[len(stmts)-1]
 
-	// Recursively descend LabeledStmts.
-	for {
+	for { // recursively descend LabeledStmts.
 		switch s := ft.(type) {
 		case *ast.BranchStmt:
 			if s.Tok == token.FALLTHROUGH {
@@ -535,42 +379,11 @@ func fallThrough(stmts []ast.Stmt) *ast.BranchStmt {
 	return nil
 }
 
-// nextInBlock returns the next statement in a given block
-// based off of given index i. Will return nil if next is
-// outside the bounds of the block and will skip any defer
-// statements.
-func (b *builder) nextInBlock(s []ast.Stmt, i int) (ast.Stmt, int) {
-	i++
-	if i >= len(s) {
-		return nil, i
+// buildBlock iterates over a slice of statements (typically the statements
+// from an ast.BlockStmt), adding them successively to the CFG.  Upon return,
+// b.prev is set to the control exits of the last statement.
+func (b *builder) buildBlock(block []ast.Stmt) {
+	for _, stmt := range block {
+		b.buildStmt(stmt)
 	}
-	switch stmt := s[i].(type) {
-	case *ast.DeferStmt:
-		return b.pushDefer(stmt).nextInBlock(s, i)
-	default:
-		return stmt, i
-	}
-	return nil, i // unreachable?
-}
-
-// buildBlock will iterate over a slice of statements
-// (re: *ast.BlockStmt, mostly) and then should only have
-// the last statement's edges as the builder's edges upon return.
-func (b *builder) buildBlock(owner ast.Stmt, block []ast.Stmt) *builder {
-	if len(block) < 1 { // empty blocks happen
-		b.edges = append(b.edges, owner)
-		return b
-	}
-
-	cur, i := b.nextInBlock(block, -1) // first in block (skip defers)
-	b.flowTo(owner, cur)
-
-	for i < len(block) {
-		cur = block[i]
-		var next ast.Stmt
-		next, i = b.nextInBlock(block, i) // increments i, skips defers
-
-		b.buildStmt(cur, next) // magic
-	}
-	return b
 }
