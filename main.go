@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"golang-refactoring.org/go-doctor/doctor"
+	"golang-refactoring.org/go-doctor/protocol"
 )
 
 var (
@@ -37,6 +38,8 @@ var (
 	writeFlag = flag.Bool("w", false, "write the refactored files in place")
 	//useful for JSON I'm thinking
 	skipLogFlag = flag.Bool("e", false, "write results even if log, dangerous")
+	// need json usage
+	jsonFlag = flag.Bool("json", false, "")
 )
 
 func usage() {
@@ -127,6 +130,11 @@ func attempt() error {
 
 	if *listFlag {
 		printAllRefactorings(*formatFlag)
+		return nil
+	}
+
+	if *jsonFlag {
+		protocol.Run(args)
 		return nil
 	}
 
