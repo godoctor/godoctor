@@ -176,7 +176,7 @@ func (r *debugRefactoring) showAffected() {
 			r.log.Log(FATAL_ERROR, err.Error())
 			return
 		}
-		for _, obj := range searchResult {
+		for obj := range searchResult {
 			p := r.program.Fset.Position(obj.Pos())
 			fmt.Printf("  %s - %s, Line %d\n",
 				obj.Name(), p.Filename, p.Line)

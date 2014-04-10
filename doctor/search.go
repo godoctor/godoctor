@@ -34,203 +34,129 @@ type SearchEngine struct {
 //
 // where renaming a method in Type1 could force a method with the same
 // signature to be renamed in Interface1, Interface2, Type2, and Type3.  This
-// method returns a slice containing the reflexive-transitive closure of
-// objects that must be renamed along with the given identifier.
-func (r *SearchEngine) FindDeclarationsAcrossInterfaces(ident *ast.Ident) (decls []types.Object, err error) {
+// method returns a set containing the reflexive-transitive closure of objects
+// that must be renamed if the given identifier is renamed.
+func (r *SearchEngine) FindDeclarationsAcrossInterfaces(ident *ast.Ident) (map[types.Object]bool, error) {
 	pkgInfo := r.pkgInfo(r.fileContaining(ident))
 	obj := pkgInfo.ObjectOf(ident)
 	if obj == nil {
-		err = fmt.Errorf("unable to find declaration of %s", ident.Name)
-		return
+		return nil, fmt.Errorf("Unable to find declaration of %s", ident.Name)
 	}
 
-	sig, ok := types.Object.Type(obj).(*types.Signature)
-	if ok && sig.Recv() != nil {
-		// Method -- match closure with respect to interfaces
-		methodName := ident.Name
-		allInterfaces := r.allInterfacesIncluding(methodName)
-		allConcrete := r.allTypesIncluding(methodName)
-		closure := closure(allInterfaces, allConcrete)
-		recvType := sig.Recv().Type()
-		return r.methods(closure[recvType], methodName), nil
+	if isMethod(obj) {
+		// If obj is a method, search across interfaces: there may be
+		// many other methods that need to change to ensure that all
+		// types continue to implement the same interfaces
+		return r.findReachableMethods(obj, r.program.AllPackages[obj.Pkg()]), nil
 	} else {
-		// Function, variable, or something else -- resolves uniquely
-		return []types.Object{obj}, nil
+		// If obj is not a method, then only one object needs to change
+		return map[types.Object]bool{obj: true}, nil
+	}
+
+}
+
+// isMethod reports whether obj is a method.
+func isMethod(obj types.Object) bool {
+	return methodReceiver(obj) != nil
+}
+
+// methodReceiver returns the receiver if obj is a method and nil otherwise.
+func methodReceiver(obj types.Object) *types.Var {
+	if fn, isFunc := obj.(*types.Func); isFunc {
+		return fn.Type().(*types.Signature).Recv()
+	} else {
+		return nil
 	}
 }
 
-// allInterfacesIncluding returns all interfaces in the current program that
-// declare a method with the given name (regardless of signature).
-func (r *SearchEngine) allInterfacesIncluding(method string) []*types.Interface {
-	result := make(map[*types.Interface]int)
-	for _, pkgInfo := range r.program.AllPackages {
-		for _, typ := range pkgInfo.Types {
-			intf, isInterface := typ.Type.Underlying().(*types.Interface)
-			if isInterface {
-				if _, ok := result[intf]; !ok {
-					obj, _, _ := types.LookupFieldOrMethod(
-						typ.Type, pkgInfo.Pkg, method)
-					if obj != nil {
-						result[intf] = 0
+// findReachableMethods receives an object for a method (i.e., a types.Func with
+// a non-nil receiver) and the PackageInfo in which it was declared and returns
+// a set of objects that must be renamed if that method is renamed.
+func (r *SearchEngine) findReachableMethods(obj types.Object, pkgInfo *loader.PackageInfo) map[types.Object]bool {
+	// Find methods and interfaces defined in the given package that have
+	// the same signature as the argument method (obj)
+	sig := obj.(*types.Func).Type().(*types.Signature)
+	methods, interfaces := r.findMethodDeclsMatchingSig(sig, pkgInfo)
+
+	// Map methods to interfaces their receivers implement and vice versa
+	methodInterfaces := map[types.Object]map[*types.Interface]bool{}
+	interfaceMethods := map[*types.Interface]map[types.Object]bool{}
+	for iface := range interfaces {
+		interfaceMethods[iface] = map[types.Object]bool{}
+	}
+	for method := range methods {
+		methodInterfaces[method] = map[*types.Interface]bool{}
+		recv := methodReceiver(method).Type()
+		for iface := range interfaces {
+			if types.Implements(recv, iface) {
+				methodInterfaces[method][iface] = true
+				interfaceMethods[iface][method] = true
+			}
+		}
+	}
+
+	// The two maps above define a graph with edges between methods and the
+	// interfaces implemented by their receivers.  Perform a breadth-first
+	// search of this graph, starting from obj, to find the
+	// reflexive-transitive closure of methods affected by renaming obj.
+	affectedMethods := map[types.Object]bool{obj: true}
+	affectedInterfaces := map[*types.Interface]bool{}
+	queue := []interface{}{obj}
+	for i := 0; i < len(queue); i++ {
+		switch elt := queue[i].(type) {
+		case types.Object:
+			for iface := range methodInterfaces[elt] {
+				if !affectedInterfaces[iface] {
+					affectedInterfaces[iface] = true
+					queue = append(queue, iface)
+				}
+			}
+		case *types.Interface:
+			for method := range interfaceMethods[elt] {
+				if !affectedMethods[method] {
+					affectedMethods[method] = true
+					queue = append(queue, method)
+				}
+			}
+		}
+	}
+
+	return affectedMethods
+}
+
+// findMethodDeclsMatchingSig walks all of the ASTs in the given package and
+// returns methods with the given signature and interfaces that explicitly
+// define a method with the given signature.
+func (r *SearchEngine) findMethodDeclsMatchingSig(sig *types.Signature, pkgInfo *loader.PackageInfo) (methods map[types.Object]bool, interfaces map[*types.Interface]bool) {
+	methods = map[types.Object]bool{}
+	interfaces = map[*types.Interface]bool{}
+	for _, file := range pkgInfo.Files {
+		ast.Inspect(file, func(node ast.Node) bool {
+			switch n := node.(type) {
+			case *ast.InterfaceType:
+				iface := pkgInfo.TypeOf(n).Underlying().(*types.Interface)
+				interfaces[iface] = true
+				for i := 0; i < iface.NumExplicitMethods(); i++ {
+					method := iface.ExplicitMethod(i)
+					methodSig := method.Type().(*types.Signature)
+					if types.Identical(sig, methodSig) {
+						methods[method] = true
 					}
 				}
-			}
-		}
-	}
-
-	slice := make([]*types.Interface, 0, len(result))
-	for t, _ := range result {
-		slice = append(slice, t)
-	}
-	return slice
-}
-
-// allTypesIncluding returns all types in the current program for which a
-// method is declared with the given name (regardless of signature).
-func (r *SearchEngine) allTypesIncluding(method string) []types.Type {
-	result := make(map[types.Type]int)
-	for _, pkgInfo := range r.program.AllPackages {
-		for _, obj := range pkgInfo.Defs {
-			if obj, ok := obj.(*types.TypeName); ok {
-				typ := obj.Type()
-				if _, ok := result[typ]; !ok {
-					obj1, _, _ := types.LookupFieldOrMethod(
-						typ, pkgInfo.Pkg, method)
-					obj2, _, _ := types.LookupFieldOrMethod(
-						typ.Underlying(), pkgInfo.Pkg,
-						method)
-					if obj1 != nil || obj2 != nil {
-						result[typ] = 0
-						result[typ.Underlying()] = 0
-					}
+				return true
+			case *ast.FuncDecl:
+				obj := pkgInfo.ObjectOf(n.Name)
+				fnSig := obj.Type().Underlying().(*types.Signature)
+				if fnSig.Recv() != nil && types.Identical(sig, fnSig) {
+					methods[obj] = true
 				}
-
-			}
-		}
-		for _, typ := range pkgInfo.Types {
-			if _, ok := result[typ.Type]; !ok {
-				obj1, _, _ := types.LookupFieldOrMethod(
-					typ.Type, pkgInfo.Pkg, method)
-				obj2, _, _ := types.LookupFieldOrMethod(
-					typ.Type.Underlying(), pkgInfo.Pkg, method)
-				if obj1 != nil || obj2 != nil {
-					result[typ.Type] = 0
-					result[typ.Type.Underlying()] = 0
-				}
-			}
-		}
-	}
-
-	slice := make([]types.Type, 0, len(result))
-	for t, _ := range result {
-		slice = append(slice, t)
-	}
-	return slice
-}
-
-// closure builds an undirected graph representing the subtype relation and
-// finds the reflexive-transitive closure of each type in the graph.
-// Typically, the interfaces and types passed as arguments will consist of the
-// interfaces and types in the program that declare a method with a particular
-// method name; then, closure will determine subtype relationships (using
-// go/types) to determine the results.  The returned map maps each type to all
-// of the types that are reachable from that type.  As an example,
-//
-//      Interface0
-//           |
-//      Interface1  Interface2
-//        /    \    /        \
-//    Type1    Type2        Type3
-//
-// if Interface1 and Interface2 both declare a method m(), then the closure of
-// Type1 will include Type1, Interface1, Type2, Interface2, and Type3, since
-// renaming m() in Type1 will have a cascading effect, requiring m() to be
-// renamed in Interface1, Type2, Interface2, and Type3 in order to maintain the
-// subtype relationship.
-func closure(interfcs []*types.Interface, typs []types.Type) map[types.Type][]types.Type {
-	graph := digraphClosure(implementsGraph(interfcs, typs))
-
-	result := make(map[types.Type][]types.Type, len(interfcs)+len(typs))
-	for u, adj := range graph {
-		typ := mapType(u, interfcs, typs)
-		typClsr := make([]types.Type, 0, len(adj))
-		for _, v := range adj {
-			typClsr = append(typClsr, mapType(v, interfcs, typs))
-		}
-		result[typ] = typClsr
-	}
-	return result
-}
-
-// implementsGraph produces an adjacency-list representation of the
-// subtype graph, suitable for processing by digraphClosure.  If the arguments
-// include n interfcs and m typs, then the interfaces are mapped to the
-// integers { 1, 2, ..., n } and types to { n+1, n+2, ..., n+m }.  See mapType.
-func implementsGraph(interfcs []*types.Interface, typs []types.Type) [][]int {
-	adj := make([][]int, len(interfcs)+len(typs))
-	for i, interf := range interfcs {
-		for j, typ := range typs {
-			if types.Implements(typ, interf) {
-				adj[i] = append(adj[i], len(interfcs)+j)
-				adj[len(interfcs)+j] =
-					append(adj[len(interfcs)+j], i)
-			}
-		}
-	}
-	return adj
-}
-
-// mapType maps an integer in the adjacency list returned by implementsGraph
-// to the type represented by that integer.
-func mapType(node int, interfcs []*types.Interface, typs []types.Type) types.Type {
-	if node >= len(interfcs) {
-		return typs[node-len(interfcs)]
-	} else {
-		return interfcs[node]
-	}
-}
-
-// methods returns a slice of objects, each of which corresponds to a
-// definition of a method with the given name on a type in the given list.
-func (r *SearchEngine) methods(ts []types.Type, methodName string) []types.Object {
-	var result []types.Object
-	for _, pkgInfo := range r.program.AllPackages {
-		for id, obj := range pkgInfo.Defs {
-			if obj != nil &&
-				obj.Pos() == id.Pos() &&
-				obj.Name() == methodName &&
-				r.isMethodFor(ts, obj) {
-				result = append(result, obj)
-			}
-		}
-	}
-	return result
-}
-
-// isMethodFor returns true iff the given Object represents a method for one of
-// the given types.
-func (r *SearchEngine) isMethodFor(ts []types.Type, obj types.Object) bool {
-	fun, isFunc := obj.(*types.Func)
-	if isFunc {
-		sig := fun.Type().(*types.Signature)
-		if sig.Recv() != nil {
-			recvT := sig.Recv().Type()
-			if r.containsType(ts, recvT) {
+				return true
+			default:
 				return true
 			}
-		}
+		})
 	}
-	return false
-}
-
-// containsType returns true iff t is contained in ts.
-func (r *SearchEngine) containsType(ts []types.Type, t types.Type) bool {
-	for _, typ := range ts {
-		if typ == t {
-			return true
-		}
-	}
-	return false
+	return methods, interfaces
 }
 
 /* -=-=- Search by Identifier  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
@@ -239,52 +165,39 @@ func (r *SearchEngine) containsType(ts []types.Type, t types.Type) bool {
 // indirect references to the same object as given identifier.  The returned
 // map maps filenames to a slice of (offset, length) pairs describing locations
 // at which the given identifier is referenced.
-func (r *SearchEngine) FindOccurrences(ident *ast.Ident) (allOccurrences map[string][]OffsetLength, err error) {
+func (r *SearchEngine) FindOccurrences(ident *ast.Ident) (map[string][]OffsetLength, error) {
 	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
 	if obj == nil {
-		err = fmt.Errorf("unable to find declaration of %s", ident.Name)
-		return
+		return nil, fmt.Errorf("Unable to find declaration of %s", ident.Name)
 	}
 
-	decls := []types.Object{obj}
-	if r.isMethod(obj) {
+	decls := map[types.Object]bool{obj: true}
+	if isMethod(obj) {
+		var err error
 		decls, err = r.FindDeclarationsAcrossInterfaces(ident)
 		if err != nil {
-			return
+			return nil, err
 		}
 	}
 
 	result := r.findOccurrences(decls)
-	allOccurrences = r.FindOccurrencesinComments(ident.Name, decls, result)
-	return
-}
-
-// isMethod returns true if the given object denotes a declaration of, or
-// reference to, a method
-func (r *SearchEngine) isMethod(obj types.Object) bool {
-	switch sig := types.Object.Type(obj).(type) {
-	case *types.Signature:
-		return sig.Recv() != nil
-
-	default:
-		return false
-	}
+	return r.findOccurrencesInComments(ident.Name, decls, result), nil
 }
 
 // findOccurrences returns the source locations of all identifiers that resolve
 // to one of the given objects.
-func (r *SearchEngine) findOccurrences(decls []types.Object) map[string][]OffsetLength {
+func (r *SearchEngine) findOccurrences(decls map[types.Object]bool) map[string][]OffsetLength {
 	result := make(map[string][]OffsetLength)
-	for _, pkgInfo := range r.getPackages(decls) {
+	for pkgInfo := range r.packages(decls) {
 		for id, obj := range pkgInfo.Defs {
-			if r.containsObject(decls, obj) {
+			if decls[obj] {
 				filename := r.position(id).Filename
 				result[filename] = append(result[filename],
 					r.offsetLength(id))
 			}
 		}
 		for id, obj := range pkgInfo.Uses {
-			if r.containsObject(decls, obj) {
+			if decls[obj] {
 				filename := r.position(id).Filename
 				result[filename] = append(result[filename],
 					r.offsetLength(id))
@@ -305,49 +218,31 @@ func (r *SearchEngine) offsetLength(id *ast.Ident) OffsetLength {
 	return OffsetLength{offset, length}
 }
 
-func (r *SearchEngine) containsObject(decls []types.Object, o types.Object) bool {
-	for _, decl := range decls {
-		if decl == o {
-			return true
-		}
-	}
-	return false
-}
-
-// getPackages returns a set of PackageInfos that may reference the given
+// packages returns a set of PackageInfos that may reference the given
 // Objects.  If at least one of the given declarations is exported, the method
-// returns AllPackages for this program; otherwise, it returns the package(s)
-// containing the given declarations.
-func (r *SearchEngine) getPackages(decls []types.Object) []*loader.PackageInfo {
-	pkgs := make(map[*loader.PackageInfo]int)
-	for _, decl := range decls {
+// returns all the packages of this program; otherwise, it returns the
+// package(s) containing the given declarations.
+func (r *SearchEngine) packages(decls map[types.Object]bool) map[*loader.PackageInfo]bool {
+	pkgs := make(map[*loader.PackageInfo]bool)
+	for decl := range decls {
 		if decl.Exported() {
 			return r.allPackages()
 		} else {
-			pkgs[r.pkgInfoForPkg(decl.Pkg())] = 0
+			pkgInfo := r.program.AllPackages[decl.Pkg()]
+			pkgs[pkgInfo] = true
 		}
 	}
-
-	result := make([]*loader.PackageInfo, 0, len(pkgs))
-	for pkgInfo, _ := range pkgs {
-		result = append(result, pkgInfo)
-	}
-	return result
+	return pkgs
 }
 
 func (r *SearchEngine) pkgInfoForPkg(pkg *types.Package) *loader.PackageInfo {
-	for _, pkgInfo := range r.program.AllPackages {
-		if pkgInfo.Pkg == pkg {
-			return pkgInfo
-		}
-	}
-	return nil
+	return r.program.AllPackages[pkg]
 }
 
-func (r *SearchEngine) allPackages() []*loader.PackageInfo {
-	var pkgs []*loader.PackageInfo
+func (r *SearchEngine) allPackages() map[*loader.PackageInfo]bool {
+	pkgs := map[*loader.PackageInfo]bool{}
 	for _, pkgInfo := range r.program.AllPackages {
-		pkgs = append(pkgs, pkgInfo)
+		pkgs[pkgInfo] = true
 	}
 	return pkgs
 }
@@ -355,14 +250,14 @@ func (r *SearchEngine) allPackages() []*loader.PackageInfo {
 // FindOccurrencesincomments checks if identifier occurs as a part in comments,if true then
 // all the source locations of identifier  in comments are returned.
 
-func (r *SearchEngine) FindOccurrencesinComments(name string, decls []types.Object, result map[string][]OffsetLength) map[string][]OffsetLength {
+func (r *SearchEngine) findOccurrencesInComments(name string, decls map[types.Object]bool, result map[string][]OffsetLength) map[string][]OffsetLength {
 
-	for _, pkgInfo := range r.getPackages(decls) {
+	for pkgInfo := range r.packages(decls) {
 		for _, f := range pkgInfo.Files {
 			for _, comment := range f.Comments {
 
 				if strings.Contains(comment.List[0].Text, name) {
-					result = r.findOccurrencesInComments(f, comment, name, result)
+					result = r.findOccurrencesInFileComments(f, comment, name, result)
 				}
 			}
 		}
@@ -370,10 +265,10 @@ func (r *SearchEngine) FindOccurrencesinComments(name string, decls []types.Obje
 	return result
 }
 
-// findOccurrencesInComments finds the source location of identifiers in
+// findOccurrencesInFileComments finds the source location of identifiers in
 // comments, adds them to the already existng occurrences of
 // identifier(result), and returns the result.
-func (r *SearchEngine) findOccurrencesInComments(f *ast.File, comment *ast.CommentGroup, name string, result map[string][]OffsetLength) map[string][]OffsetLength {
+func (r *SearchEngine) findOccurrencesInFileComments(f *ast.File, comment *ast.CommentGroup, name string, result map[string][]OffsetLength) map[string][]OffsetLength {
 
 	var whitespaceindex int = 1
 
@@ -399,8 +294,7 @@ func (r *SearchEngine) fileContaining(node ast.Node) *ast.File {
 	tfile := r.program.Fset.File(node.Pos())
 	for _, pkgInfo := range r.program.AllPackages {
 		for _, thisFile := range pkgInfo.Files {
-			thisTFile := r.program.Fset.File(thisFile.Package)
-			if thisTFile == tfile {
+			if r.program.Fset.File(thisFile.Package) == tfile {
 				return thisFile
 			}
 		}
