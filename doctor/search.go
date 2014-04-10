@@ -5,15 +5,15 @@
 package doctor
 
 import (
-         "fmt"
+	"fmt"
 	"go/ast"
+	"go/token"
 	"regexp"
 	"strings"
 	"unicode/utf8"
-          
+
 	"code.google.com/p/go.tools/go/loader"
 	"code.google.com/p/go.tools/go/types"
-	
 )
 
 type SearchEngine struct {
@@ -90,7 +90,7 @@ func (r *SearchEngine) allInterfacesIncluding(method string) []*types.Interface 
 func (r *SearchEngine) allTypesIncluding(method string) []types.Type {
 	result := make(map[types.Type]int)
 	for _, pkgInfo := range r.program.AllPackages {
-		for _, obj := range pkgInfo.Objects {
+		for _, obj := range pkgInfo.Defs {
 			if obj, ok := obj.(*types.TypeName); ok {
 				typ := obj.Type()
 				if _, ok := result[typ]; !ok {
@@ -195,7 +195,7 @@ func mapType(node int, interfcs []*types.Interface, typs []types.Type) types.Typ
 func (r *SearchEngine) methods(ts []types.Type, methodName string) []types.Object {
 	var result []types.Object
 	for _, pkgInfo := range r.program.AllPackages {
-		for id, obj := range pkgInfo.Objects {
+		for id, obj := range pkgInfo.Defs {
 			if obj != nil &&
 				obj.Pos() == id.Pos() &&
 				obj.Name() == methodName &&
@@ -253,7 +253,7 @@ func (r *SearchEngine) FindOccurrences(ident *ast.Ident) (allOccurrences map[str
 			return
 		}
 	}
-	
+
 	result := r.findOccurrences(decls)
 	allOccurrences = r.FindOccurrencesinComments(ident.Name, decls, result)
 	return
@@ -276,18 +276,33 @@ func (r *SearchEngine) isMethod(obj types.Object) bool {
 func (r *SearchEngine) findOccurrences(decls []types.Object) map[string][]OffsetLength {
 	result := make(map[string][]OffsetLength)
 	for _, pkgInfo := range r.getPackages(decls) {
-		for id, obj := range pkgInfo.Objects {
+		for id, obj := range pkgInfo.Defs {
 			if r.containsObject(decls, obj) {
-				position := r.program.Fset.Position(id.NamePos)
-				filename := position.Filename
-				offset := position.Offset
-				length := len(id.Name)
+				filename := r.position(id).Filename
 				result[filename] = append(result[filename],
-					OffsetLength{offset, length})
+					r.offsetLength(id))
+			}
+		}
+		for id, obj := range pkgInfo.Uses {
+			if r.containsObject(decls, obj) {
+				filename := r.position(id).Filename
+				result[filename] = append(result[filename],
+					r.offsetLength(id))
 			}
 		}
 	}
 	return result
+}
+
+func (r *SearchEngine) position(id *ast.Ident) token.Position {
+	return r.program.Fset.Position(id.NamePos)
+}
+
+func (r *SearchEngine) offsetLength(id *ast.Ident) OffsetLength {
+	position := r.position(id)
+	offset := position.Offset
+	length := len(id.Name)
+	return OffsetLength{offset, length}
 }
 
 func (r *SearchEngine) containsObject(decls []types.Object, o types.Object) bool {
@@ -337,7 +352,6 @@ func (r *SearchEngine) allPackages() []*loader.PackageInfo {
 	return pkgs
 }
 
-
 // FindOccurrencesincomments checks if identifier occurs as a part in comments,if true then
 // all the source locations of identifier  in comments are returned.
 
@@ -348,18 +362,18 @@ func (r *SearchEngine) FindOccurrencesinComments(name string, decls []types.Obje
 			for _, comment := range f.Comments {
 
 				if strings.Contains(comment.List[0].Text, name) {
-					result = r.findoccurrencesincomments(f, comment, name, result)
-                	        }
+					result = r.findOccurrencesInComments(f, comment, name, result)
+				}
 			}
 		}
 	}
 	return result
 }
 
-//findoccurrencesincomments finds the source location of identifier in comments , adds them to the already
-// existng occurrences of identifier(result) and returns the result.
-
-func (r *SearchEngine) findoccurrencesincomments(f *ast.File, comment *ast.CommentGroup, name string, result map[string][]OffsetLength) map[string][]OffsetLength {
+// findOccurrencesInComments finds the source location of identifiers in
+// comments, adds them to the already existng occurrences of
+// identifier(result), and returns the result.
+func (r *SearchEngine) findOccurrencesInComments(f *ast.File, comment *ast.CommentGroup, name string, result map[string][]OffsetLength) map[string][]OffsetLength {
 
 	var whitespaceindex int = 1
 
@@ -377,7 +391,6 @@ func (r *SearchEngine) findoccurrencesincomments(f *ast.File, comment *ast.Comme
 
 	return result
 }
-
 
 /* -=-=- Utility Methods -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 // TODO: These are duplicated from refactoring.go
@@ -405,5 +418,3 @@ func (r *SearchEngine) pkgInfo(file *ast.File) *loader.PackageInfo {
 	}
 	return nil
 }
-
-

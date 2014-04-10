@@ -91,9 +91,9 @@ func (r *RenameRefactoring) rename(ident *ast.Ident) {
 		r.addOccurrences(searchResult)
 		//TODO: r.checkForErrors()
 		return
-	} 
+	}
 
-      r.log.Log(FATAL_ERROR, "newname already exists in scope,please select other value for the newname")
+	r.log.Log(FATAL_ERROR, "newname already exists in scope,please select other value for the newname")
 
 }
 
@@ -115,7 +115,6 @@ func (r *RenameRefactoring) IdentifierExists(ident *ast.Ident) bool {
 
 	return false
 }
-
 
 //addOccurrences adds all the Occurences to the editset
 func (r *RenameRefactoring) addOccurrences(allOccurrences map[string][]OffsetLength) {

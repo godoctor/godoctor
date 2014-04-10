@@ -137,6 +137,8 @@ func (r *RefactoringBase) SetSelection(selection TextSelection, scope []string, 
 
 	var config loader.Config
 	config.Build = &buildContext
+	config.ParserMode = parser.ParseComments | parser.DeclarationErrors
+	config.AllowTypeErrors = false
 	config.SourceImports = true
 	config.TypeChecker.Error = func(err error) {
 		// FIXME: Needs to be thread-safe
@@ -151,7 +153,7 @@ func (r *RefactoringBase) SetSelection(selection TextSelection, scope []string, 
 
 	if src != "" {
 		// passed on stdin, create *ast.File
-		f, err := config.ParseFile(selection.Filename, src, 0)
+		f, err := config.ParseFile(selection.Filename, nil)
 		if err != nil {
 			return false
 		}
