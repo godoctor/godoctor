@@ -36,6 +36,7 @@ type SearchEngine struct {
 // signature to be renamed in Interface1, Interface2, Type2, and Type3.  This
 // method returns a set containing the reflexive-transitive closure of objects
 // that must be renamed if the given identifier is renamed.
+// TODO: Does this need to be API?  If not, no need to explicitly check if ident is a method
 func (r *SearchEngine) FindDeclarationsAcrossInterfaces(ident *ast.Ident) (map[types.Object]bool, error) {
 	pkgInfo := r.pkgInfo(r.fileContaining(ident))
 	obj := pkgInfo.ObjectOf(ident)
@@ -47,7 +48,7 @@ func (r *SearchEngine) FindDeclarationsAcrossInterfaces(ident *ast.Ident) (map[t
 		// If obj is a method, search across interfaces: there may be
 		// many other methods that need to change to ensure that all
 		// types continue to implement the same interfaces
-		return r.findReachableMethods(obj, r.program.AllPackages[obj.Pkg()]), nil
+		return r.findReachableMethods(ident, obj, r.program.AllPackages[obj.Pkg()]), nil
 	} else {
 		// If obj is not a method, then only one object needs to change
 		return map[types.Object]bool{obj: true}, nil
@@ -65,6 +66,7 @@ func methodReceiver(obj types.Object) *types.Var {
 	if fn, isFunc := obj.(*types.Func); isFunc {
 		return fn.Type().(*types.Signature).Recv()
 	} else {
+
 		return nil
 	}
 }
@@ -72,11 +74,11 @@ func methodReceiver(obj types.Object) *types.Var {
 // findReachableMethods receives an object for a method (i.e., a types.Func with
 // a non-nil receiver) and the PackageInfo in which it was declared and returns
 // a set of objects that must be renamed if that method is renamed.
-func (r *SearchEngine) findReachableMethods(obj types.Object, pkgInfo *loader.PackageInfo) map[types.Object]bool {
+func (r *SearchEngine) findReachableMethods(ident *ast.Ident, obj types.Object, pkgInfo *loader.PackageInfo) map[types.Object]bool {
 	// Find methods and interfaces defined in the given package that have
 	// the same signature as the argument method (obj)
 	sig := obj.(*types.Func).Type().(*types.Signature)
-	methods, interfaces := r.findMethodDeclsMatchingSig(sig, pkgInfo)
+	methods, interfaces := r.findMethodDeclsMatchingSig(ident, sig, pkgInfo)
 
 	// Map methods to interfaces their receivers implement and vice versa
 	methodInterfaces := map[types.Object]map[*types.Interface]bool{}
@@ -127,7 +129,7 @@ func (r *SearchEngine) findReachableMethods(obj types.Object, pkgInfo *loader.Pa
 // findMethodDeclsMatchingSig walks all of the ASTs in the given package and
 // returns methods with the given signature and interfaces that explicitly
 // define a method with the given signature.
-func (r *SearchEngine) findMethodDeclsMatchingSig(sig *types.Signature, pkgInfo *loader.PackageInfo) (methods map[types.Object]bool, interfaces map[*types.Interface]bool) {
+func (r *SearchEngine) findMethodDeclsMatchingSig(ident *ast.Ident, sig *types.Signature, pkgInfo *loader.PackageInfo) (methods map[types.Object]bool, interfaces map[*types.Interface]bool) {
 	methods = map[types.Object]bool{}
 	interfaces = map[*types.Interface]bool{}
 	for _, file := range pkgInfo.Files {
@@ -139,7 +141,7 @@ func (r *SearchEngine) findMethodDeclsMatchingSig(sig *types.Signature, pkgInfo 
 				for i := 0; i < iface.NumExplicitMethods(); i++ {
 					method := iface.ExplicitMethod(i)
 					methodSig := method.Type().(*types.Signature)
-					if types.Identical(sig, methodSig) {
+					if types.Identical(sig, methodSig) && method.Name() == ident.Name {
 						methods[method] = true
 					}
 				}
@@ -147,7 +149,7 @@ func (r *SearchEngine) findMethodDeclsMatchingSig(sig *types.Signature, pkgInfo 
 			case *ast.FuncDecl:
 				obj := pkgInfo.ObjectOf(n.Name)
 				fnSig := obj.Type().Underlying().(*types.Signature)
-				if fnSig.Recv() != nil && types.Identical(sig, fnSig) {
+				if fnSig.Recv() != nil && types.Identical(sig, fnSig) && n.Name.Name == ident.Name {
 					methods[obj] = true
 				}
 				return true
