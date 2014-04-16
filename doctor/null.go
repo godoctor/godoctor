@@ -24,7 +24,9 @@ func (r *nullRefactoring) Description() *Description {
 }
 
 func (r *nullRefactoring) Run(config *Config) *Result {
-	if r.refactoringBase.Run(config); r.Log.ContainsErrors() {
+	r.refactoringBase.Run(config)
+	r.Log.ChangeInitialErrorsToWarnings()
+	if r.Log.ContainsErrors() {
 		return &r.Result
 	}
 
@@ -32,8 +34,6 @@ func (r *nullRefactoring) Run(config *Config) *Result {
 		r.Log.Log(FATAL_ERROR, "This refactoring takes no arguments.")
 		return &r.Result
 	}
-
-	r.Log.ChangeInitialErrorsToWarnings()
 
 	return &r.Result
 }
