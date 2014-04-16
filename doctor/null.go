@@ -8,26 +8,32 @@
 
 package doctor
 
-// A NullRefactoring makes no changes to a program.
-type NullRefactoring struct {
-	RefactoringBase
+// A nullRefactoring makes no changes to a program.
+type nullRefactoring struct {
+	refactoringBase
 	optShowAST        bool
 	optShowPackages   bool
 	optShowReferences bool
 }
 
-func (r *NullRefactoring) Name() string {
-	return "Null Refactoring"
+func (r *nullRefactoring) Description() *Description {
+	return &Description{
+		Name:   "Null Refactoring",
+		Params: []string{},
+	}
 }
 
-func (r *NullRefactoring) GetParams() []string {
-	return []string{}
-}
+func (r *nullRefactoring) Run(config *Config) *Result {
+	if r.refactoringBase.Run(config); r.Log.ContainsErrors() {
+		return &r.Result
+	}
 
-func (r *NullRefactoring) Configure(args []string) bool {
-	return len(args) == 0
-}
+	if len(config.Args) != 0 {
+		r.Log.Log(FATAL_ERROR, "This refactoring takes no arguments.")
+		return &r.Result
+	}
 
-func (r *NullRefactoring) Run() {
-	r.log.ChangeInitialErrorsToWarnings()
+	r.Log.ChangeInitialErrorsToWarnings()
+
+	return &r.Result
 }

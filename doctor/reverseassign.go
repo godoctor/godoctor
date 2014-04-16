@@ -13,50 +13,55 @@ import (
 	"reflect"
 )
 
-type ReverseAssignRefactoring struct {
-	RefactoringBase
+type reverseAssignRefactoring struct {
+	refactoringBase
 }
 
-func (r *ReverseAssignRefactoring) Name() string {
-	return "Reverse Assignment Refactoring"
+func (r *reverseAssignRefactoring) Description() *Description {
+	return &Description{
+		Name:   "Reverse Assignment Refactoring",
+		Params: nil,
+	}
 }
 
-func (r *ReverseAssignRefactoring) Configure(args []string) bool {
-	return true
-}
+func (r *reverseAssignRefactoring) Run(config *Config) *Result {
+	if r.refactoringBase.Run(config); r.Log.ContainsErrors() {
+		return &r.Result
+	}
 
-func (r *ReverseAssignRefactoring) GetParams() []string {
-	return nil
-}
+	if len(config.Args) != 0 {
+		r.Log.Log(FATAL_ERROR, "This refactoring takes no arguments.")
+		return &r.Result
+	}
 
-func (r *ReverseAssignRefactoring) Run() {
 	if r.selectedNode == nil {
-		r.log.Log(FATAL_ERROR, "selection cannot be null")
-		return // SetSelection did not succeed
+		r.Log.Log(FATAL_ERROR, "selection cannot be null")
+		return &r.Result
 	}
 	switch selectedNode := r.selectedNode.(type) {
 	case *ast.GenDecl:
 		r.callEditset(selectedNode)
 	default:
-		r.log.Log(FATAL_ERROR, fmt.Sprintf("Select a short assignment (:=) statement! Selected node is %s", reflect.TypeOf(r.selectedNode)))
+		r.Log.Log(FATAL_ERROR, fmt.Sprintf("Select a short assignment (:=) statement! Selected node is %s", reflect.TypeOf(r.selectedNode)))
 	}
 	r.checkForErrors()
+	return &r.Result
 }
 
-func (r *ReverseAssignRefactoring) lhsNames(decl *ast.GenDecl) string {
+func (r *reverseAssignRefactoring) lhsNames(decl *ast.GenDecl) string {
 	offset, _ := r.offsetLength(decl.Specs[0].(*ast.ValueSpec))
 	endOffset := r.program.Fset.Position(decl.Specs[0].(*ast.ValueSpec).Names[len(decl.Specs[0].(*ast.ValueSpec).Names)-1].End()).Offset
 	return r.readFromFile(offset, (endOffset - offset))
 }
 
 // returns the replacement string
-func (r *ReverseAssignRefactoring) replacement(decl *ast.GenDecl) string {
+func (r *reverseAssignRefactoring) replacement(decl *ast.GenDecl) string {
 	return (fmt.Sprintf("%s := ", r.lhsNames(decl)))
 }
 
 //calls the edit set
-func (r *ReverseAssignRefactoring) callEditset(decl *ast.GenDecl) {
+func (r *reverseAssignRefactoring) callEditset(decl *ast.GenDecl) {
 	start, _ := r.offsetLength(decl)
 	repstrlen := r.program.Fset.Position(decl.Specs[0].(*ast.ValueSpec).Values[0].Pos()).Offset - r.program.Fset.Position(decl.Pos()).Offset
-	r.editSet[r.filename(r.file)].Add(OffsetLength{start, repstrlen}, r.replacement(decl))
+	r.Edits[r.filename(r.file)].Add(OffsetLength{start, repstrlen}, r.replacement(decl))
 }

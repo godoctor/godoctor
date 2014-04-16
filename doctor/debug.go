@@ -18,24 +18,24 @@ import (
 )
 
 type debugRefactoring struct {
-	RefactoringBase
-	optShowAST         bool
-	optShowPackages    bool
-	optShowIdentifiers bool
-	optShowReferences  bool
-	optShowAffected    bool
+	refactoringBase
 }
 
-func (r *debugRefactoring) Name() string {
-	return "Null Refactoring"
+func (r *debugRefactoring) Description() *Description {
+	return &Description{
+		Name:   "Debug Refactoring",
+		Params: []string{"Options"},
+	}
 }
 
-func (r *debugRefactoring) GetParams() []string {
-	return []string{"Options"}
-}
+func (r *debugRefactoring) Run(config *Config) *Result {
+	if r.refactoringBase.Run(config); r.Log.ContainsErrors() {
+		return &r.Result
+	}
 
-func (r *debugRefactoring) Configure(options []string) bool {
-	if len(options) == 0 {
+	r.Log.ChangeInitialErrorsToWarnings()
+
+	if len(config.Args) == 0 {
 		fmt.Println("Usage: debug <options>")
 		fmt.Println("where <options> can be any or all of:")
 		fmt.Println("    showast")
@@ -43,53 +43,29 @@ func (r *debugRefactoring) Configure(options []string) bool {
 		fmt.Println("    showidentifiers")
 		fmt.Println("    showreferences")
 		fmt.Println("    showaffected")
-		return false
+		return &r.Result
 	}
 
-	for _, opt := range options {
+	for _, opt := range config.Args {
 		switch strings.ToLower(strings.TrimSpace(opt)) {
 		case "showast":
-			r.optShowAST = true
+			r.showAST()
 		case "showpackages":
-			r.optShowPackages = true
+			r.showLoadedPackagesAndFiles()
 		case "showidentifiers":
-			r.optShowIdentifiers = true
+			r.showIdentifiers()
 		case "showreferences":
-			r.optShowReferences = true
+			r.showReferences()
 		case "showaffected":
-			r.optShowAffected = true
+			r.showAffected()
 		default:
-			r.log.Log(FATAL_ERROR, "Unknown option "+opt)
-			return false
+			r.Log.Log(FATAL_ERROR, "Unknown option "+opt)
+			return &r.Result
 		}
 	}
-	return true
-}
 
-func (r *debugRefactoring) Run() {
-	r.log.ChangeInitialErrorsToWarnings()
-
-	if r.optShowAST {
-		r.showAST()
-	}
-
-	if r.optShowPackages {
-		r.showLoadedPackagesAndFiles()
-	}
-
-	if r.optShowIdentifiers {
-		r.showIdentifiers()
-	}
-
-	if r.optShowReferences {
-		r.showReferences()
-	}
-
-	if r.optShowAffected {
-		r.showAffected()
-	}
-
-	r.editSet = map[string]EditSet{}
+	r.Edits = map[string]EditSet{}
+	return &r.Result
 }
 
 func (r *debugRefactoring) showAST() {
@@ -136,7 +112,7 @@ func (r *debugRefactoring) showReferences() {
 	errorMsg := "Please select an identifier for showreferences"
 
 	if r.selectedNode == nil {
-		r.log.Log(FATAL_ERROR, errorMsg)
+		r.Log.Log(FATAL_ERROR, errorMsg)
 		return
 	}
 	switch id := r.selectedNode.(type) {
@@ -145,7 +121,7 @@ func (r *debugRefactoring) showReferences() {
 		search := &SearchEngine{r.program}
 		searchResult, err := search.FindOccurrences(id)
 		if err != nil {
-			r.log.Log(FATAL_ERROR, err.Error())
+			r.Log.Log(FATAL_ERROR, err.Error())
 			return
 		}
 		for filename, occs := range searchResult {
@@ -155,7 +131,7 @@ func (r *debugRefactoring) showReferences() {
 			}
 		}
 	default:
-		r.log.Log(FATAL_ERROR, errorMsg)
+		r.Log.Log(FATAL_ERROR, errorMsg)
 		return
 	}
 }
@@ -164,7 +140,7 @@ func (r *debugRefactoring) showAffected() {
 	errorMsg := "Please select an identifier for showaffected"
 
 	if r.selectedNode == nil {
-		r.log.Log(FATAL_ERROR, errorMsg)
+		r.Log.Log(FATAL_ERROR, errorMsg)
 		return
 	}
 	switch id := r.selectedNode.(type) {
@@ -173,7 +149,7 @@ func (r *debugRefactoring) showAffected() {
 		search := &SearchEngine{r.program}
 		searchResult, err := search.FindDeclarationsAcrossInterfaces(id)
 		if err != nil {
-			r.log.Log(FATAL_ERROR, err.Error())
+			r.Log.Log(FATAL_ERROR, err.Error())
 			return
 		}
 		for obj := range searchResult {
@@ -182,7 +158,7 @@ func (r *debugRefactoring) showAffected() {
 				obj.Name(), p.Filename, p.Line)
 		}
 	default:
-		r.log.Log(FATAL_ERROR, errorMsg)
+		r.Log.Log(FATAL_ERROR, errorMsg)
 		return
 	}
 }

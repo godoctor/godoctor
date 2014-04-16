@@ -17,9 +17,16 @@
 //
 // Refactorings are run on the files in each test directory; special comments
 // in the .go files indicate what refactoring(s) to run and whether the
-// refactorings are expected to succeed or fail.  If a refactoring is
-// expected to succeed, the resulting file is compared against a .golden file
-// in the same directory.
+// refactorings are expected to succeed or fail.  Specifically, test files are
+// annotated with markers of the form
+//     //<<<<<name,startline,startcol,endline,endcol,arg1,arg2,...,argn,pass
+// The name indicates the refactoring to run.  The next four fields specify a
+// text selection on which to invoke the refactoring.  The arguments
+// arg1,arg2,...,argn are passed as arguments to the refactoring (see
+// Config.Args).  The last field is either "pass" or "fail", indicating whether
+// the refactoring is expected to complete successfully or raise an error.  If
+// the refactoring is expected to succeed, the resulting file is compared
+// against a .golden file with the same name in the same directory.
 //
 // Each test directory (001-test-name, 002-test-name, etc.) is treated as the
 // root of a Go workspace when its tests are run; i.e., the GOPATH is set to
@@ -31,8 +38,10 @@
 //             001-test-name/
 //                 src/
 //                     main.go
+//                     main.golden
 //                     package-name/
 //                         package-file.go
+//                         package-file.golden
 //
 // If a test directory contains a file named main.go, the test runner will
 // compile and run it before and after performing the refactoring.  This is
@@ -57,13 +66,12 @@ import (
 
 const MARKER = "<<<<<"
 const PASS = "pass"
-const FAIL_SELECTION = "fail-selection"
-const FAIL_CONFIGURE = "fail-configure"
 const FAIL = "fail"
 
 const MAIN_DOT_GO = "main.go"
 
-var filterFlag = flag.String("filter", "", "Only tests from directories containing this substring will be run")
+var filterFlag = flag.String("filter", "",
+	"Only tests from directories containing this substring will be run")
 
 const directory = "../testdata/"
 
@@ -84,14 +92,8 @@ func runAllTestsInSubdirectories(testDirInfo os.FileInfo, t *testing.T) {
 	for _, subDirInfo := range subDirs {
 		if subDirInfo.IsDir() {
 			subDirPath := filepath.Join(testDirPath, subDirInfo.Name())
-			//desc := filepath.Join(testDirInfo.Name(), subDirInfo.Name())
 			if strings.Contains(subDirPath, *filterFlag) {
-				//fmt.Printf("********** %s **********\n", desc)
-				//if !strings.Contains(subDirPath, "fiximports/003") && !strings.Contains(subDirPath, "fiximports/004") {
 				runAllTestsInDirectory(subDirPath, t)
-				//}
-			} else {
-				//fmt.Printf("Skipping directory %s (filtered)\n", desc)
 			}
 		}
 	}
@@ -167,15 +169,15 @@ func runTestsInFiles(directory string, files []string, t *testing.T) {
 }
 
 func runRefactoring(directory string, filename string, marker string, t *testing.T) {
-	refac, selection, remainder, result := splitMarker(filename, marker, t)
+	refac, selection, remainder, passFail := splitMarker(filename, marker, t)
 
 	r := GetRefactoring(refac)
 	if r == nil {
 		t.Fatalf("There is no refactoring named %s (from marker %s)", refac, marker)
 	}
 
-	shouldPass := (result == PASS)
-	name := r.Name()
+	shouldPass := (passFail == PASS)
+	name := r.Description().Name
 
 	cwd, _ := os.Getwd()
 	absPath, _ := filepath.Abs(filename)
@@ -204,32 +206,20 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 		t.Fatal(err)
 	}
 
-	ok := r.SetSelection(selection, []string{mainFile}, "")
-	rlog := r.GetLog()
-	if result == FAIL_SELECTION && !ok {
-		return // We expected SetSelection to fail -- good
-	} else if shouldPass && (!ok || rlog.ContainsNonInitialErrors()) {
-		t.Logf("SetSelection produced unexpected errors")
-		t.Fatal(rlog)
+	config := &Config{
+		FileSystem: &LocalFileSystem{},
+		Scope:      []string{mainFile},
+		Selection:  selection,
+		Args:       remainder,
+		GoPath:     "", // FIXME(jeff): GOPATH
 	}
-
-	ok = r.Configure(remainder)
-	rlog = r.GetLog()
-	if result == FAIL_CONFIGURE && !ok {
-		return // We expected configuration to fail -- good
-	} else if shouldPass && (!ok || rlog.ContainsNonInitialErrors()) {
-		t.Log("Refactoring configuration failed")
-		t.Fatal(rlog)
-	}
-
-	r.Run()
-	rlog, editSets := r.GetResult()
-	if shouldPass && rlog.ContainsErrors() {
-		t.Log(rlog)
+	result := r.Run(config)
+	if shouldPass && result.Log.ContainsErrors() {
+		t.Log(result.Log)
 		t.Fatalf("Refactoring produced unexpected errors")
 	}
 
-	for filename, edits := range editSets {
+	for filename, edits := range result.Edits {
 		output, err := ApplyToFile(edits, filename)
 		if err != nil {
 			t.Fatal(err)
@@ -322,9 +312,8 @@ func splitMarker(filename string, marker string, t *testing.T) (refac string, se
 	remainder = fields[5 : len(fields)-1]
 	result = fields[len(fields)-1]
 	if result != PASS && result != FAIL {
-		t.Fatalf("Marker is invalid: last field must be one of: "+
-			"%s, %s, %s, or %s",
-			PASS, FAIL_SELECTION, FAIL_CONFIGURE, FAIL)
+		t.Fatalf("Marker is invalid: last field must be %s or %s",
+			PASS, FAIL)
 	}
 	return
 }

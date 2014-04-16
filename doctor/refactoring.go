@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// This file defines the Refactoring interface, the RefactoringBase struct, and
-// several methods common to refactorings based on RefactoringBase, including
-// SetSelection, GetLog, and GetResult.
+// This file defines the Refactoring interface, the refactoringBase struct, and
+// several methods common to refactorings based on refactoringBase, including
+// a base implementation of the Run method.
 
 // Package doctor provides infrastructure for building refactorings and similar
 // source code-level program transformations for Go programs.
@@ -30,12 +30,12 @@ var refactorings map[string]Refactoring
 
 func init() {
 	refactorings = map[string]Refactoring{
-		"rename":        new(RenameRefactoring),
-		"reverseassign": new(ReverseAssignRefactoring),
-		"shortassign":   new(ShortAssignRefactoring),
+		"rename":        new(renameRefactoring),
+		"reverseassign": new(reverseAssignRefactoring),
+		"shortassign":   new(shortAssignRefactoring),
 		"debug":         new(debugRefactoring),
-		//"extract":	 new(ExtractRefactoring),
-		"null": new(NullRefactoring),
+		//"extract":	 new(extractRefactoring),
+		"null": new(nullRefactoring),
 	}
 }
 
@@ -52,79 +52,99 @@ func GetRefactoring(shortName string) Refactoring {
 	return refactorings[shortName]
 }
 
-// The Refactoring interface provides the methods common to all refactorings.
+// Description provides information about a refactoring suitable for display in
+// a user interface.
+type Description struct {
+	// A human-readable name for this refactoring, properly capitalized
+	// (e.g., "Rename" or "Extract Function") as it would appear in a user
+	// interface.  Every refactoring should have a unique name.
+	Name string
+	// TODO(jeff): Replace this
+	Params []string
+}
+
+// A Config provides the initial configuration for a refactoring, including the
+// file system and program on which it will operate, the initial text
+// selection, and any refactoring-specific arguments.
+//
+// At a minimum, the FileSystem, Scope, and Selection arguments must be set.
+type Config struct {
+	// The file system on which the refactoring will operate.
+	FileSystem FileSystem
+	// A set of initial packages to load.  This slice will be passed as-is
+	// to the Config.FromArgs method of go.tools/go/loader.  Typically, the
+	// scope will consist of a package name or a file containing the
+	// program entrypoint (main function), which may be different from the
+	// file containing the text selection.
+	Scope []string
+	// The range of text on which to invoke the refactoring.
+	Selection TextSelection
+	// Refactoring-specific arguments.  To determine what arguments are
+	// required for each refactoring, see Refactoring.Description().Params.
+	// For example, for the Rename refactoring, you must specify a new name
+	// for the entity being renamed.  If the refactoring does not require
+	// any arguments, this may be nil.
+	Args []string
+	// The GOPATH.  If this is set to the empty string, the GOPATH is
+	// determined from the environment.
+	GoPath string
+}
+
+// The Refactoring interface identifies methods common to all refactorings.
 //
 // The protocol for invoking a refactoring is:
 //
-//     1. Invoke SetSelection to initialize the refactoring and specify what
-//        file is to be refactored.
-//     2. Invoke any custom configuration methods (or Configure) to specify
-//        any arguments.  For example, for the Rename refactoring, you must
-//        specify a new name for the entity being renamed.
-//     3. Invoke Run.
-//     4. Invoke GetResult to get the resulting Log and the EditSet for each
-//        file.
-//
-// Name returns a human-readable name for the refactoring, properly capitalized
-// (e.g., "Rename" or "Extract Function").  Every refactoring should have a
-// unique name.
-//
-// Refactorings are typically invoked from a text editor.  The SetSelection
-// method initializes the refactoring, clears the log (see GetLog/GetResult),
-// and provides the refactoring with the file that was open in the text editor
-// and the selected region/caret position.  The method returns true if the
-// refactoring can be invoked on the given selection.  If the method returns
-// false, more information may be obtained by invoking the GetLog method.
-//
-// The Configure method is used by the testing infrastructure to pass
-// configuration information to the refactoring.  Test files are annotated
-// with markers of the form
-//     //<<<<<name,startline,startcol,endline,endcol,arg1,arg2,...,argn,pass
-// which indicate what refactoring(s) to run.  The arguments arg1,arg2,...,argn
-// (if present) are passed as the args of the Configure method.  This method
-// returns false if configuration fails, i.e., if the wrong number of
-// arguments are passed or the arguments are invalid.  If the method fails,
-// more information may be obtained by invoking the GetLog method.
-//
-// The Run method runs the refactoring.
-//
-// Informational message, errors, and warnings are logged so that they can be
-// displayed to the user.  This log can be obtained by invoking the GetLog
-// method, or it can be obtained along with the resulting EditSets by invoking
-// the GetResult method.
-//
-// If the log contains errors (log.ContainsErrors()), the resulting map of
-// EditSets may be empty or incomplete, since it may not be possible to perform
-// the refactoring.
+//     1. If necessary, invoke the Description() method to obtain the name of
+//        the refactoring and a list of arguments that must be provided to it.
+//     2. Create a Config.  Refactorings are typically invoked from a text
+//        editor; the Config provides the refactoring with the file that was
+//        open in the text editor and the selected region/caret position.
+//     3. Invoke Run, which returns a Result.
+//     4. If Result.Log is not empty, display the log to the user.
+//     5. If Result.Edits or Result.FSChanges are non-nil, they may be applied
+//        to complete the transformation.
 type Refactoring interface {
-	Name() string
-	SetSelection(selection TextSelection, scope []string, src string) bool
-	Configure(args []string) bool
-	Run()
-	GetParams() []string
-	GetLog() *Log
-	GetResult() (*Log, map[string]EditSet)
+	Description() *Description
+	Run(*Config) *Result
 }
 
-type RefactoringBase struct {
+type Result struct {
+	// A list of informational messages, errors, and warnings to display to
+	// the user.  If the Log.ContainsErrors() is true, the Edits and
+	// FSChanges may be empty or incomplete, since it may not be possible
+	// to perform the refactoring.
+	Log *Log
+	// Maps filenames to the text edits that should be applied to those
+	// files.
+	Edits map[string]EditSet
+	// File system changes: files and directories to rename, create, or
+	// delete after the Edits have been applied.  These changes should be
+	// applied in order, since changes later in the list may depend on the
+	// successful completion of changes earlier in the list (e.g., a path
+	// to a file may be invalid after its containing directory is renamed).
+	FSChanges []FileSystemChange
+}
+
+type refactoringBase struct {
 	program        *loader.Program
 	file           *ast.File
 	selectionStart token.Pos
 	selectionEnd   token.Pos
 	selectedNode   ast.Node
-	log            *Log
-	editSet        map[string]EditSet
+	Result
 }
 
-// Configures a refactoring by indicating the filename in which text is
-// selected and the beginning and end of the selected region.  Internally, this
-// configures all of the fields in the RefactoringBase struct.  If nonempty,
-// scope denotes a scope (passed to the go.tools loader): typically a package
-// name or a file containing the program entrypoint (main function), which may
-// be different from the file containing the text selection. If nonempty,
-// src is the contents of a .go file, mainly for use when passing from stdin.
-func (r *RefactoringBase) SetSelection(selection TextSelection, scope []string, src string) bool {
-	r.log = NewLog()
+// Base implementation of a Run method.  Most refactorings should invoke this
+// method before performing refactoring-specific work.  This method
+// initializes the refactoring, clears the log, and
+// configures all of the fields in the refactoringBase struct.
+func (r *refactoringBase) Run(config *Config) *Result {
+	r.Log = NewLog()
+
+	if config.FileSystem == nil {
+		r.Log.Log(FATAL_ERROR, "Internal Error: null Config.FileSystem")
+		return &r.Result
+	}
 
 	buildContext := build.Default
 	if os.Getenv("GOPATH") != "" {
@@ -134,72 +154,78 @@ func (r *RefactoringBase) SetSelection(selection TextSelection, scope []string, 
 		// run from refactoring_test.go)
 		buildContext.GOPATH = os.Getenv("GOPATH")
 	}
+	if config.GoPath != "" {
+		buildContext.GOPATH = config.GoPath
+	}
+	buildContext.ReadDir = config.FileSystem.ReadDir
+	buildContext.OpenFile = config.FileSystem.OpenFile
 
-	var config loader.Config
-	config.Build = &buildContext
-	config.ParserMode = parser.ParseComments | parser.DeclarationErrors
-	config.AllowTypeErrors = false
-	config.SourceImports = true
-	config.TypeChecker.Error = func(err error) {
+	var lconfig loader.Config
+	lconfig.Build = &buildContext
+	lconfig.ParserMode = parser.ParseComments | parser.DeclarationErrors
+	lconfig.AllowTypeErrors = false
+	lconfig.SourceImports = true
+	lconfig.TypeChecker.Error = func(err error) {
 		// FIXME: Needs to be thread-safe
 		var message string = err.Error()
 		var pos token.Pos = err.(types.Error).Pos
 		var offset int = err.(types.Error).Fset.Position(pos).Offset
 		var filename string = err.(types.Error).Fset.File(pos).Name()
 		var length int = 0
-		r.log.LogInitial(ERROR, message, filename, offset, length)
+		r.Log.LogInitial(ERROR, message, filename, offset, length)
 	}
 	// FIXME: Jeff: handle error
 
-	if src != "" {
+	/*if src != "" {
 		// passed on stdin, create *ast.File
 		f, err := config.ParseFile(selection.Filename, nil)
 		if err != nil {
 			return false
 		}
 		config.CreateFromFiles(selection.Filename, f)
-	} else if scope != nil {
-		config.FromArgs(scope, false)
+	} else*/if config.Scope != nil {
+		lconfig.FromArgs(config.Scope, false)
 	} else {
-		config.FromArgs([]string{selection.Filename}, false)
+		lconfig.FromArgs([]string{config.Selection.Filename}, false)
 	}
 
 	var err error
-	r.program, err = config.Load()
+	r.program, err = lconfig.Load()
 	if err != nil {
-		r.log.Log(FATAL_ERROR, err.Error())
-		return false
+		r.Log.Log(FATAL_ERROR, err.Error())
+		return &r.Result
 	} else if r.program == nil {
-		r.log.Log(FATAL_ERROR, "Internal Error: Loader failed")
-		return false
+		r.Log.Log(FATAL_ERROR, "Internal Error: Loader failed")
+		return &r.Result
 	}
 
 	var pkgInfo *loader.PackageInfo
-	pkgInfo, r.file = r.fileNamed(selection.Filename)
+	pkgInfo, r.file = r.fileNamed(config.Selection.Filename)
 	if pkgInfo == nil || r.file == nil {
-		r.log.Log(FATAL_ERROR,
+		r.Log.Log(FATAL_ERROR,
 			fmt.Sprintf("The selected file, %s, was not "+
 				"found in the provided scope: %s",
-				selection.Filename,
-				scope))
-		return false
+				config.Selection.Filename,
+				config.Scope))
+		return &r.Result
 	}
 
-	r.selectionStart = r.lineColToPos(r.file, selection.StartLine, selection.StartCol)
-	r.selectionEnd = r.lineColToPos(r.file, selection.EndLine, selection.EndCol)
+	r.selectionStart = r.lineColToPos(r.file, config.Selection.StartLine, config.Selection.StartCol)
+	r.selectionEnd = r.lineColToPos(r.file, config.Selection.EndLine, config.Selection.EndCol)
 
 	nodes, _ := astutil.PathEnclosingInterval(r.file,
 		r.selectionStart, r.selectionEnd)
 	r.selectedNode = nodes[0]
 
-	r.editSet = map[string]EditSet{r.filename(r.file): NewEditSet()}
+	r.Edits = map[string]EditSet{r.filename(r.file): NewEditSet()}
+	//r.FSChanges = []FileSystemChange{}
 
-	return true
+	return &r.Result
 }
 
 // lineColToPos converts a line/column position (where the first character in a
 // file is at // line 1, column 1) into a token.Pos
-func (r *RefactoringBase) lineColToPos(file *ast.File, line int, column int) token.Pos {
+func (r *refactoringBase) lineColToPos(file *ast.File, line int, column int) token.Pos {
 	if file == nil {
 		panic("file is nil")
 	}
@@ -222,17 +248,17 @@ func (r *RefactoringBase) lineColToPos(file *ast.File, line int, column int) tok
 	return file.Pos()
 }
 
-func (r *RefactoringBase) checkForErrors() {
+func (r *refactoringBase) checkForErrors() {
 	contents, err := ioutil.ReadFile(r.filename(r.file))
 	if err != nil {
-		r.log.Log(ERROR, "Unable to read source file: "+err.Error())
+		r.Log.Log(ERROR, "Unable to read source file: "+err.Error())
 		return
 	}
 	sourceFromFile := string(contents)
 
-	string, err := ApplyToString(r.editSet[r.filename(r.file)], sourceFromFile)
+	string, err := ApplyToString(r.Edits[r.filename(r.file)], sourceFromFile)
 	if err != nil {
-		r.log.Log(ERROR, "Transformation produced invalid EditSet: "+
+		r.Log.Log(ERROR, "Transformation produced invalid EditSet: "+
 			err.Error())
 		return
 	}
@@ -242,7 +268,7 @@ func (r *RefactoringBase) checkForErrors() {
 		fmt.Println("vvvvv")
 		fmt.Println(string)
 		fmt.Println("^^^^^")
-		r.log.Log(ERROR, "Transformation will introduce "+
+		r.Log.Log(ERROR, "Transformation will introduce "+
 			"syntax errors: "+err.Error())
 		return
 	}
@@ -251,7 +277,7 @@ func (r *RefactoringBase) checkForErrors() {
 		// TODO: This may be wrong if several files are changed...?
 		r.pkgInfo = r.program.CreatePackage(r.file.Name.Name, f)
 		if r.pkgInfo.Err != nil {
-			r.log.Log(ERROR, "Transformation will introduce semantic "+
+			r.Log.Log(ERROR, "Transformation will introduce semantic "+
 				"errors: "+r.pkgInfo.Err.Error())
 			return
 		}
@@ -261,7 +287,7 @@ func (r *RefactoringBase) checkForErrors() {
 /*
 //find occurrences of [top level] identifier across package
 //TODO filter file? /dumbfounded
-func (r *RefactoringBase) findAnyOccurrences(name string) bool {
+func (r *refactoringBase) findAnyOccurrences(name string) bool {
 	result := false
 	//ast.Inspect(r.file, func(n ast.Node) bool {
 	//switch thisIdent := n.(type) {
@@ -279,17 +305,9 @@ func (r *RefactoringBase) findAnyOccurrences(name string) bool {
 }
 */
 
-func (r *RefactoringBase) GetLog() *Log {
-	return r.log
-}
-
-func (r *RefactoringBase) GetResult() (*Log, map[string]EditSet) {
-	return r.log, r.editSet
-}
-
 /* -=-=- Utility Methods -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 
-func (r *RefactoringBase) pkgInfo(file *ast.File) *loader.PackageInfo {
+func (r *refactoringBase) pkgInfo(file *ast.File) *loader.PackageInfo {
 	for _, pkgInfo := range r.program.AllPackages {
 		for _, thisFile := range pkgInfo.Files {
 			if thisFile == file {
@@ -300,11 +318,11 @@ func (r *RefactoringBase) pkgInfo(file *ast.File) *loader.PackageInfo {
 	return nil
 }
 
-func (r *RefactoringBase) filename(file *ast.File) string {
+func (r *refactoringBase) filename(file *ast.File) string {
 	return r.program.Fset.Position(file.Package).Filename
 }
 
-func (r *RefactoringBase) fileContaining(node ast.Node) *ast.File {
+func (r *refactoringBase) fileContaining(node ast.Node) *ast.File {
 	tfile := r.program.Fset.File(node.Pos())
 	for _, pkgInfo := range r.program.AllPackages {
 		for _, thisFile := range pkgInfo.Files {
@@ -317,7 +335,7 @@ func (r *RefactoringBase) fileContaining(node ast.Node) *ast.File {
 	panic("No ast.File for node")
 }
 
-func (r *RefactoringBase) fileNamed(filename string) (*loader.PackageInfo, *ast.File) {
+func (r *refactoringBase) fileNamed(filename string) (*loader.PackageInfo, *ast.File) {
 	absFilename, _ := filepath.Abs(filename)
 	for _, pkgInfo := range r.program.AllPackages {
 		for _, f := range pkgInfo.Files {
@@ -330,7 +348,7 @@ func (r *RefactoringBase) fileNamed(filename string) (*loader.PackageInfo, *ast.
 	return nil, nil
 }
 
-func (r *RefactoringBase) forEachFile(f func(ast *ast.File)) {
+func (r *refactoringBase) forEachFile(f func(ast *ast.File)) {
 	for _, pkgInfo := range r.program.AllPackages {
 		for _, ast := range pkgInfo.Files {
 			f(ast)
@@ -338,7 +356,7 @@ func (r *RefactoringBase) forEachFile(f func(ast *ast.File)) {
 	}
 }
 
-func (r *RefactoringBase) forEachInitialFile(f func(ast *ast.File)) {
+func (r *refactoringBase) forEachInitialFile(f func(ast *ast.File)) {
 	for _, pkgInfo := range r.program.InitialPackages() {
 		for _, ast := range pkgInfo.Files {
 			f(ast)
@@ -346,20 +364,20 @@ func (r *RefactoringBase) forEachInitialFile(f func(ast *ast.File)) {
 	}
 }
 
-func (r *RefactoringBase) readFromFile(offset, len int) string {
+func (r *refactoringBase) readFromFile(offset, len int) string {
 	buf := make([]byte, len)
 	file, err := os.Open(r.filename(r.file))
 	if err != nil {
-		r.log.Log(FATAL_ERROR, fmt.Sprintf("Error on file Open %s", err))
+		r.Log.Log(FATAL_ERROR, fmt.Sprintf("Error on file Open %s", err))
 	}
 	defer file.Close()
 	_, err = file.ReadAt(buf, int64(offset))
 	if err != nil {
-		r.log.Log(FATAL_ERROR, fmt.Sprintf("Error on file Open %s", err))
+		r.Log.Log(FATAL_ERROR, fmt.Sprintf("Error on file Open %s", err))
 	}
 	return string(buf)
 }
 
-func (r *RefactoringBase) offsetLength(node ast.Node) (int, int) {
+func (r *refactoringBase) offsetLength(node ast.Node) (int, int) {
 	return r.program.Fset.Position(node.Pos()).Offset, (r.program.Fset.Position(node.End()).Offset - r.program.Fset.Position(node.Pos()).Offset)
 }

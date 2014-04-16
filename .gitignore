@@ -5,3 +5,4 @@ go-doctor
 doctor/doctor.test
 *.swp
 *~
+doctor/zz_*

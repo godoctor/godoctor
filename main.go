@@ -154,7 +154,7 @@ func attempt() error {
 			return err
 		}
 		src = string(bytes)
-		filename = os.Stdin.Name()
+		filename = "main.go" // was os.Stdin.Name()
 		args = args[1:]
 	} else { // file given, e.g. go-doctor file refactor params...
 		filename = args[0]
@@ -175,7 +175,7 @@ func attempt() error {
 	changes := make(map[string][]byte)
 
 	if log.ContainsErrors() && !*skipLogFlag {
-		printResults(r.Name(), log, changes)
+		printResults(r.Description().Name, log, changes)
 		return nil
 	}
 
@@ -200,7 +200,7 @@ func attempt() error {
 			p.Write(f, f, &b)
 			changes[f] = b.Bytes()
 		}
-		printResults(r.Name(), log, changes)
+		printResults(r.Description().Name, log, changes)
 		return nil
 	}
 
@@ -236,7 +236,7 @@ func attempt() error {
 
 	// At this point changes has updated files and user did not give write flag,
 	// so print refactored files.
-	printResults(r.Name(), log, changes)
+	printResults(r.Description().Name, log, changes)
 	return nil
 }
 
@@ -259,8 +259,8 @@ func printResults(refactoring string, l *doctor.Log, changes map[string][]byte) 
 
 func printRefactoringParams(r doctor.Refactoring) {
 	resp := Response{"OK",
-		fields{"params": r.GetParams()},
-		r.GetParams(),
+		fields{"params": r.Description().Params},
+		r.Description().Params,
 	}
 	fmt.Printf("%s\n", resp)
 }
@@ -348,15 +348,21 @@ func query(file string, src string, args []string, r doctor.Refactoring, pos str
 		s = []string{ts.Filename}
 	}
 
-	// TODO these 3 all return bool, but get checked in log. Not sure if
-	// need a change here or not. Maybe move this entire function to main.go
-	if !r.SetSelection(ts, s, src) {
-		return nil, nil, fmt.Errorf("unable to set selection for %s at %s", file, pos)
+	var fs doctor.FileSystem
+	if src != "" {
+		fs = &doctor.VirtualFileSystem{}
+		fs.CreateFile("main.go", src)
+	} else {
+		fs = &doctor.LocalFileSystem{}
 	}
-	if !r.Configure(args) {
-		return nil, nil, fmt.Errorf("unable to configure refactoring with args")
+
+	config := &doctor.Config{
+		FileSystem: fs,
+		Scope:      s,
+		Selection:  ts,
+		Args:       args,
 	}
-	r.Run()
-	l, e := r.GetResult()
-	return l, e, nil
+	result := r.Run(config)
+	fmt.Println(result.Log)
+	return result.Log, result.Edits, nil
 }

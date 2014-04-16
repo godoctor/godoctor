@@ -5,6 +5,7 @@
 // This file defines a simple key value store intended for
 // usage as an in memory file store. It will accept chunks
 // or entire files and load for later usage.
+
 package doctor
 
 import (

@@ -15,45 +15,49 @@ import (
 
 // A ShortAssignmentRefactoring changes short assignment statements (n := 5)
 // into explicitly-typed variable declarations (var n int = 5).
-type ShortAssignRefactoring struct {
-	RefactoringBase
+type shortAssignRefactoring struct {
+	refactoringBase
 }
 
-func (r *ShortAssignRefactoring) Name() string {
-	return "Short Assignment Refactoring"
-}
-
-func (r *ShortAssignRefactoring) GetParams() []string {
-	//return []string{}
-	return nil
-}
-
-func (r *ShortAssignRefactoring) Configure(args []string) bool {
-	return true
-}
-
-func (r *ShortAssignRefactoring) Run() {
-	if r.selectedNode == nil {
-		//	r.log.Log(FATAL_ERROR, "selection cannot be null")
-		r.log.Log(ERROR, "The selection cannot be null.Please select a valid node!")
-		return // SetSelection did not succeed
+func (r *shortAssignRefactoring) Description() *Description {
+	return &Description{
+		Name:   "Short Assignment Refactoring",
+		Params: nil,
 	}
+}
+
+func (r *shortAssignRefactoring) Run(config *Config) *Result {
+	if r.refactoringBase.Run(config); r.Log.ContainsErrors() {
+		return &r.Result
+	}
+
+	if len(config.Args) != 0 {
+		r.Log.Log(FATAL_ERROR, "This refactoring takes no arguments.")
+		return &r.Result
+	}
+
+	if r.selectedNode == nil {
+		//	r.Log.Log(FATAL_ERROR, "selection cannot be null")
+		r.Log.Log(ERROR, "The selection cannot be null.Please select a valid node!")
+		return &r.Result
+	}
+
 	switch selectedNode := r.selectedNode.(type) {
 	case *ast.AssignStmt:
 		r.createEditSet(selectedNode)
 	default:
-		r.log.Log(FATAL_ERROR, fmt.Sprintf("Select a short assignment (:=) statement! Selected node is %s", reflect.TypeOf(r.selectedNode)))
+		r.Log.Log(FATAL_ERROR, fmt.Sprintf("Select a short assignment (:=) statement! Selected node is %s", reflect.TypeOf(r.selectedNode)))
 	}
 	r.checkForErrors()
-	return
+	return &r.Result
 }
 
-func (r *ShortAssignRefactoring) createEditSet(assign *ast.AssignStmt) {
+func (r *shortAssignRefactoring) createEditSet(assign *ast.AssignStmt) {
 	start, length := r.offsetLength(assign)
-	r.editSet[r.filename(r.file)].Add(OffsetLength{start, length + 1}, r.createReplacementString(assign))
+	r.Edits[r.filename(r.file)].Add(OffsetLength{start, length + 1}, r.createReplacementString(assign))
 }
 
-func (r *ShortAssignRefactoring) rhsExprs(assign *ast.AssignStmt) []string {
+func (r *shortAssignRefactoring) rhsExprs(assign *ast.AssignStmt) []string {
 	rhsValue := make([]string, len(assign.Rhs))
 	for j, rhs := range assign.Rhs {
 		rhsValue[j] = r.readFromFile(r.offsetLength(rhs))
@@ -61,7 +65,7 @@ func (r *ShortAssignRefactoring) rhsExprs(assign *ast.AssignStmt) []string {
 	return rhsValue
 }
 
-func (r *ShortAssignRefactoring) createReplacementString(assign *ast.AssignStmt) string {
+func (r *shortAssignRefactoring) createReplacementString(assign *ast.AssignStmt) string {
 	var buf bytes.Buffer
 	replacement := make([]string, len(assign.Rhs))
 	for i, rhs := range assign.Rhs {
@@ -71,7 +75,7 @@ func (r *ShortAssignRefactoring) createReplacementString(assign *ast.AssignStmt)
 				typeOfFunctionType(T),
 				r.rhsExprs(assign)[i])
 			if typeOfFunctionType(T) == "" {
-				//	r.log.Log(ERROR, "This short assignment cannot be converted to an explicitly-typed var declaration.")
+				//	r.Log.Log(ERROR, "This short assignment cannot be converted to an explicitly-typed var declaration.")
 				replacement[i] = fmt.Sprintf("var %s = %s\n",
 					r.lhsNames(assign)[i].String(),
 					r.rhsExprs(assign)[i])
@@ -88,7 +92,7 @@ func (r *ShortAssignRefactoring) createReplacementString(assign *ast.AssignStmt)
 }
 
 // lhsNames returns the names on the LHS of an assignment, comma-separated.
-func (r *ShortAssignRefactoring) lhsNames(assign *ast.AssignStmt) []bytes.Buffer {
+func (r *shortAssignRefactoring) lhsNames(assign *ast.AssignStmt) []bytes.Buffer {
 	var lhsbuf bytes.Buffer
 	buf := make([]bytes.Buffer, len(assign.Lhs))
 	for i, lhs := range assign.Lhs {

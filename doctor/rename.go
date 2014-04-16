@@ -14,49 +14,44 @@ import (
 	"code.google.com/p/go.tools/go/types"
 )
 
-// A RenameRefactoring is used to rename identifiers in Go programs.
-type RenameRefactoring struct {
-	RefactoringBase
+// A renameRefactoring is used to rename identifiers in Go programs.
+type renameRefactoring struct {
+	refactoringBase
 	newName   string
 	signature *types.Signature
 }
 
-func (r *RenameRefactoring) Name() string {
-	return "Rename"
-}
-
-func (r *RenameRefactoring) SetNewName(newName string) {
-
-	if r.isIdentifierValid(newName) {
-		r.newName = newName
-	} else {
-		r.log.Log(FATAL_ERROR, "Please select a valid Go identifier")
+func (r *renameRefactoring) Description() *Description {
+	return &Description{
+		Name:   "Rename",
+		Params: []string{"New Name"},
 	}
 }
 
-func (r *RenameRefactoring) GetParams() []string {
-	return []string{"New Name"}
-}
-
-func (r *RenameRefactoring) Configure(args []string) bool {
-	if len(args) == 1 {
-		r.SetNewName(args[0])
-		return true
-	} else {
-		r.log.Log(FATAL_ERROR, "(Internal Error) Invalid arguments")
-		return false
+func (r *renameRefactoring) Run(config *Config) *Result {
+	if r.refactoringBase.Run(config); r.Log.ContainsErrors() {
+		return &r.Result
 	}
-}
 
-func (r *RenameRefactoring) Run() {
+	if len(config.Args) != 1 {
+		r.Log.Log(FATAL_ERROR, "(Internal Error) Invalid arguments")
+		return &r.Result
+	}
+
+	r.newName = config.Args[0]
+	if !r.isIdentifierValid(r.newName) {
+		r.Log.Log(FATAL_ERROR, "Please select a valid Go identifier")
+		return &r.Result
+	}
+
 	if r.selectedNode == nil {
-		r.log.Log(FATAL_ERROR, "Please select an identifier to rename.")
-		return
+		r.Log.Log(FATAL_ERROR, "Please select an identifier to rename.")
+		return &r.Result
 	}
 
 	if r.newName == "" {
-		r.log.Log(FATAL_ERROR, "newName cannot be empty")
-		return
+		r.Log.Log(FATAL_ERROR, "newName cannot be empty")
+		return &r.Result
 	}
 
 	switch ident := r.selectedNode.(type) {
@@ -64,12 +59,12 @@ func (r *RenameRefactoring) Run() {
 		r.rename(ident)
 
 	default:
-		r.log.Log(FATAL_ERROR, "Please select an identifier to rename.")
-		return
+		r.Log.Log(FATAL_ERROR, "Please select an identifier to rename.")
 	}
+	return &r.Result
 }
 
-func (r *RenameRefactoring) isIdentifierValid(newName string) bool {
+func (r *renameRefactoring) isIdentifierValid(newName string) bool {
 
 	matched, err := regexp.MatchString("^[A-Za-z_][0-9A-Za-z_]*$", newName)
 	if matched && err == nil {
@@ -78,13 +73,13 @@ func (r *RenameRefactoring) isIdentifierValid(newName string) bool {
 	return false
 }
 
-func (r *RenameRefactoring) rename(ident *ast.Ident) {
+func (r *renameRefactoring) rename(ident *ast.Ident) {
 
 	if !r.IdentifierExists(ident) {
 		search := &SearchEngine{r.program}
 		searchResult, err := search.FindOccurrences(ident)
 		if err != nil {
-			r.log.Log(FATAL_ERROR, err.Error())
+			r.Log.Log(FATAL_ERROR, err.Error())
 			return
 		}
 
@@ -93,17 +88,17 @@ func (r *RenameRefactoring) rename(ident *ast.Ident) {
 		return
 	}
 
-	r.log.Log(FATAL_ERROR, "newname already exists in scope,please select other value for the newname")
+	r.Log.Log(FATAL_ERROR, "newname already exists in scope,please select other value for the newname")
 
 }
 
 //IdentifierExists checks if there already exists an Identifier with the newName,with in the scope of the oldname.
-func (r *RenameRefactoring) IdentifierExists(ident *ast.Ident) bool {
+func (r *renameRefactoring) IdentifierExists(ident *ast.Ident) bool {
 
 	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
 
 	if obj == nil {
-		r.log.Log(FATAL_ERROR, "unable to find declaration of selected identifier")
+		r.Log.Log(FATAL_ERROR, "unable to find declaration of selected identifier")
 		return false
 	}
 
@@ -117,13 +112,13 @@ func (r *RenameRefactoring) IdentifierExists(ident *ast.Ident) bool {
 }
 
 //addOccurrences adds all the Occurences to the editset
-func (r *RenameRefactoring) addOccurrences(allOccurrences map[string][]OffsetLength) {
+func (r *renameRefactoring) addOccurrences(allOccurrences map[string][]OffsetLength) {
 	for filename, occurrences := range allOccurrences {
 		for _, occurrence := range occurrences {
-			if r.editSet[filename] == nil {
-				r.editSet[filename] = NewEditSet()
+			if r.Edits[filename] == nil {
+				r.Edits[filename] = NewEditSet()
 			}
-			r.editSet[filename].Add(occurrence, r.newName)
+			r.Edits[filename].Add(occurrence, r.newName)
 		}
 
 	}
