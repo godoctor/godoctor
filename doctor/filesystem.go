@@ -5,10 +5,12 @@
 package doctor
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -18,10 +20,10 @@ import (
 type FileSystem interface {
 	// ReadDir returns a slice of os.FileInfo, sorted by Name,
 	// describing the content of the named directory.
-	ReadDir(dir string) (fi []os.FileInfo, err error)
+	ReadDir(dir string) ([]os.FileInfo, error)
 
 	// OpenFile opens a file (not a directory) for reading.
-	OpenFile(path string) (r io.ReadCloser, err error)
+	OpenFile(path string) (io.ReadCloser, error)
 
 	// CreateFile creates a text file with the given contents and default
 	// permissions.
@@ -40,11 +42,15 @@ type FileSystem interface {
 
 type LocalFileSystem struct{}
 
+func NewLocalFileSystem() *LocalFileSystem {
+	return &LocalFileSystem{}
+}
+
 func (fs *LocalFileSystem) ReadDir(path string) ([]os.FileInfo, error) {
 	return ioutil.ReadDir(path)
 }
 
-func (fs *LocalFileSystem) OpenFile(path string) (r io.ReadCloser, err error) {
+func (fs *LocalFileSystem) OpenFile(path string) (io.ReadCloser, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -70,25 +76,67 @@ func (fs *LocalFileSystem) CreateFile(path, contents string) error {
 	return nil
 }
 
-func (fs *LocalFileSystem) CreateDirectory(path string) error {
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		return fmt.Errorf("Path already exists: %s", path)
+func (fs *LocalFileSystem) Rename(oldPath, newName string) error {
+	if !isBareFilename(newName) {
+		return fmt.Errorf("newName must be a bare filename: %s",
+			newName)
 	}
-	return os.Mkdir(path, os.ModeDir)
-}
-
-func (fs *LocalFileSystem) Rename(path, newName string) error {
-	return os.Rename(path, newName)
+	newPath := path.Join(path.Dir(oldPath), newName)
+	return os.Rename(oldPath, newPath)
 }
 
 func (fs *LocalFileSystem) Remove(path string) error {
 	return os.Remove(path)
 }
 
+/* -=-=- Edited File System -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
+
+type EditedFileSystem struct {
+	LocalFileSystem
+	Edits map[string]EditSet
+}
+
+func NewEditedFileSystem(edits map[string]EditSet) *EditedFileSystem {
+	return &EditedFileSystem{Edits: edits}
+}
+
+func (fs *EditedFileSystem) OpenFile(path string) (io.ReadCloser, error) {
+	localReader, err := fs.LocalFileSystem.OpenFile(path)
+	editSet, ok := fs.Edits[path]
+	if err != nil || !ok {
+		return localReader, err
+	}
+	contents, err := ApplyToReader(editSet, localReader)
+	if err != nil {
+		return nil, err
+	}
+	return ioutil.NopCloser(bytes.NewReader(contents)), nil
+}
+
+func (fs *EditedFileSystem) CreateFile(path, contents string) error {
+	panic("CreateFile unsupported")
+}
+
+func (fs *EditedFileSystem) CreateDirectory(path string) error {
+	panic("CreateDirectory unsupported")
+}
+
+func (fs *EditedFileSystem) Rename(path, newName string) error {
+	panic("Rename unsupported")
+}
+
+func (fs *EditedFileSystem) Remove(path string) error {
+	panic("Remove unsupported")
+}
+
 /* -=-=- Virtual File System -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 
 type VirtualFileSystem struct {
 	files map[string]string
+}
+
+func NewVirtualFileSystem() *VirtualFileSystem {
+	return &VirtualFileSystem{files: map[string]string{}}
 }
 
 func isInGoRoot(path string) bool {
@@ -99,11 +147,12 @@ func (fs *VirtualFileSystem) ReadDir(path string) ([]os.FileInfo, error) {
 	if isInGoRoot(path) {
 		return ioutil.ReadDir(path)
 	} else {
+		panic("NOT YET SUPPORTED: READDIR " + path)
 		return []os.FileInfo{}, nil
 	}
 }
 
-func (fs *VirtualFileSystem) OpenFile(path string) (r io.ReadCloser, err error) {
+func (fs *VirtualFileSystem) OpenFile(path string) (io.ReadCloser, error) {
 	if isInGoRoot(path) {
 		f, err := os.Open(path)
 		if err != nil {
@@ -191,4 +240,9 @@ func Execute(fs FileSystem, changes []FileSystemChange) error {
 		}
 	}
 	return nil
+}
+
+func isBareFilename(filePath string) bool {
+	dir, _ := path.Split(filePath)
+	return dir == ""
 }
