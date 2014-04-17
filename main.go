@@ -170,6 +170,9 @@ func attempt() error {
 		return err
 	}
 
+	// TODO: do something with result.FSChanges -- e.g., Rename Package
+	// will rename a directory
+
 	// map[filename]output
 	// where: output == diff || updated file
 	changes := make(map[string][]byte)

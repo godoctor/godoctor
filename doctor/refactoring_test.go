@@ -206,8 +206,9 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 		t.Fatal(err)
 	}
 
+	fileSystem := &LocalFileSystem{}
 	config := &Config{
-		FileSystem: &LocalFileSystem{},
+		FileSystem: fileSystem,
 		Scope:      []string{mainFile},
 		Selection:  selection,
 		Args:       remainder,
@@ -226,6 +227,12 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 		}
 		if shouldPass {
 			checkResult(filename, string(output), t)
+		}
+	}
+
+	for _, chg := range result.FSChanges {
+		if err := chg.ExecuteUsing(fileSystem); err != nil {
+			t.Fatal(err)
 		}
 	}
 }

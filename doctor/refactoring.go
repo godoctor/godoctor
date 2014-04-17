@@ -218,7 +218,7 @@ func (r *refactoringBase) Run(config *Config) *Result {
 	r.selectedNode = nodes[0]
 
 	r.Edits = map[string]EditSet{r.filename(r.file): NewEditSet()}
-	//r.FSChanges = []FileSystemChange{}
+	r.FSChanges = []FileSystemChange{}
 
 	return &r.Result
 }
