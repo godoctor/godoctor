@@ -1,7 +1,7 @@
 package mypackage 
 
 
-type Simple interface {
+type Sample interface {
 
 Mymethod() string
 

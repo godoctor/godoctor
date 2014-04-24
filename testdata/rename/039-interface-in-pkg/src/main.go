@@ -11,7 +11,7 @@ mystructvar  :=   mypackage.Mystruct {"helloo" }
 												
 otherstructvar :=  mypackage.Otherstruct {"Hiii"} 
 	
-structsArr    :=   [...]mypackage.Simple{mystructvar,otherstructvar}  // <<<<< rename,14,35,14,35,Renamed,pass
+structsArr    :=   [...]mypackage.Sample{mystructvar,otherstructvar}  // <<<<< rename,14,35,14,35,Renamed,pass
 
 for i,_ := range structsArr {
 

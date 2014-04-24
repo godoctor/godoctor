@@ -11,7 +11,7 @@ mystructvar := mypackage.Mystruct {"helloo" }
 
 fmt.Println("value is",mystructvar.Mymethod())	
 
-fmt.Println(mypackage.Dummy)   // <<<<< rename,14,23,14,23,Renamed,pass
+fmt.Println(mypackage.Dumy)   // <<<<< rename,14,23,14,23,Renamed,pass
 
 }
 

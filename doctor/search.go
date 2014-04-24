@@ -10,8 +10,7 @@ import (
 	"go/token"
 	"regexp"
 	"strings"
-	"unicode/utf8"
-
+	
 	"code.google.com/p/go.tools/go/loader"
 	"code.google.com/p/go.tools/go/types"
 )
@@ -268,49 +267,40 @@ func allPackages(prog *loader.Program) map[*loader.PackageInfo]bool {
 	return pkgs
 }
 
-// FindOccurrencesincomments checks if identifier occurs as a part in comments,if true then
-// all the source locations of identifier  in comments are returned.
-
+// occurrencesincomments checks if the name of the selected identifier occurs as a word in comments,if true then
+// all the source locations of name in comments are returned.
 func (r *SearchEngine) occurrencesInComments(name string, decls map[types.Object]bool, result map[string][]OffsetLength) map[string][]OffsetLength {
-
 	for pkgInfo := range r.packages(decls) {
 		for _, f := range pkgInfo.Files {
 			for _, comment := range f.Comments {
-
 				if strings.Contains(comment.List[0].Text, name) {
-					result = r.occurrencesInFileComments(f, comment, name, result)
+					result = r.occurrencesInFileComments(f, comment, name, result,r.program)
 				}
 			}
 		}
 	}
-	return result
+return result
 }
 
-// occurrencesInFileComments finds the source location of identifiers in
-// comments, adds them to the already existng occurrences of
-// identifier(result), and returns the result.
-func (r *SearchEngine) occurrencesInFileComments(f *ast.File, comment *ast.CommentGroup, name string, result map[string][]OffsetLength) map[string][]OffsetLength {
-
+// occurrencesInFileComments finds the source location of  selected identifier names in
+// comments, appends them to the already found source locations of 
+// selected identifier objects (result), and returns the result.
+func (r *SearchEngine) occurrencesInFileComments(f *ast.File, comment *ast.CommentGroup, name string, result map[string][]OffsetLength,prog *loader.Program) map[string][]OffsetLength {
 	var whitespaceindex int = 1
-
-	re := regexp.MustCompile("[^0-9A-Za-z_]hello[^0-9A-Za-z_]|//hello[^0-9A-Za-z_]|/*hello[^0-9A-Za-z_]|[^0-9A-Za-z_]hello$")
+        regexpstring := fmt.Sprintf("[\\PL]%s[\\PL]|//%s[\\PL]|/*%s[\\PL]|[\\PL]%s$",name,name,name,name)
+        re := regexp.MustCompile(regexpstring) 
 	matchcount := strings.Count(comment.List[0].Text, name)
-
 	for _, matchindex := range re.FindAllStringIndex(comment.List[0].Text, matchcount) {
-
-		offset := r.program.Fset.Position(comment.List[0].Slash).Offset + matchindex[0] + whitespaceindex
-		length := utf8.RuneCountInString(name)
-		filename := r.program.Fset.Position(f.Pos()).Filename
+		offset := prog.Fset.Position(comment.List[0].Slash).Offset + matchindex[0] + whitespaceindex		
+                length := len(name) 
+		filename := prog.Fset.Position(f.Pos()).Filename
 		result[filename] = append(result[filename], OffsetLength{offset, length})
-
-	}
-
+          }
 	return result
 }
 
 /* -=-=- Utility Methods -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 // TODO: These are duplicated from refactoring.go
-
 func (r *SearchEngine) fileContaining(node ast.Node) *ast.File {
 	tfile := r.program.Fset.File(node.Pos())
 	for _, pkgInfo := range r.program.AllPackages {
