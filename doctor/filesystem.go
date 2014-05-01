@@ -13,6 +13,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 /* -=-=- File System Interface -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
@@ -147,10 +148,36 @@ func (fs *VirtualFileSystem) ReadDir(path string) ([]os.FileInfo, error) {
 	if isInGoRoot(path) {
 		return ioutil.ReadDir(path)
 	} else {
-		panic("NOT YET SUPPORTED: READDIR " + path)
-		return []os.FileInfo{}, nil
+		return fs.fileInfos(), nil
 	}
 }
+
+func (fs *VirtualFileSystem) fileInfos() []os.FileInfo {
+	now := time.Time{} // Zero time
+	result := make([]os.FileInfo, len(fs.files))
+	for name, contents := range fs.files {
+		fi := &vfsFileInfo{
+			name:    name,
+			size:    int64(len(contents)),
+			modTime: now,
+		}
+		result = append(result, fi)
+	}
+	return result
+}
+
+type vfsFileInfo struct {
+	name    string
+	size    int64
+	modTime time.Time
+}
+
+func (fi *vfsFileInfo) Name() string       { return fi.name }
+func (fi *vfsFileInfo) Size() int64        { return fi.size }
+func (fi *vfsFileInfo) Mode() os.FileMode  { return 0777 }
+func (fi *vfsFileInfo) ModTime() time.Time { return fi.modTime }
+func (fi *vfsFileInfo) IsDir() bool        { return false }
+func (fi *vfsFileInfo) Sys() interface{}   { return nil }
 
 func (fs *VirtualFileSystem) OpenFile(path string) (io.ReadCloser, error) {
 	if isInGoRoot(path) {
