@@ -10,7 +10,7 @@ import (
 	"go/token"
 	"regexp"
 	"strings"
-	
+
 	"code.google.com/p/go.tools/go/loader"
 	"code.google.com/p/go.tools/go/types"
 )
@@ -274,28 +274,28 @@ func (r *SearchEngine) occurrencesInComments(name string, decls map[types.Object
 		for _, f := range pkgInfo.Files {
 			for _, comment := range f.Comments {
 				if strings.Contains(comment.List[0].Text, name) {
-					result = r.occurrencesInFileComments(f, comment, name, result,r.program)
+					result = r.occurrencesInFileComments(f, comment, name, result, r.program)
 				}
 			}
 		}
 	}
-return result
+	return result
 }
 
 // occurrencesInFileComments finds the source location of  selected identifier names in
-// comments, appends them to the already found source locations of 
+// comments, appends them to the already found source locations of
 // selected identifier objects (result), and returns the result.
-func (r *SearchEngine) occurrencesInFileComments(f *ast.File, comment *ast.CommentGroup, name string, result map[string][]OffsetLength,prog *loader.Program) map[string][]OffsetLength {
+func (r *SearchEngine) occurrencesInFileComments(f *ast.File, comment *ast.CommentGroup, name string, result map[string][]OffsetLength, prog *loader.Program) map[string][]OffsetLength {
 	var whitespaceindex int = 1
-        regexpstring := fmt.Sprintf("[\\PL]%s[\\PL]|//%s[\\PL]|/*%s[\\PL]|[\\PL]%s$",name,name,name,name)
-        re := regexp.MustCompile(regexpstring) 
+	regexpstring := fmt.Sprintf("[\\PL]%s[\\PL]|//%s[\\PL]|/*%s[\\PL]|[\\PL]%s$", name, name, name, name)
+	re := regexp.MustCompile(regexpstring)
 	matchcount := strings.Count(comment.List[0].Text, name)
 	for _, matchindex := range re.FindAllStringIndex(comment.List[0].Text, matchcount) {
-		offset := prog.Fset.Position(comment.List[0].Slash).Offset + matchindex[0] + whitespaceindex		
-                length := len(name) 
+		offset := prog.Fset.Position(comment.List[0].Slash).Offset + matchindex[0] + whitespaceindex
+		length := len(name)
 		filename := prog.Fset.Position(f.Pos()).Filename
 		result[filename] = append(result[filename], OffsetLength{offset, length})
-          }
+	}
 	return result
 }
 
