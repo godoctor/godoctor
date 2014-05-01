@@ -172,7 +172,7 @@ func (r *refactoringBase) Run(config *Config) *Result {
 		var offset int = err.(types.Error).Fset.Position(pos).Offset
 		var filename string = err.(types.Error).Fset.File(pos).Name()
 		var length int = 0
-		r.Log.LogInitial(ERROR, "!!!!!"+message, filename, offset, length)
+		r.Log.LogInitial(ERROR, message, filename, offset, length)
 	}
 	// FIXME: Jeff: handle error
 
