@@ -353,8 +353,12 @@ func query(file string, src string, args []string, r doctor.Refactoring, pos str
 
 	var fs doctor.FileSystem
 	if src != "" {
-		fs = &doctor.VirtualFileSystem{}
-		fs.CreateFile("main.go", src)
+		// FIXME(reed): Need a filename for what's being passed on standard input -- must exist on the file system already -- then pass in absolute path to file in editor rather than "main.go"
+		// FIXME(reed): Make sure the resulting edit set only changes the one file passed on stdin.  If it changes any others, bail with an error message
+		fs, err = doctor.NewSingleEditedFileSystem("main.go", src)
+		if err != nil {
+			return nil, nil, err
+		}
 	} else {
 		fs = &doctor.LocalFileSystem{}
 	}

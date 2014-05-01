@@ -101,6 +101,24 @@ func NewEditedFileSystem(edits map[string]EditSet) *EditedFileSystem {
 	return &EditedFileSystem{Edits: edits}
 }
 
+func NewSingleEditedFileSystem(filename, contents string) (*EditedFileSystem, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	size := int(fi.Size())
+	if int64(size) != fi.Size() {
+		return nil, fmt.Errorf("File too large: %d bytes\n", fi.Size())
+	}
+	es := NewEditSet()
+	es.Add(OffsetLength{0, size}, contents)
+	return NewEditedFileSystem(map[string]EditSet{filename: es}), nil
+}
+
 func (fs *EditedFileSystem) OpenFile(path string) (io.ReadCloser, error) {
 	localReader, err := fs.LocalFileSystem.OpenFile(path)
 	editSet, ok := fs.Edits[path]
