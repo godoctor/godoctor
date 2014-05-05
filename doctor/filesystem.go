@@ -102,21 +102,36 @@ func NewEditedFileSystem(edits map[string]EditSet) *EditedFileSystem {
 }
 
 func NewSingleEditedFileSystem(filename, contents string) (*EditedFileSystem, error) {
-	f, err := os.Open(filename)
+	size, err := sizeOf(filename)
 	if err != nil {
 		return nil, err
-	}
-	fi, err := f.Stat()
-	if err != nil {
-		return nil, err
-	}
-	size := int(fi.Size())
-	if int64(size) != fi.Size() {
-		return nil, fmt.Errorf("File too large: %d bytes\n", fi.Size())
 	}
 	es := NewEditSet()
 	es.Add(OffsetLength{0, size}, contents)
 	return NewEditedFileSystem(map[string]EditSet{filename: es}), nil
+}
+
+func sizeOf(filename string) (int, error) {
+	if filename == os.Stdin.Name() {
+		return 0, nil
+	}
+	f, err := os.Open(filename)
+	if err != nil {
+		//if os.IsNotExist(err) {
+		//	return 0, nil
+		//}
+		return 0, err
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		return 0, err
+	}
+	size := int(fi.Size())
+	if int64(size) != fi.Size() {
+		return 0, fmt.Errorf("File too large: %d bytes\n", fi.Size())
+	}
+	return size, nil
 }
 
 func (fs *EditedFileSystem) OpenFile(path string) (io.ReadCloser, error) {
