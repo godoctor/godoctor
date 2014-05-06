@@ -11,6 +11,8 @@
 " currently only does rename on current cursor selection (in .go file)
 " usage:
 " :Rename <new name>
+"
+" I would also add: 'set hidden' to your ~/.vimrc
 
 if exists("b:did_ftplugin_doc")
     finish
