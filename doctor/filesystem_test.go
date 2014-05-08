@@ -31,7 +31,7 @@ func TestCreateFile1(t *testing.T) {
 	}
 	if string(bytes) != contents {
 		os.Remove(testFile)
-		t.Fatalf("Incorrect file contents:\n", string(bytes))
+		t.Fatal("Incorrect file contents:\n", string(bytes))
 	}
 	os.Remove(testFile)
 }
@@ -106,7 +106,7 @@ func TestEditedFileSystem(t *testing.T) {
 	}
 	if string(bytes) != expected {
 		os.Remove(testFile)
-		t.Fatalf("Incorrect file contents:\n", string(bytes))
+		t.Fatal("Incorrect file contents:\n", string(bytes))
 	}
 	os.Remove(testFile)
 }

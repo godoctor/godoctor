@@ -377,7 +377,7 @@ func (h *hunk) String() string {
 	fmt.Fprintf(&buf, "Original Text:\nvvvvv\n%s\n^^^^^\n", h.hunk.String())
 	fmt.Fprintf(&buf, "Edits:\n")
 	for _, edit := range h.edits {
-		fmt.Fprintf(&buf, "%s\n", edit)
+		fmt.Fprintf(&buf, "%s\n", edit.String())
 	}
 	return buf.String()
 }
