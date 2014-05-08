@@ -11,9 +11,6 @@ package doctor
 // A nullRefactoring makes no changes to a program.
 type nullRefactoring struct {
 	refactoringBase
-	optShowAST        bool
-	optShowPackages   bool
-	optShowReferences bool
 }
 
 func (r *nullRefactoring) Description() *Description {
