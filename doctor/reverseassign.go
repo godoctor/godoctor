@@ -19,8 +19,9 @@ type reverseAssignRefactoring struct {
 
 func (r *reverseAssignRefactoring) Description() *Description {
 	return &Description{
-		Name:   "Reverse Assignment Refactoring",
-		Params: nil,
+		Name:    "Reverse Assignment Refactoring",
+		Params:  nil,
+		Quality: Development,
 	}
 }
 
@@ -29,8 +30,7 @@ func (r *reverseAssignRefactoring) Run(config *Config) *Result {
 		return &r.Result
 	}
 
-	if len(config.Args) != 0 {
-		r.Log.Log(FATAL_ERROR, "This refactoring takes no arguments.")
+	if !validateArgs(config, r.Description(), r.Log) {
 		return &r.Result
 	}
 

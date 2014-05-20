@@ -23,8 +23,13 @@ type debugRefactoring struct {
 
 func (r *debugRefactoring) Description() *Description {
 	return &Description{
-		Name:   "Debug Refactoring",
-		Params: []string{"Options"},
+		Name: "Debug Refactoring",
+		Params: []Parameter{Parameter{
+			Label:        "Options",
+			Prompt:       "Options",
+			DefaultValue: "",
+		}},
+		Quality: Development,
 	}
 }
 
@@ -45,9 +50,12 @@ func (r *debugRefactoring) Run(config *Config) *Result {
 		fmt.Println("    showaffected")
 		return &r.Result
 	}
+	if !validateArgs(config, r.Description(), r.Log) {
+		return &r.Result
+	}
 
-	for _, opt := range config.Args {
-		switch strings.ToLower(strings.TrimSpace(opt)) {
+	for _, arg := range config.Args {
+		switch strings.ToLower(strings.TrimSpace(arg.(string))) {
 		case "showast":
 			r.showAST()
 		case "showpackages":
@@ -59,7 +67,7 @@ func (r *debugRefactoring) Run(config *Config) *Result {
 		case "showaffected":
 			r.showAffected()
 		default:
-			r.Log.Log(FATAL_ERROR, "Unknown option "+opt)
+			r.Log.Log(FATAL_ERROR, "Unknown option "+arg.(string))
 			return &r.Result
 		}
 	}

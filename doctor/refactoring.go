@@ -19,6 +19,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"reflect"
 
 	"code.google.com/p/go.tools/astutil"
 	"code.google.com/p/go.tools/go/loader"
@@ -52,6 +53,41 @@ func GetRefactoring(shortName string) Refactoring {
 	return refactorings[shortName]
 }
 
+// Description of a parameter for a refactoring.
+//
+// Some refactorings require additional input from the user besides a text
+// selection.  For example, in a Rename refactoring, the user may select an
+// identifier to rename, but the refactoring tool must also elicit (1) a new
+// name for the identifier and (2) whether or not occurrences of the name
+// should be replaced in comments.  These two inputs are parameters to the
+// refactoring.
+type Parameter struct {
+	// A brief label suitable for display next to an input field (e.g., a
+	// text box or check box in a dialog box), e.g., "Name:" or "Replace
+	// occurrences"
+	Label string
+	// A longer (typically one sentence) description of the input
+	// requested, suitable for display in a tooltip/hover tip.
+	Prompt string
+	// The default value for this parameter.  The type of the parameter
+	// (string or boolean) can be determined from the type of its default
+	// value.
+	DefaultValue interface{}
+}
+
+// Quality determines whether a refactoring is exposed to end users
+type Quality int
+
+const (
+	// Refactoring should not be exposed to end users
+	Development Quality = iota
+	// Refactoring has not been extensively tested on large codes but is
+	// stable enough for early adopters to try
+	Testing
+	// Refactoring can be safely used in a production environment
+	Production
+)
+
 // Description provides information about a refactoring suitable for display in
 // a user interface.
 type Description struct {
@@ -59,8 +95,10 @@ type Description struct {
 	// (e.g., "Rename" or "Extract Function") as it would appear in a user
 	// interface.  Every refactoring should have a unique name.
 	Name string
-	// TODO(jeff): Replace this
-	Params []string
+	// Additional input required for this refactoring.  See Parameter.
+	Params []Parameter
+	// Whether this refactoring is suitable for production use.
+	Quality Quality
 }
 
 // A Config provides the initial configuration for a refactoring, including the
@@ -84,7 +122,7 @@ type Config struct {
 	// For example, for the Rename refactoring, you must specify a new name
 	// for the entity being renamed.  If the refactoring does not require
 	// any arguments, this may be nil.
-	Args []string
+	Args []interface{}
 	// The GOPATH.  If this is set to the empty string, the GOPATH is
 	// determined from the environment.
 	GoPath string
@@ -221,6 +259,33 @@ func (r *refactoringBase) Run(config *Config) *Result {
 	r.FSChanges = []FileSystemChange{}
 
 	return &r.Result
+}
+
+// validateArgs determines whether the arguments supplied in the given Config
+// match the parameters required by the given Description.  If they mismatch in
+// either type or number, a fatal error is logged to the given Log, and the
+// function returns false; otherwise, no error is logged, and the function
+// returns true.
+func validateArgs(config *Config, desc *Description, log *Log) bool {
+	numArgsExpected := len(desc.Params)
+	numArgsSupplied := len(config.Args)
+	if numArgsSupplied != numArgsExpected {
+		log.Log(FATAL_ERROR,
+			fmt.Sprintf("This refactoring requires %d arguments, "+
+				"but %d were supplied.", numArgsExpected,
+				numArgsSupplied))
+		return false
+	}
+	for i, arg := range config.Args {
+		expected := reflect.TypeOf(desc.Params[i].DefaultValue)
+		if reflect.TypeOf(arg) != expected {
+			paramName := desc.Params[i].Label
+			log.Log(FATAL_ERROR, fmt.Sprintf("%s must be a %s",
+				paramName, expected))
+			return false
+		}
+	}
+	return true
 }
 
 // lineColToPos converts a line/column position (where the first character in a

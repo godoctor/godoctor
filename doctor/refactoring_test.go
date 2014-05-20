@@ -206,12 +206,18 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 		t.Fatal(err)
 	}
 
+	// TODO: This assumes that all refactoring arguments are strings
+	args := []interface{}{}
+	for _, opt := range remainder {
+		args = append(args, opt)
+	}
+
 	fileSystem := &LocalFileSystem{}
 	config := &Config{
 		FileSystem: fileSystem,
 		Scope:      []string{mainFile},
 		Selection:  selection,
-		Args:       remainder,
+		Args:       args,
 		GoPath:     "", // FIXME(jeff): GOPATH
 	}
 	result := r.Run(config)

@@ -23,8 +23,13 @@ type renameRefactoring struct {
 
 func (r *renameRefactoring) Description() *Description {
 	return &Description{
-		Name:   "Rename",
-		Params: []string{"New Name"},
+		Name: "Rename",
+		Params: []Parameter{Parameter{
+			Label:        "New Name:",
+			Prompt:       "What to rename this identifier to.",
+			DefaultValue: "",
+		}},
+		Quality: Development,
 	}
 }
 
@@ -33,12 +38,11 @@ func (r *renameRefactoring) Run(config *Config) *Result {
 		return &r.Result
 	}
 
-	if len(config.Args) != 1 {
-		r.Log.Log(FATAL_ERROR, "(Internal Error) Invalid arguments")
+	if !validateArgs(config, r.Description(), r.Log) {
 		return &r.Result
 	}
 
-	r.newName = config.Args[0]
+	r.newName = config.Args[0].(string)
 	if !r.isIdentifierValid(r.newName) {
 		r.Log.Log(FATAL_ERROR, "Please select a valid Go identifier")
 		return &r.Result

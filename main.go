@@ -9,6 +9,8 @@ package main
 // mainly there's prints everywhere when in reality these should all
 // get shoved through one function
 
+// TODO(jeff/robert): Support "put" command for Web demo
+
 import (
 	"bytes"
 	"encoding/json"

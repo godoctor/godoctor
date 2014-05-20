@@ -15,8 +15,9 @@ type nullRefactoring struct {
 
 func (r *nullRefactoring) Description() *Description {
 	return &Description{
-		Name:   "Null Refactoring",
-		Params: []string{},
+		Name:    "Null Refactoring",
+		Params:  nil,
+		Quality: Development,
 	}
 }
 
@@ -27,8 +28,7 @@ func (r *nullRefactoring) Run(config *Config) *Result {
 		return &r.Result
 	}
 
-	if len(config.Args) != 0 {
-		r.Log.Log(FATAL_ERROR, "This refactoring takes no arguments.")
+	if !validateArgs(config, r.Description(), r.Log) {
 		return &r.Result
 	}
 
