@@ -280,9 +280,13 @@ func printResults(refactoring string, l *doctor.Log, changes map[string][]byte) 
 }
 
 func printRefactoringParams(r doctor.Refactoring) {
+	params := []string{}
+	for _, param := range r.Description().Params {
+		params = append(params, param.Label)
+	}
 	resp := Response{"OK",
-		fields{"params": r.Description().Params},
-		r.Description().Params,
+		fields{"params": params},
+		params,
 	}
 	fmt.Printf("%s\n", resp)
 }
@@ -382,11 +386,17 @@ func query(file string, src string, args []string, r doctor.Refactoring, pos str
 		fs = &doctor.LocalFileSystem{}
 	}
 
+	// TODO: This assumes that all refactoring arguments are strings
+	argArray := []interface{}{}
+	for _, arg := range args {
+		argArray = append(argArray, arg)
+	}
+
 	config := &doctor.Config{
 		FileSystem: fs,
 		Scope:      s,
 		Selection:  ts,
-		Args:       args,
+		Args:       argArray,
 	}
 	result := r.Run(config)
 	return result.Log, result.Edits, nil
