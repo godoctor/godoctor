@@ -76,26 +76,23 @@ type Response struct {
 type fields map[string]interface{}
 
 func (r Response) String() string {
-	var s string
+	var buf bytes.Buffer
 	switch *formatFlag {
 	case "plain":
 		for i, p := range r.Plain {
-			s += p
+			buf.WriteString(p)
 			if i != len(r.Plain)-1 {
-				s += "\n"
+				buf.WriteString("\n")
 			}
 		}
 	case "json":
 		r.JSON["reply"] = r.Reply
-		b, err := json.MarshalIndent(r.JSON, "", "\t")
-		s = string(b)
-		if err != nil {
-			s = ""
-		}
+		b, _ := json.MarshalIndent(r.JSON, "", "\t")
+		buf.Write(b)
 	default:
 		return "invalid -format flag"
 	}
-	return s
+	return buf.String()
 }
 
 //TODO(reed) -comments to change comments (if a thing?)
@@ -107,7 +104,11 @@ func (r Response) String() string {
 func main() {
 	err := attempt()
 	if err != nil {
-		r := Response{"Error", fields{"message": err.Error()}, []string{err.Error()}}
+		r := Response{
+			Reply: "Error",
+			JSON:  fields{"message": err.Error()},
+			Plain: []string{err.Error()},
+		}
 		fmt.Fprintf(os.Stderr, "%s\n", r)
 		os.Exit(2)
 	}
@@ -180,7 +181,7 @@ func attempt() error {
 	changes := make(map[string][]byte)
 
 	if log.ContainsErrors() && !*skipLogFlag {
-		//printResults(r.Description().Name, log, changes)
+		printResults(r.Description().Name, log, changes)
 		return nil
 	}
 
@@ -259,6 +260,14 @@ func printResults(refactoring string, l *doctor.Log, changes map[string][]byte) 
 		"changes": c,
 	}
 	repl := Response{"OK", r, contents}
+
+	// log to stderr if not json
+	if *formatFlag == "plain" {
+		for _, e := range l.Entries {
+			fmt.Fprintln(os.Stderr, e)
+		}
+	}
+
 	fmt.Printf("%s\n", repl)
 }
 
