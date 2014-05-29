@@ -10,9 +10,9 @@ import (
 )
 
 type List struct {
-	Fileselection []string      `json:"fileselection"`
-	Textselection TextSelection `json:"textselection"`
-	Quality       string        `json:"quality" chk:"in_testing|in_development|production"`
+	Fileselection []string             `json:"fileselection"`
+	Textselection doctor.TextSelection `json:"textselection"`
+	Quality       string               `json:"quality" chk:"in_testing|in_development|production"`
 }
 
 func (l *List) Run(state *State, input map[string]interface{}) (Reply, error) {

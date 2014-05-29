@@ -9,9 +9,9 @@ import (
 )
 
 type Params struct {
-	Transformation string        `json:"transformation"`
-	Fileselection  []string      `json:"fileselection"`
-	Textselection  TextSelection `json:"textselection"`
+	Transformation string               `json:"transformation"`
+	Fileselection  []string             `json:"fileselection"`
+	Textselection  doctor.TextSelection `json:"textselection"`
 }
 
 func (p *Params) Run(state *State, input map[string]interface{}) (Reply, error) {
