@@ -36,6 +36,7 @@ func init() {
 		"rename":        new(renameRefactoring),
 		"reverseassign": new(reverseAssignRefactoring),
 		"shortassign":   new(shortAssignRefactoring),
+		"godoc":         new(documentationCheckerRefactoring),
 		"debug":         new(debugRefactoring),
 		//"extract":	 new(extractRefactoring),
 		"null": new(nullRefactoring),

@@ -1,0 +1,51 @@
+package main // <<<<< godoc,1,1,1,1,pass
+
+import "fmt"
+
+func main() {
+	Exported()
+}
+
+// TODO: FUNC NEEDS COMMENT INFO
+func Exported() {
+	fmt.Println("Hello, Go")
+	
+	j := 0
+	for i := 0; i < 5; i++ {
+		j++
+	}
+}
+
+// TODO: STRUCT/INTERFACE NEEDS COMMENT INFO
+type Shaper interface {
+}
+
+// TODO: STRUCT/INTERFACE NEEDS COMMENT INFO
+type Rectangle struct {
+}
+
+type square struct {
+}
+
+type circle interface {
+}
+
+// TODO: STRUCT/INTERFACE NEEDS COMMENT INFO
+type Oval struct {
+}
+
+// TODO: FUNC NEEDS COMMENT INFO
+func A() { }
+
+// TODO: FUNC NEEDS COMMENT INFO
+func B() { }
+
+type alpha struct { }
+
+// TODO: STRUCT/INTERFACE NEEDS COMMENT INFO
+type Beta struct { }
+
+func c() { }
+
+// TODO: FUNC NEEDS COMMENT INFO
+func D() { }
