@@ -111,9 +111,18 @@ func (b *builder) addSucc(current ast.Stmt) {
 
 	for _, p := range b.prev {
 		p := b.block(p)
-		p.succs = append(p.succs, cur.stmt)
-		cur.preds = append(cur.preds, p.stmt)
+		p.succs = appendNoDuplicates(p.succs, cur.stmt)
+		cur.preds = appendNoDuplicates(cur.preds, p.stmt)
 	}
+}
+
+func appendNoDuplicates(list []ast.Stmt, stmt ast.Stmt) []ast.Stmt {
+	for _, s := range list {
+		if s == stmt {
+			return list
+		}
+	}
+	return append(list, stmt)
 }
 
 // block returns a block for the given statement, creating one and inserting it

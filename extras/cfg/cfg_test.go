@@ -18,6 +18,34 @@ const (
 	END   = 100000000 // if there's this many statements, may god have mercy on your soul
 )
 
+func TestIfElseIfGoto(t *testing.T) {
+	c := getWrapper(t, `
+  package main
+
+  func main() {
+    i := 5              //1
+    i++                 //2
+    if i == 6 {         //3
+        goto ABC        //4
+    } else if i == 8 {  //5
+        goto DEF        //6
+    }
+  ABC: fmt.Println("6") //7, 8
+  DEF: fmt.Println("8") //9, 10
+  }`)
+
+	c.expectSuccs(t, START, 1)
+	c.expectSuccs(t, 1, 2)
+	c.expectSuccs(t, 2, 3)
+	c.expectSuccs(t, 3, 4, 5)
+	c.expectSuccs(t, 4, 7)
+	c.expectSuccs(t, 5, 6, 7)
+	c.expectSuccs(t, 6, 9)
+	c.expectSuccs(t, 7, 8)
+	c.expectSuccs(t, 8, 9)
+	c.expectSuccs(t, 9, 10)
+}
+
 func TestDoubleForBreak(t *testing.T) {
 	c := getWrapper(t, `
   package main
@@ -547,7 +575,7 @@ func (c *CFGWrapper) expectSuccs(t *testing.T, s int, exp ...int) {
 	}
 
 	for stmt, _ := range found {
-		t.Error("found", c.stmts[stmt], "as a successors for", s)
+		t.Error("found", c.stmts[stmt], "as a successor for", s)
 	}
 }
 
