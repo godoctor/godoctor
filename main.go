@@ -5,9 +5,10 @@
 // This file contains the command line interface for Go refactoring.
 package main
 
-//TODO(reed): this is getting rather crufty... go read other go CLI's.
-// mainly there's prints everywhere when in reality these should all
-// get shoved through one function
+// example query: go-doctor -pos=11,8:11,8 someFile.go rename newName
+
+// TODO(reed): still not proud of this.
+// TODO(reed) take byte offsets AND line:col
 
 // TODO(jeff/robert): Support "put" command for Web demo
 
@@ -33,11 +34,8 @@ var (
 	listFlag   = flag.Bool("l", false, "list all possible refactorings")
 	paramsFlag = flag.Bool("p", false, "get description of parameters for given refactoring")
 	posFlag    = flag.String("pos", "0,0:0,0", "line, col offset usually necessary, e.g. -pos=5,11:5,11")
-	//TODO (reed) not sure if this actually works
-	scopeFlag = flag.String("scope", "", "give a scope (package), e.g. -scope=code.google.com/p/go.tools/")
-	writeFlag = flag.Bool("w", false, "write the refactored files in place")
-	//useful for JSON I'm thinking
-	skipLogFlag = flag.Bool("e", false, "write results even if log, dangerous")
+	scopeFlag  = flag.String("scope", "", "give a scope (package), e.g. -scope=code.google.com/p/go.tools/")
+	writeFlag  = flag.Bool("w", false, "write the refactored files in place")
 	// need json usage
 	jsonFlag = flag.Bool("json", false, "")
 )
@@ -69,14 +67,147 @@ The <flag> arguments are:
 	os.Exit(2)
 }
 
+// TODO(reed) usage() in JSON
+// TODO(reed/somebodyelse) find weird flag combos that shouldn't work
+func main() {
+	flag.Parse()
+	args := flag.Args()
+
+	// TODO(reed) are we [ever] going to have a default to run w/o any args or flags?
+	if *helpFlag || flag.NFlag() == 0 {
+		usage()
+	}
+
+	if *listFlag {
+		printAllRefactorings(*formatFlag)
+		return
+	}
+
+	if *jsonFlag {
+		protocol.Run(args)
+		return
+	}
+
+	if flag.NArg() == 0 {
+		printError(fmt.Errorf("given flag requires args, see -h"))
+	}
+
+	r := doctor.GetRefactoring(args[0])
+
+	if *paramsFlag {
+		if r == nil {
+			printError(fmt.Errorf("no refactoring given to parameterize, see -h"))
+		}
+		printRefactoringParams(r)
+		return
+	}
+
+	var filename, src string
+	// no file given (assume stdin), e.g. go-doctor refactor params...
+	if r != nil {
+		if stat, err := os.Stdin.Stat(); err != nil {
+			printError(err)
+		} else if stat.Size() < 1 {
+			printError(fmt.Errorf("no filename given and no input given on stdin, see -h"))
+		}
+		bytes, err := ioutil.ReadAll(os.Stdin)
+		if err != nil {
+			printError(err)
+		}
+		src = string(bytes)
+		filename = "main.go" // was os.Stdin.Name()
+		args = args[1:]
+	} else { // file given, e.g. go-doctor file refactor params...
+		filename = args[0]
+		r = doctor.GetRefactoring(args[1])
+		args = args[2:]
+	}
+	// at this point args = refactoring's args, possibly none
+
+	// do the refactoring
+	results, err := refactor(filename, src, args, r)
+	if err != nil {
+		printError(err)
+	}
+
+	log := results.Log
+	edits := results.Edits
+
+	// TODO: do something with result.FSChanges -- e.g., Rename Package
+	// will rename a directory
+
+	// map[filename]output
+	// where: output == diff || updated file
+	changes := make(map[string][]byte)
+
+	if log.ContainsErrors() {
+		printResults(r.Description().Name, log, changes)
+	}
+
+	if *diffFlag {
+		// compute diff for each file changed
+		for f, e := range edits {
+			var p *doctor.Patch
+			var err error
+			if src != "" {
+				// TODO(reed): I suppose passing on stdin we can trust
+				// that len(edits) == 1, but I'm skeptical...
+				// if scope is passed then multiple files could be effected.
+				p, err = e.CreatePatch(strings.NewReader(src))
+			} else {
+				p, err = doctor.CreatePatchForFile(e, f)
+			}
+			if err != nil {
+				printError(err)
+			}
+
+			var b bytes.Buffer
+			p.Write(f, f, &b)
+			changes[f] = b.Bytes()
+		}
+		printResults(r.Description().Name, log, changes)
+	}
+
+	// write all edits out to new file contents in []byte; something to work with
+	for file, _ := range edits {
+		if src != "" {
+			str, err := doctor.ApplyToString(edits[file], src)
+			if err != nil {
+				printError(err)
+			}
+			changes[file] = []byte(str)
+		} else {
+			changes[file], err = doctor.ApplyToFile(edits[file], file)
+			if err != nil {
+				printError(err)
+			}
+		}
+	}
+
+	// write changes to their file and exit
+	if *writeFlag {
+		if *diffFlag || *formatFlag != "plain" {
+			printError(fmt.Errorf("cannot write files with json or diff flags, try again"))
+		}
+		for file, change := range changes {
+			if err := ioutil.WriteFile(file, change, 0); err != nil {
+				printError(err)
+			}
+		}
+		return
+	}
+
+	// so you came all this way for some output
+	printResults(r.Description().Name, log, changes)
+}
+
 type Response struct {
 	Reply string
 	JSON  fields
 	Plain []string
 }
 
-//this got real old
-type fields map[string]interface{}
+type fields map[string]interface{} // this got real old
 
 func (r Response) String() string {
 	var buf bytes.Buffer
@@ -98,165 +229,20 @@ func (r Response) String() string {
 	return buf.String()
 }
 
-//TODO(reed) -comments to change comments (if a thing?)
-//TODO(reed) scope... done?
-//TODO(reed) handle errors better (JSON-wise, especially the not log stuff)
-//TODO(reed) take byte offsets AND line:col
-//
-//example query: go-doctor -pos=11,8:11,8 someFile.go rename newName
-func main() {
-	err := attempt()
-	if err != nil {
-		r := Response{
-			Reply: "Error",
-			JSON:  fields{"message": err.Error()},
-			Plain: []string{err.Error()},
-		}
-		fmt.Fprintf(os.Stderr, "%s\n", r)
-		os.Exit(2)
+func printError(err error) {
+	r := Response{
+		Reply: "Error",
+		JSON:  fields{"message": err.Error()},
+		Plain: []string{err.Error()},
 	}
-}
-
-//TODO(reed) usage() in JSON
-//TODO(reed) find weird flag combos that shouldn't work
-func attempt() error {
-	flag.Parse()
-	args := flag.Args()
-
-	//TODO(reed) are we [ever] going to have a default to run w/o any args or flags?
-	if *helpFlag || flag.NFlag() == 0 {
-		usage()
-	}
-
-	if *listFlag {
-		printAllRefactorings(*formatFlag)
-		return nil
-	}
-
-	if *jsonFlag {
-		protocol.Run(args)
-		return nil
-	}
-
-	if flag.NArg() == 0 {
-		return fmt.Errorf("given flag requires args, see -h")
-	}
-
-	r := doctor.GetRefactoring(args[0])
-
-	if *paramsFlag {
-		if r == nil {
-			return fmt.Errorf("no refactoring given to parameterize, see -h")
-		}
-		printRefactoringParams(r)
-		return nil
-	}
-
-	var filename, src string
-	// no file given (assume stdin), e.g. go-doctor refactor params...
-	if r != nil {
-		if stat, err := os.Stdin.Stat(); err != nil {
-			return err
-		} else if stat.Size() < 1 {
-			return fmt.Errorf("no filename given and no input given on stdin, see -h")
-		}
-		bytes, err := ioutil.ReadAll(os.Stdin)
-		if err != nil {
-			return err
-		}
-		src = string(bytes)
-		filename = "main.go" // was os.Stdin.Name()
-		args = args[1:]
-	} else { // file given, e.g. go-doctor file refactor params...
-		filename = args[0]
-		r = doctor.GetRefactoring(args[1])
-		args = args[2:]
-	}
-	// at this point args = refactoring's args, possibly none
-
-	// TODO(reed): params much?
-	// do the refactoring
-	log, edits, err := query(filename, src, args, r, *posFlag, *scopeFlag)
-	if err != nil {
-		return err
-	}
-
-	// TODO: do something with result.FSChanges -- e.g., Rename Package
-	// will rename a directory
-
-	// map[filename]output
-	// where: output == diff || updated file
-	changes := make(map[string][]byte)
-
-	if log.ContainsErrors() && !*skipLogFlag {
-		printResults(r.Description().Name, log, changes)
-		return nil
-	}
-
-	if *diffFlag {
-		// compute diff for each file changed
-		for f, e := range edits {
-			var p *doctor.Patch
-			var err error
-			if src != "" {
-				// TODO(reed): I suppose passing on stdin we can trust
-				// that len(edits) == 1, but I'm skeptical...
-				// if scope is passed then multiple files could be effected.
-				p, err = e.CreatePatch(strings.NewReader(src))
-			} else {
-				p, err = doctor.CreatePatchForFile(e, f)
-			}
-			if err != nil {
-				return err
-			}
-
-			var b bytes.Buffer
-			p.Write(f, f, &b)
-			changes[f] = b.Bytes()
-		}
-		printResults(r.Description().Name, log, changes)
-		return nil
-	}
-
-	//write all edits out to new file contents in []byte; something to work with
-	for file, _ := range edits {
-		if src != "" {
-			str, err := doctor.ApplyToString(edits[file], src)
-			if err != nil {
-				return err
-			}
-			changes[file] = []byte(str)
-		} else {
-			changes[file], err = doctor.ApplyToFile(edits[file], file)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	//write changes to their file and exit
-	if *writeFlag {
-		if *diffFlag || *formatFlag != "plain" {
-			return fmt.Errorf("cannot write files with json or diff flags, try again")
-		}
-		for file, change := range changes {
-			if err := ioutil.WriteFile(file, change, 0); err != nil {
-				return err
-			}
-		}
-		return nil
-
-	}
-
-	// At this point changes has updated files and user did not give write flag,
-	// so print refactored files.
-	printResults(r.Description().Name, log, changes)
-	return nil
+	fmt.Fprintf(os.Stderr, "%s\n", r)
+	os.Exit(2)
 }
 
 func printResults(refactoring string, l *doctor.Log, changes map[string][]byte) {
 	c := make(map[string]string)
 	var contents []string
+	var exitCode int
 
 	for file, change := range changes {
 		c[file] = string(change)
@@ -272,11 +258,13 @@ func printResults(refactoring string, l *doctor.Log, changes map[string][]byte) 
 	// log to stderr if not json
 	if *formatFlag == "plain" {
 		for _, e := range l.Entries {
-			fmt.Fprintln(os.Stderr, e)
+			exitCode = 1
+			fmt.Fprintln(os.Stderr, e.String())
 		}
 	}
 
 	fmt.Printf("%s\n", repl)
+	os.Exit(exitCode)
 }
 
 func printRefactoringParams(r doctor.Refactoring) {
@@ -344,34 +332,32 @@ func parseScopes(scope string) []string {
 	return strings.Split(scope, ",")
 }
 
-//TODO (jeff) figure out how to deal with scope/mainFile/2nd arg to SetSelection
+// TODO (jeff) figure out how to deal with scope/mainFile/2nd arg to SetSelection
 // Anyway I think we need to know which file the main function is in,
 // so I made that the second arg to SetSelection -- confirm with Alan
-//TODO(reed): what jeff said, currently prints nothing if scope != nil
 //
 // This will do all of the configuration and execution for
-// a refactoring (@op), returning the edits to be made and log.
-// For use with the CLI, but have at it.
-//
-func query(file string, src string, args []string, r doctor.Refactoring, pos string, scope string) (*doctor.Log, map[string]doctor.EditSet, error) {
+// a refactoring r, returning the results.
+func refactor(file string, src string, args []string, r doctor.Refactoring) (*doctor.Result, error) {
 	if r == nil {
-		return nil, nil, fmt.Errorf("no refactoring given or in wrong place, see -h")
+		return nil, fmt.Errorf("no refactoring given or in wrong place, see -h")
 	}
 
-	ts, err := parsePositionToTextSelection(pos)
+	ts, err := parsePositionToTextSelection(*posFlag)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	s := parseScopes(scope)
+	var scope []string
+	if *scopeFlag == "" {
+		scope = append(scope, ts.Filename)
+	} else {
+		scope = parseScopes(*scopeFlag)
+	}
 
 	ts.Filename, err = filepath.Abs(file)
 	if err != nil {
-		return nil, nil, err
-	}
-
-	if scope == "" {
-		s = []string{ts.Filename}
+		return nil, err
 	}
 
 	var fs doctor.FileSystem
@@ -380,24 +366,22 @@ func query(file string, src string, args []string, r doctor.Refactoring, pos str
 		// FIXME(reed): Make sure the resulting edit set only changes the one file passed on stdin.  If it changes any others, bail with an error message
 		fs, err = doctor.NewSingleEditedFileSystem("main.go", src)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	} else {
 		fs = &doctor.LocalFileSystem{}
 	}
 
-	// TODO: This assumes that all refactoring arguments are strings
-	argArray := []interface{}{}
-	for _, arg := range args {
+	var argArray []interface{}
+	for _, arg := range args { // cast to interface{}
 		argArray = append(argArray, arg)
 	}
 
 	config := &doctor.Config{
 		FileSystem: fs,
-		Scope:      s,
+		Scope:      scope,
 		Selection:  ts,
 		Args:       argArray,
 	}
-	result := r.Run(config)
-	return result.Log, result.Edits, nil
+	return r.Run(config), nil
 }
