@@ -348,16 +348,16 @@ func refactor(file string, src string, args []string, r doctor.Refactoring) (*do
 		return nil, err
 	}
 
+	ts.Filename, err = filepath.Abs(file)
+	if err != nil {
+		return nil, err
+	}
+
 	var scope []string
 	if *scopeFlag == "" {
 		scope = append(scope, ts.Filename)
 	} else {
 		scope = parseScopes(*scopeFlag)
-	}
-
-	ts.Filename, err = filepath.Abs(file)
-	if err != nil {
-		return nil, err
 	}
 
 	var fs doctor.FileSystem
@@ -372,7 +372,7 @@ func refactor(file string, src string, args []string, r doctor.Refactoring) (*do
 		fs = &doctor.LocalFileSystem{}
 	}
 
-	var argArray []interface{}
+	argArray := []interface{}{}
 	for _, arg := range args { // cast to interface{}
 		argArray = append(argArray, arg)
 	}
