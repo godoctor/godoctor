@@ -265,6 +265,7 @@ func (fs *VirtualFileSystem) Remove(path string) error {
 
 type FileSystemChange interface {
 	ExecuteUsing(FileSystem) error
+	String() string
 }
 
 type fsCreateFile struct {
@@ -275,6 +276,10 @@ func (chg *fsCreateFile) ExecuteUsing(fs FileSystem) error {
 	return fs.CreateFile(chg.path, chg.contents)
 }
 
+func (chg *fsCreateFile) String() string {
+	return fmt.Sprintf("create %s", chg.path)
+}
+
 type fsRemove struct {
 	path string
 }
@@ -283,12 +288,20 @@ func (chg *fsRemove) ExecuteUsing(fs FileSystem) error {
 	return fs.Remove(chg.path)
 }
 
+func (chg *fsRemove) String() string {
+	return fmt.Sprintf("remove %s", chg.path)
+}
+
 type fsRename struct {
 	path, newName string
 }
 
 func (chg *fsRename) ExecuteUsing(fs FileSystem) error {
 	return fs.Rename(chg.path, chg.newName)
+}
+
+func (chg *fsRename) String() string {
+	return fmt.Sprintf("rename %s %s", chg.path, chg.newName)
 }
 
 func Execute(fs FileSystem, changes []FileSystemChange) error {

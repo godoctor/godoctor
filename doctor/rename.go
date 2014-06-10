@@ -44,7 +44,7 @@ func (r *renameRefactoring) Run(config *Config) *Result {
 
 	r.newName = config.Args[0].(string)
 	if !r.isIdentifierValid(r.newName) {
-		r.Log.Log(FATAL_ERROR, "Please select a valid Go identifier")
+		r.Log.Log(FATAL_ERROR, "The new name "+r.newName+" is not a valid Go identifier")
 		return &r.Result
 	}
 
@@ -69,10 +69,10 @@ func (r *renameRefactoring) Run(config *Config) *Result {
 }
 
 func (r *renameRefactoring) isIdentifierValid(newName string) bool {
-
 	matched, err := regexp.MatchString("^[A-Za-z_][0-9A-Za-z_]*$", newName)
 	if matched && err == nil {
-		return true
+		keyword, err := regexp.MatchString("^(break|case|chan|const|continue|default|defer|else|fallthrough|for|func|go|goto|if|import|interface|map|package|range|return|select|struct|switch|type|var)$", newName)
+		return !keyword && err == nil
 	}
 	return false
 }

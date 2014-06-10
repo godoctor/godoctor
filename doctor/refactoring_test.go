@@ -70,6 +70,8 @@ const FAIL = "fail"
 
 const MAIN_DOT_GO = "main.go"
 
+const FSCHANGES_TXT = "fschanges.txt"
+
 var filterFlag = flag.String("filter", "",
 	"Only tests from directories containing this substring will be run")
 
@@ -224,6 +226,8 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 	if shouldPass && result.Log.ContainsErrors() {
 		t.Log(result.Log)
 		t.Fatalf("Refactoring produced unexpected errors")
+	} else if !shouldPass && !result.Log.ContainsErrors() {
+		t.Fatalf("Refactoring should have produced errors but didn't")
 	}
 
 	for filename, edits := range result.Edits {
@@ -236,9 +240,26 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 		}
 	}
 
-	for _, chg := range result.FSChanges {
-		if err := chg.ExecuteUsing(fileSystem); err != nil {
+	if _, err := os.Stat(FSCHANGES_TXT); os.IsNotExist(err) {
+		if len(result.FSChanges) > 0 {
+			t.Fatalf("Refactoring returned file system changes, "+
+				"but %s does not exist", FSCHANGES_TXT)
+		}
+	} else {
+		bytes, err := ioutil.ReadFile(FSCHANGES_TXT)
+		if err != nil {
 			t.Fatal(err)
+		}
+		fschanges := strings.Split(string(bytes), "\n")
+		if len(fschanges) != len(result.FSChanges) {
+			t.Fatalf("Expected %d file system changes but got %d",
+				len(fschanges), len(result.FSChanges))
+		} else {
+			for i, chg := range result.FSChanges {
+				if chg.String() != fschanges[i] {
+					t.Fatalf("FSChanges[%d]\nExpected: %s\nActual: %s", i, fschanges[i], chg.String())
+				}
+			}
 		}
 	}
 }
