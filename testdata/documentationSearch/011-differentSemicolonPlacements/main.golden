@@ -6,16 +6,16 @@ func main() {
 	Exported()
 }
 
-// TODO: FUNC NEEDS COMMENT INFO
+// Exported TODO: FUNC NEEDS COMMENT INFO
 func Exported() {
 	fmt.Println("Hello, Go")
 }
 
-// TODO: STRUCT/INTERFACE NEEDS COMMENT INFO
+// Shaper TODO: STRUCT/INTERFACE NEEDS COMMENT INFO
 type Shaper interface {
 }
 
-// TODO: STRUCT/INTERFACE NEEDS COMMENT INFO
+// Rectangle TODO: STRUCT/INTERFACE NEEDS COMMENT INFO
 type Rectangle struct {
 }
 
@@ -25,24 +25,24 @@ type square struct {
 type circle interface {
 }
 
-// TODO: STRUCT/INTERFACE NEEDS COMMENT INFO
+// Oval TODO: STRUCT/INTERFACE NEEDS COMMENT INFO
 type Oval struct {
 }
 
-// TODO: FUNC NEEDS COMMENT INFO
+// A TODO: FUNC NEEDS COMMENT INFO
 func A() { }
 
-// TODO: FUNC NEEDS COMMENT INFO
+// B TODO: FUNC NEEDS COMMENT INFO
 func B() { }
 
 type alpha struct { }
 
-// TODO: STRUCT/INTERFACE NEEDS COMMENT INFO
+// Beta TODO: STRUCT/INTERFACE NEEDS COMMENT INFO
 type Beta struct { }
 
 func c() { }
 
-// TODO: FUNC NEEDS COMMENT INFO
+// D TODO: FUNC NEEDS COMMENT INFO
 func D() { }
 
 func e() { }
