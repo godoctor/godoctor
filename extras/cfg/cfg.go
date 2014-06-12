@@ -7,8 +7,12 @@
 package cfg
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
+	"io"
+
+	"code.google.com/p/go.tools/astutil"
 )
 
 // This package can be used to construct a control flow graph from an abstract syntax tree (go/ast).
@@ -71,6 +75,32 @@ func (c *CFG) Blocks() []ast.Stmt {
 		blocks = append(blocks, s)
 	}
 	return blocks
+}
+
+func (c *CFG) PrintDot(f io.Writer) {
+	fmt.Fprintf(f, `digraph mgraph {
+mode="heir";
+splines="ortho";
+
+`)
+	for _, v := range c.blocks {
+		for _, a := range v.succs {
+			fmt.Fprintf(f, "\t\"%s\" -> \"%s\"\n", c.printVertex(v), c.printVertex(c.blocks[a]))
+		}
+	}
+	fmt.Fprintf(f, "}\n")
+}
+
+func (c *CFG) printVertex(v *block) string {
+	switch v.stmt {
+	case c.Entry:
+		return fmt.Sprintf("%s %p", "ENTRY", v.stmt)
+	case c.Exit:
+		return fmt.Sprintf("%s %p", "EXIT", v.stmt)
+	case nil:
+		return ""
+	}
+	return fmt.Sprintf("%s %p", astutil.NodeDescription(v.stmt), v.stmt)
 }
 
 type builder struct {

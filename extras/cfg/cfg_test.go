@@ -3,14 +3,13 @@
 package cfg
 
 import (
-	"fmt"
+	"bytes"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
+	"regexp"
 	"testing"
-
-	"code.google.com/p/go.tools/astutil"
 )
 
 const (
@@ -614,27 +613,37 @@ func (c *CFGWrapper) printDOT() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Fprintf(f, `digraph mgraph {
+	defer f.Close()
+	c.cfg.PrintDot(f)
+}
+
+func TestPrintDot(t *testing.T) {
+	c := getWrapper(t, `
+  package main
+
+  func main() {
+    i := 5              //1
+    i++                 //2
+  }`)
+
+	var buf bytes.Buffer
+	c.cfg.PrintDot(&buf)
+	dot := buf.String()
+
+	expected := []string{
+		`^digraph mgraph {
 mode="heir";
 splines="ortho";
 
-`)
-	for _, v := range c.cfg.blocks {
-		for _, a := range v.succs {
-			fmt.Fprintf(f, "\t\"%s\" -> \"%s\"\n", c.printVertex(v), c.printVertex(c.cfg.blocks[a]))
+`,
+		"\"assignment 0x[0-9a-f]*\" -> \"increment statement 0x[0-9a-f]*\"\n",
+		"\"ENTRY 0x[0-9a-f]*\" -> \"assignment 0x[0-9a-f]*\"\n",
+		"\"increment statement 0x[0-9a-f]*\" -> \"EXIT 0x[0-9a-f]*\"\n",
+	}
+	for _, re := range expected {
+		ok, _ := regexp.MatchString(re, dot)
+		if !ok {
+			t.Fatalf("[%s]", dot)
 		}
 	}
-	fmt.Fprintf(f, "}\n")
-}
-
-func (c *CFGWrapper) printVertex(v *block) string {
-	switch v.stmt {
-	case c.cfg.Entry:
-		return fmt.Sprintf("%s %p", "ENTRY", v.stmt)
-	case c.cfg.Exit:
-		return fmt.Sprintf("%s %p", "EXIT", v.stmt)
-	case nil:
-		return ""
-	}
-	return fmt.Sprintf("%s %p", astutil.NodeDescription(v.stmt), v.stmt)
 }
