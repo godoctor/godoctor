@@ -174,7 +174,11 @@ func NewVirtualFileSystem() *VirtualFileSystem {
 }
 
 func isInGoRoot(path string) bool {
-	return strings.HasPrefix(path, os.Getenv("GOROOT"))
+	goRoot := os.Getenv("GOROOT")
+	if goRoot == "" {
+		return false
+	}
+	return strings.HasPrefix(path, goRoot)
 }
 
 func (fs *VirtualFileSystem) ReadDir(path string) ([]os.FileInfo, error) {
