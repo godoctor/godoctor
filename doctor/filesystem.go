@@ -122,7 +122,9 @@ func sizeOf(filename string) (int, error) {
 		//}
 		return 0, err
 	}
-	defer f.Close()
+	if err := f.Close(); err != nil {
+		return 0, err
+	}
 	fi, err := f.Stat()
 	if err != nil {
 		return 0, err
@@ -142,6 +144,9 @@ func (fs *EditedFileSystem) OpenFile(path string) (io.ReadCloser, error) {
 	}
 	contents, err := ApplyToReader(editSet, localReader)
 	if err != nil {
+		return nil, err
+	}
+	if err := localReader.Close(); err != nil {
 		return nil, err
 	}
 	return ioutil.NopCloser(bytes.NewReader(contents)), nil

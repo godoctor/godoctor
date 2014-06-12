@@ -81,7 +81,9 @@ func TestRenameFile(t *testing.T) {
 		os.RemoveAll(testDir)
 		t.Fatal("Create over renamed file should have failed")
 	}
-	os.RemoveAll(testDir)
+	if err := os.RemoveAll(testDir); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestEditedFileSystem(t *testing.T) {
@@ -100,6 +102,7 @@ func TestEditedFileSystem(t *testing.T) {
 		t.Fatal(err)
 	}
 	bytes, err := ioutil.ReadAll(editedFile)
+	editedFile.Close()
 	if err != nil {
 		os.Remove(testFile)
 		t.Fatal(err)
@@ -108,7 +111,9 @@ func TestEditedFileSystem(t *testing.T) {
 		os.Remove(testFile)
 		t.Fatal("Incorrect file contents:\n", string(bytes))
 	}
-	os.Remove(testFile)
+	if err := os.Remove(testFile); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestVirtualFileSystem(t *testing.T) {
