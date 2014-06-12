@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 
 	"code.google.com/p/go.tools/astutil"
 	"code.google.com/p/go.tools/go/loader"
@@ -163,6 +164,9 @@ type Result struct {
 	FSChanges []FileSystemChange
 }
 
+const CGO_ERROR1 = "could not import C (cannot"
+const CGO_ERROR2 = "undeclared name: C"
+
 type refactoringBase struct {
 	program        *loader.Program
 	file           *ast.File
@@ -210,7 +214,10 @@ func (r *refactoringBase) Run(config *Config) *Result {
 		var offset int = err.(types.Error).Fset.Position(pos).Offset
 		var filename string = err.(types.Error).Fset.File(pos).Name()
 		var length int = 0
-		r.Log.LogInitial(ERROR, message, filename, offset, length)
+		// TODO: This is temporary until go/loader handles cgo
+		if strings.Contains(message, CGO_ERROR1) && strings.HasSuffix(message, CGO_ERROR2) {
+			r.Log.LogInitial(ERROR, message, filename, offset, length)
+		}
 	}
 	// FIXME: Jeff: handle error
 

@@ -23,7 +23,7 @@ func (r *nullRefactoring) Description() *Description {
 
 func (r *nullRefactoring) Run(config *Config) *Result {
 	r.refactoringBase.Run(config)
-	r.Log.ChangeInitialErrorsToWarnings()
+	//r.Log.ChangeInitialErrorsToWarnings()
 	if r.Log.ContainsErrors() {
 		return &r.Result
 	}
