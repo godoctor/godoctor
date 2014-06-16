@@ -205,7 +205,7 @@ func (r *refactoringBase) Run(config *Config) *Result {
 	var lconfig loader.Config
 	lconfig.Build = &buildContext
 	lconfig.ParserMode = parser.ParseComments | parser.DeclarationErrors
-	lconfig.AllowTypeErrors = true
+	lconfig.AllowErrors = true
 	lconfig.SourceImports = true
 	lconfig.TypeChecker.Error = func(err error) {
 		// FIXME: Needs to be thread-safe
