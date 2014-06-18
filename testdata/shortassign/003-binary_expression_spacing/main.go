@@ -1,4 +1,4 @@
-// <<<<< shortassign,8,3,8,10,fail
+// <<<<< shortassign,8,3,8,10,pass
 package main
 
 import "fmt"

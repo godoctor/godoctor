@@ -11,6 +11,7 @@
 package doctor
 
 import (
+	"bytes"
 	"fmt"
 	"go/ast"
 	"go/build"
@@ -162,8 +163,6 @@ type Result struct {
 	// successful completion of changes earlier in the list (e.g., a path
 	// to a file may be invalid after its containing directory is renamed).
 	FSChanges []FileSystemChange
-        //RenameFiles:Contains list of directories  to be renamed along with newname
-       // RenameDir []string
 }
 
 const CGO_ERROR1 = "could not import C (cannot"
@@ -455,4 +454,21 @@ func (r *refactoringBase) readFromFile(offset, len int) string {
 
 func (r *refactoringBase) offsetLength(node ast.Node) (int, int) {
 	return r.program.Fset.Position(node.Pos()).Offset, (r.program.Fset.Position(node.End()).Offset - r.program.Fset.Position(node.Pos()).Offset)
+}
+
+func (r *refactoringBase) lhsNames(assign *ast.AssignStmt) []bytes.Buffer {
+	var lhsbuf bytes.Buffer
+	buf := make([]bytes.Buffer, len(assign.Lhs))
+	for i, lhs := range assign.Lhs {
+		if len(assign.Lhs) == len(assign.Rhs) {
+			buf[i].WriteString(r.readFromFile(r.offsetLength(lhs)))
+		} else {
+			lhsbuf.WriteString(r.readFromFile(r.offsetLength(lhs)))
+			if i < len(assign.Lhs)-1 {
+				lhsbuf.WriteString(", ")
+			}
+			buf[0] = lhsbuf
+		}
+	}
+	return buf
 }

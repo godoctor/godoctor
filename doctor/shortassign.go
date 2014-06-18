@@ -6,6 +6,7 @@ package doctor
 
 import (
 	"bytes"
+	"code.google.com/p/go.tools/astutil"
 	"code.google.com/p/go.tools/go/types"
 	"fmt"
 	"go/ast"
@@ -37,7 +38,6 @@ func (r *shortAssignRefactoring) Run(config *Config) *Result {
 	}
 
 	if r.selectedNode == nil {
-		//	r.Log.Log(FATAL_ERROR, "selection cannot be null")
 		r.Log.Log(ERROR, "The selection cannot be null.Please select a valid node!")
 		return &r.Result
 	}
@@ -68,45 +68,43 @@ func (r *shortAssignRefactoring) rhsExprs(assign *ast.AssignStmt) []string {
 func (r *shortAssignRefactoring) createReplacementString(assign *ast.AssignStmt) string {
 	var buf bytes.Buffer
 	replacement := make([]string, len(assign.Rhs))
+	path, _ := astutil.PathEnclosingInterval(r.file, assign.Pos(), assign.End())
 	for i, rhs := range assign.Rhs {
-		if T, ok := r.pkgInfo(r.file).TypeOf(rhs).(*types.Tuple); ok {
-			replacement[i] = fmt.Sprintf("var %s %s = %s\n",
-				r.lhsNames(assign)[i].String(),
-				typeOfFunctionType(T),
-				r.rhsExprs(assign)[i])
+		switch T := r.pkgInfo(r.file).TypeOf(rhs).(type) {
+		case *types.Tuple: // function type
 			if typeOfFunctionType(T) == "" {
-				//	r.Log.Log(ERROR, "This short assignment cannot be converted to an explicitly-typed var declaration.")
 				replacement[i] = fmt.Sprintf("var %s = %s\n",
 					r.lhsNames(assign)[i].String(),
 					r.rhsExprs(assign)[i])
+			} else {
+				replacement[i] = fmt.Sprintf("var %s %s = %s\n",
+					r.lhsNames(assign)[i].String(),
+					typeOfFunctionType(T),
+					r.rhsExprs(assign)[i])
 			}
-		} else {
+		case *types.Named: // package and struct types
+			if path[len(path)-1].(*ast.File).Name.Name == T.Obj().Pkg().Name() {
+				replacement[i] = fmt.Sprintf("var %s %s = %s\n",
+					r.lhsNames(assign)[i].String(),
+					T.Obj().Name(),
+					r.rhsExprs(assign)[i])
+			} else {
+				replacement[i] = fmt.Sprintf("var %s %s = %s\n",
+					r.lhsNames(assign)[i].String(),
+					T,
+					r.rhsExprs(assign)[i])
+			}
+		default:
 			replacement[i] = fmt.Sprintf("var %s %s = %s\n",
 				r.lhsNames(assign)[i].String(),
-				r.pkgInfo(r.file).TypeOf(rhs),
+				T,
 				r.rhsExprs(assign)[i])
+
 		}
 		io.WriteString(&buf, replacement[i])
 	}
 	return buf.String()
-}
 
-// lhsNames returns the names on the LHS of an assignment, comma-separated.
-func (r *shortAssignRefactoring) lhsNames(assign *ast.AssignStmt) []bytes.Buffer {
-	var lhsbuf bytes.Buffer
-	buf := make([]bytes.Buffer, len(assign.Lhs))
-	for i, lhs := range assign.Lhs {
-		if len(assign.Lhs) == len(assign.Rhs) {
-			buf[i].WriteString(r.readFromFile(r.offsetLength(lhs)))
-		} else {
-			lhsbuf.WriteString(r.readFromFile(r.offsetLength(lhs)))
-			if i < len(assign.Lhs)-1 {
-				lhsbuf.WriteString(", ")
-			}
-			buf[0] = lhsbuf
-		}
-	}
-	return buf
 }
 
 // typeOfFunctionType receives a type of function's return type, which must be a
