@@ -11,16 +11,20 @@ import (
 	"fmt"
 )
 
-// An OffsetLength consists of two integers: a 0-based offset and a nonnegative
-// length.  An OffsetLength is used to specify a region of a string or file.
-// For example, given the string "ABCDEFG", the substring CDE could be
-// specified by
-//     OffsetLength{offset: 2, length: 3}
+// An OffsetLength consists of two integers: a 0-based byte offset and a
+// nonnegative length.  An OffsetLength is used to specify a region of a string
+// or file.  For example, given the string "ABCDEFG", the substring CDE could
+// be specified by OffsetLength{offset: 2, length: 3}.
 type OffsetLength struct {
+	// Byte offset of the first character (0-based)
 	Offset int `json:"offset"`
+	// Length in bytes (nonnegative)
 	Length int `json:"length"`
 }
 
+// OffsetPastEnd returns the offset of the first byte immediately beyond the
+// end of this region.  For example, a region at offset 2 with length 3
+// occupies bytes 2 through 4, so this method would return 5.
 func (o *OffsetLength) OffsetPastEnd() int {
 	return o.Offset + o.Length
 }
