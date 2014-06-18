@@ -16,7 +16,6 @@ package doctor
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -39,25 +38,21 @@ import (
 //
 // The implementation follows the pseudocode in Myers' paper (cited above)
 // fairly closely.
-func Diff(a []string, b []string) EditSet {
-	return diff(a, b)
-}
-
-func diff(a []string, b []string) *editSet {
+func Diff(a []string, b []string) *EditSet {
 	n := len(a)
 	m := len(b)
 	max := m + n
 	if n == 0 && m == 0 {
-		return &editSet{}
+		return &EditSet{}
 	} else if n == 0 {
-		result := &editSet{}
+		result := &EditSet{}
 		replacement := strings.Join(b, "")
 		if replacement != "" {
 			result.Add(OffsetLength{0, 0}, replacement)
 		}
 		return result
 	} else if m == 0 {
-		result := &editSet{}
+		result := &EditSet{}
 		length := len(strings.Join(a, ""))
 		if length > 0 {
 			result.Add(OffsetLength{0, length}, "")
@@ -88,7 +83,7 @@ func diff(a []string, b []string) *editSet {
 				// length of SES is D
 				vs = append(vs, v)
 				//return constructEditSet(a, b, vs)
-				edits := &editSet{}
+				edits := &EditSet{}
 				constructEditSet(a, b, vs, edits, n-m)
 				return edits
 			}
@@ -111,7 +106,7 @@ func abs(n int) int {
 
 // constructEditSet uses the matrix vs (computed by Diff) to compute a
 // sequence of deletions and additions.
-func constructEditSet(a, b []string, vs [][]int, edits *editSet, k int) {
+func constructEditSet(a, b []string, vs [][]int, edits *EditSet, k int) {
 	n := len(a)
 	m := len(b)
 	max := m + n
@@ -175,32 +170,11 @@ func offsetOfString(index int, ss []string) int {
 const numCtxLines int = 3
 
 // A Patch is an object representing a unified diff.  It can be created from an
-// EditSet by invoking the CreatePatch method.
-//
-// Patch implements the EditSet interface, so a patch can be applied just as
-// any other EditSet can.  However, patches are read-only; the Add method will
-// always return an error.
+// EditSet by invoking the CreatePatch method.  To get the contents of the
+// unified diff, invoke the Write method.
 type Patch struct {
 	filename string
 	hunks    []*hunk
-}
-
-func (p *Patch) Add(OffsetLength, string) error {
-	return errors.New("Add cannot be called on Patch (read-only)")
-}
-
-func (p *Patch) ApplyTo(in io.Reader, out io.Writer) error {
-	panic("Not implemented")
-}
-
-func (p *Patch) CreatePatch(filename string, in io.Reader) (*Patch, error) {
-	return p, nil
-}
-
-func (p *Patch) String() string {
-	var result bytes.Buffer
-	p.Write("filename", "filename", &result)
-	return result.String()
 }
 
 // add appends a hunk to this patch.  It is the caller's responsibility to
@@ -248,7 +222,7 @@ func writeDiffHunk(h *hunk, outputLineOffset int, out io.Writer) (int, error) {
 	}
 
 	// Create an iterator that will traverse deletions and additions
-	it := diff(origLines, newLines).newEditIter()
+	it := Diff(origLines, newLines).newEditIter()
 
 	// For each line in the original file, add one or more lines to the
 	// unified diff output
@@ -313,7 +287,7 @@ func lenWithoutLastIfEmpty(ss []string) int {
 // cannot be applied.
 func computeLines(h *hunk) (origLines []string, newLines []string, err error) {
 	hunk := h.hunk.String()
-	newText, err := ApplyToString(&editSet{edits: h.edits}, hunk)
+	newText, err := ApplyToString(&EditSet{edits: h.edits}, hunk)
 	if err != nil {
 		return
 	}
@@ -499,7 +473,7 @@ type editIter struct {
 
 // newEditIter creates a new editIter with the first edit in the given file
 // marked.
-func (e *editSet) newEditIter() *editIter {
+func (e *EditSet) newEditIter() *editIter {
 	return &editIter{e.edits, 0}
 }
 
@@ -519,9 +493,9 @@ func (e *editIter) moveToNextEdit() *edit {
 	return e.edit()
 }
 
-// createPatch creates a Patch from an editSet.  (The CreatePatch method on
-// editSet delegates to this function.)
-func createPatch(e *editSet, in io.Reader) (result *Patch, err error) {
+// createPatch creates a Patch from an EditSet.  (The CreatePatch method on
+// EditSet delegates to this function.)
+func createPatch(e *EditSet, in io.Reader) (result *Patch, err error) {
 	result = &Patch{}
 
 	if len(e.edits) == 0 {

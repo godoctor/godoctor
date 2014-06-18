@@ -155,7 +155,7 @@ type Result struct {
 	Log *Log
 	// Maps filenames to the text edits that should be applied to those
 	// files.
-	Edits map[string]EditSet
+	Edits map[string]*EditSet
 	// File system changes: files and directories to rename, create, or
 	// delete after the Edits have been applied.  These changes should be
 	// applied in order, since changes later in the list may depend on the
@@ -262,7 +262,7 @@ func (r *refactoringBase) Run(config *Config) *Result {
 		r.selectionStart, r.selectionEnd)
 	r.selectedNode = nodes[0]
 
-	r.Edits = map[string]EditSet{r.filename(r.file): NewEditSet()}
+	r.Edits = map[string]*EditSet{r.filename(r.file): NewEditSet()}
 	r.FSChanges = []FileSystemChange{}
 
 	return &r.Result

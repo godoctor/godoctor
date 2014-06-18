@@ -94,10 +94,10 @@ func (fs *LocalFileSystem) Remove(path string) error {
 
 type EditedFileSystem struct {
 	LocalFileSystem
-	Edits map[string]EditSet
+	Edits map[string]*EditSet
 }
 
-func NewEditedFileSystem(edits map[string]EditSet) *EditedFileSystem {
+func NewEditedFileSystem(edits map[string]*EditSet) *EditedFileSystem {
 	return &EditedFileSystem{Edits: edits}
 }
 
@@ -108,7 +108,7 @@ func NewSingleEditedFileSystem(filename, contents string) (*EditedFileSystem, er
 	}
 	es := NewEditSet()
 	es.Add(OffsetLength{0, size}, contents)
-	return NewEditedFileSystem(map[string]EditSet{filename: es}), nil
+	return NewEditedFileSystem(map[string]*EditSet{filename: es}), nil
 }
 
 func sizeOf(filename string) (int, error) {

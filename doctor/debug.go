@@ -72,7 +72,7 @@ func (r *debugRefactoring) Run(config *Config) *Result {
 		}
 	}
 
-	r.Edits = map[string]EditSet{}
+	r.Edits = map[string]*EditSet{}
 	return &r.Result
 }
 

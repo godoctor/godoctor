@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func applyToString(e EditSet, s string) string {
+func applyToString(e *EditSet, s string) string {
 	result, err := ApplyToString(e, s)
 	if err != nil {
 		return "ERROR: " + err.Error()

@@ -5,6 +5,7 @@
 package doctor
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
@@ -167,9 +168,14 @@ func testUnifiedDiff(a, b, expected, name string, t *testing.T) {
 	edits := Diff(strings.SplitAfter(a, "\n"), strings.SplitAfter(b, "\n"))
 	s, _ := ApplyToString(edits, a)
 	assertEquals(b, s, t)
+
 	patch, _ := edits.CreatePatch(strings.NewReader(a))
-	if patch.String() != expected {
+	var result bytes.Buffer
+	patch.Write("filename", "filename", &result)
+	diff := result.String()
+
+	if diff != expected {
 		t.Fatalf("Diff test %s failed.  Expected:\n[%s]\nActual:\n[%s]\n",
-			name, expected, patch.String())
+			name, expected, diff)
 	}
 }
