@@ -14,7 +14,7 @@ func main() {
 
 mystructvar := mystruct {"helloo" } 
 
-mystructvar.mymethod()		// <<<<< rename,17,13,17,13,complex,fail
+mystructvar.mymethod()		// <<<<< rename,17,13,17,13,continue,fail
 
 
 }

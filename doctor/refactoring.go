@@ -162,6 +162,8 @@ type Result struct {
 	// successful completion of changes earlier in the list (e.g., a path
 	// to a file may be invalid after its containing directory is renamed).
 	FSChanges []FileSystemChange
+        //RenameFiles:Contains list of directories  to be renamed along with newname
+       // RenameDir []string
 }
 
 const CGO_ERROR1 = "could not import C (cannot"
@@ -437,6 +439,7 @@ func (r *refactoringBase) forEachInitialFile(f func(ast *ast.File)) {
 }
 
 func (r *refactoringBase) readFromFile(offset, len int) string {
+
 	buf := make([]byte, len)
 	file, err := os.Open(r.filename(r.file))
 	if err != nil {

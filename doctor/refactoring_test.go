@@ -238,31 +238,45 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 		}
 		if shouldPass {
 			checkResult(filename, string(output), t)
+                        
 		}
 	}
+          //fmt.Println("filesystem changes",result.FSChanges)
+            //  checkRenamedDir(result.RenameDir,"fschanges.txt") 
 
-	if _, err := os.Stat(FSCHANGES_TXT); os.IsNotExist(err) {
+	fsChangesFile := filepath.Join(directory, FSCHANGES_TXT)
+	if !exists(fsChangesFile, t) {
 		if len(result.FSChanges) > 0 {
 			t.Fatalf("Refactoring returned file system changes, "+
-				"but %s does not exist", FSCHANGES_TXT)
+				"but %s does not exist", fsChangesFile)
 		}
 	} else {
-		bytes, err := ioutil.ReadFile(FSCHANGES_TXT)
+		bytes, err := ioutil.ReadFile(fsChangesFile)
 		if err != nil {
 			t.Fatal(err)
 		}
-		fschanges := strings.Split(string(bytes), "\n")
+		fschanges := removeEmptyLines(strings.Split(string(bytes), "\n"))
 		if len(fschanges) != len(result.FSChanges) {
 			t.Fatalf("Expected %d file system changes but got %d",
 				len(fschanges), len(result.FSChanges))
 		} else {
 			for i, chg := range result.FSChanges {
-				if chg.String() != fschanges[i] {
-					t.Fatalf("FSChanges[%d]\nExpected: %s\nActual: %s", i, fschanges[i], chg.String())
+				if chg.String(directory) != fschanges[i] {
+					t.Fatalf("FSChanges[%d]\nExpected: %s\nActual: %s", i, fschanges[i], chg.String(directory))
 				}
 			}
 		}
 	}
+}
+
+func removeEmptyLines(lines []string) []string {
+	result := []string{}
+	for _, line := range lines {
+		if line != "" {
+			result = append(result, line)
+		}
+	}
+	return result
 }
 
 func exists(filename string, t *testing.T) bool {
@@ -317,6 +331,22 @@ func checkResult(filename string, actualOutput string, t *testing.T) {
 	}
 }
 
+
+//TODO Define after getting the value of Gopath
+/*func checkRenamedDir(result.RenameDir []string,filename string) {
+
+ if result.RenameDir != nil {
+  
+    bytes, err := ioutil.ReadFile(filename)
+       if err != nil {
+		t.Fatal(err)
+	}
+   expectedoutput :=  string(bytes)  	
+
+}
+
+}
+*/
 func describe(s string) string {
 	// FIXME: Jeff: Handle other non-printing characters
 	if len(s) > 10 {

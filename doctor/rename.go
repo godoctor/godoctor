@@ -4,13 +4,19 @@
 
 package doctor
 
-// This file defines a refactoring to rename variables, functions, methods, structs, and interfaces.
+// This file defines a refactoring to rename variables, functions, methods, structs,interfaces and packages
 // (TODO: It cannot yet rename packages.)
 
 import (
 	"go/ast"
 	"regexp"
-
+        //"fmt"
+        "path/filepath"
+        "io/ioutil"
+        "go/parser"
+        "go/token"
+        "strings"
+ 
 	"code.google.com/p/go.tools/go/types"
 )
 
@@ -60,6 +66,10 @@ func (r *renameRefactoring) Run(config *Config) *Result {
 
 	switch ident := r.selectedNode.(type) {
 	case *ast.Ident:
+                if ast.IsExported(ident.Name) && ! ast.IsExported(r.newName) {
+                  r.Log.Log(FATAL_ERROR, "newName cannot be non Exportable if selected identifier name is Exportable")
+                  return &r.Result  
+                 }  
 		r.rename(ident)
 
 	default:
@@ -78,7 +88,6 @@ func (r *renameRefactoring) isIdentifierValid(newName string) bool {
 }
 
 func (r *renameRefactoring) rename(ident *ast.Ident) {
-
 	if !r.IdentifierExists(ident) {
 		search := &SearchEngine{r.program}
 		searchResult, err := search.FindOccurrences(ident)
@@ -88,30 +97,51 @@ func (r *renameRefactoring) rename(ident *ast.Ident) {
 		}
 
 		r.addOccurrences(searchResult)
+                if search.isPackageName(ident) {
+		r.addFileSystemChanges(searchResult,ident)
+                  }	
 		//TODO: r.checkForErrors()
 		return
 	}
 
-	r.Log.Log(FATAL_ERROR, "newname already exists in scope,please select other value for the newname")
-
+	
 }
 
 //IdentifierExists checks if there already exists an Identifier with the newName,with in the scope of the oldname.
 func (r *renameRefactoring) IdentifierExists(ident *ast.Ident) bool {
 
 	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
-
-	if obj == nil {
+        search := &SearchEngine{r.program}
+ 
+	if obj == nil && !search.isPackageName(ident) {
+                     
 		r.Log.Log(FATAL_ERROR, "unable to find declaration of selected identifier")
-		return false
-	}
-
-	identscope := obj.Parent()
-
-	if identscope.LookupParent(r.newName) != nil {
 		return true
 	}
-
+        
+        if search.isPackageName(ident) {
+             return false
+         }  
+ 		identscope := obj.Parent()
+   
+          if isMethod(obj) {
+                	objfound,_,pointerindirections := types.LookupFieldOrMethod(methodReceiver(obj).Type(),obj.Pkg(),r.newName)
+                    if isMethod(objfound) && pointerindirections {
+                        r.Log.Log(FATAL_ERROR, "newname already exists in scope,please select other value for the newname")
+				return true
+                     } else {
+                         return false
+                          }
+	 } 
+       
+            
+            
+	if identscope.LookupParent(r.newName) != nil  {
+          
+           r.Log.Log(FATAL_ERROR, "newname already exists in scope,please select other value for the newname")
+		return true
+	}
+	 
 	return false
 }
 
@@ -122,9 +152,61 @@ func (r *renameRefactoring) addOccurrences(allOccurrences map[string][]OffsetLen
 			if r.Edits[filename] == nil {
 				r.Edits[filename] = NewEditSet()
 			}
-			r.Edits[filename].Add(occurrence, r.newName)
+                   r.Edits[filename].Add(occurrence, r.newName)
+                         
 		}
+	}
+}
 
+
+func (r *SearchEngine) isPackageName(ident *ast.Ident) bool {
+
+  if  r.pkgInfo(r.fileContaining(ident)).Pkg.Name() == ident.Name {
+                             return true
+            }    
+    
+   return false
+ }
+
+func (r  *renameRefactoring) addFileSystemChanges(allOccurrences map[string][]OffsetLength,ident *ast.Ident) {
+	for filename,_ := range allOccurrences {
+
+	if filepath.Base(filepath.Dir(filename)) == ident.Name && allFilesinDirectoryhaveSamePkg(filepath.Dir(filename),ident){
+		  chg := &fsRename{filepath.Dir(filename),r.newName} 
+                 r.FSChanges  = append(r.FSChanges,
+				chg)
+                 
+		}
+     	}
+}
+
+
+func   allFilesinDirectoryhaveSamePkg(directorypath string,ident *ast.Ident) bool {
+
+var renamefile bool = false
+fileInfos,_ := ioutil.ReadDir(directorypath)
+  
+	for _,file := range fileInfos { 
+	         	 if strings.HasSuffix(file.Name(),".go") {
+	 	           fset := token.NewFileSet()
+                   	f,err := parser.ParseFile(fset,filepath.Join(directorypath,file.Name()),nil,0)
+                                    if err!=nil {
+					panic(err)
+				     }
+	 	      		 if  f.Name.Name == ident.Name {
+         	         	    renamefile = true 
+        			   }
+		}
 	}
 
+return renamefile
 }
+
+  
+  
+
+ 
+
+
+
+

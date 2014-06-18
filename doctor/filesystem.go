@@ -15,6 +15,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 )
 
 /* -=-=- File System Interface -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
@@ -175,7 +176,7 @@ func (fs *EditedFileSystem) Rename(path, newName string) error {
 }
 
 func (fs *EditedFileSystem) Remove(path string) error {
-	panic("Remove unsupported")
+	panic("Remove unsupallPackages(r.program) ported")
 }
 
 /* -=-=- File System Changes -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
@@ -184,7 +185,7 @@ func (fs *EditedFileSystem) Remove(path string) error {
 // renaming, creating, or deleting a file/directory.
 type FileSystemChange interface {
 	ExecuteUsing(FileSystem) error
-	String() string
+	String(relativeTo string) string
 }
 
 type fsCreateFile struct {
@@ -195,8 +196,8 @@ func (chg *fsCreateFile) ExecuteUsing(fs FileSystem) error {
 	return fs.CreateFile(chg.path, chg.contents)
 }
 
-func (chg *fsCreateFile) String() string {
-	return fmt.Sprintf("create %s", chg.path)
+func (chg *fsCreateFile) String(relativeTo string) string {
+	return fmt.Sprintf("create %s", relative(chg.path, relativeTo))
 }
 
 type fsRemove struct {
@@ -207,8 +208,8 @@ func (chg *fsRemove) ExecuteUsing(fs FileSystem) error {
 	return fs.Remove(chg.path)
 }
 
-func (chg *fsRemove) String() string {
-	return fmt.Sprintf("remove %s", chg.path)
+func (chg *fsRemove) String(relativeTo string) string {
+	return fmt.Sprintf("remove %s", relative(chg.path, relativeTo))
 }
 
 type fsRename struct {
@@ -219,8 +220,8 @@ func (chg *fsRename) ExecuteUsing(fs FileSystem) error {
 	return fs.Rename(chg.path, chg.newName)
 }
 
-func (chg *fsRename) String() string {
-	return fmt.Sprintf("rename %s %s", chg.path, chg.newName)
+func (chg *fsRename) String(relativeTo string) string {
+	return fmt.Sprintf("rename %s %s", relative(chg.path, relativeTo), chg.newName)
 }
 
 func Execute(fs FileSystem, changes []FileSystemChange) error {
@@ -237,4 +238,17 @@ func Execute(fs FileSystem, changes []FileSystemChange) error {
 func isBareFilename(filePath string) bool {
 	dir, _ := path.Split(filePath)
 	return dir == ""
+}
+
+func relative(path, relativeTo string) string {
+	relativeTo, err := filepath.Abs(relativeTo)
+	if err != nil {
+		return path
+	}
+	//fmt.Println("path: ", path, "relativeTo:", relativeTo)
+	result, err := filepath.Rel(relativeTo, path)
+	if err != nil {
+		return path
+	}
+	return result
 }
