@@ -27,7 +27,8 @@ func (s *Setdir) Run(state *State, input map[string]interface{}) (Reply, error) 
 
 		// web mode? get that virtual filesystem
 		if mode == "web" {
-			state.Filesystem = doctor.NewVirtualFileSystem()
+			//state.Filesystem = doctor.NewVirtualFileSystem()
+			return Reply{map[string]interface{}{"reply": "Error", "message": "Web mode not supported"}}, err
 		}
 
 		state.State = 2
