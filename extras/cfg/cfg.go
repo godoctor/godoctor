@@ -77,7 +77,7 @@ func (c *CFG) Blocks() []ast.Stmt {
 	return blocks
 }
 
-func (c *CFG) PrintDot(f io.Writer) {
+func (c *CFG) PrintDot(f io.Writer, fset *token.FileSet) {
 	fmt.Fprintf(f, `digraph mgraph {
 mode="heir";
 splines="ortho";
@@ -85,13 +85,15 @@ splines="ortho";
 `)
 	for _, v := range c.blocks {
 		for _, a := range v.succs {
-			fmt.Fprintf(f, "\t\"%s\" -> \"%s\"\n", c.printVertex(v), c.printVertex(c.blocks[a]))
+			fmt.Fprintf(f, "\t\"%s\" -> \"%s\"\n",
+				c.printVertex(v, fset),
+				c.printVertex(c.blocks[a], fset))
 		}
 	}
 	fmt.Fprintf(f, "}\n")
 }
 
-func (c *CFG) printVertex(v *block) string {
+func (c *CFG) printVertex(v *block, fset *token.FileSet) string {
 	switch v.stmt {
 	case c.Entry:
 		return fmt.Sprintf("%s %p", "ENTRY", v.stmt)
@@ -100,7 +102,9 @@ func (c *CFG) printVertex(v *block) string {
 	case nil:
 		return ""
 	}
-	return fmt.Sprintf("%s %p", astutil.NodeDescription(v.stmt), v.stmt)
+	return fmt.Sprintf("%s - line %d",
+		astutil.NodeDescription(v.stmt),
+		fset.Position(v.stmt.Pos()).Line)
 }
 
 type builder struct {

@@ -410,7 +410,6 @@ func TestSelectDefault(t *testing.T) {
 //}`)
 
 //c.printAST()
-//c.printDOT()
 
 //c.expectSuccs(t, START, 1)
 //c.expectSuccs(t, 1, 2, 3)
@@ -606,15 +605,13 @@ func (c *CFGWrapper) printAST() {
 	ast.Print(c.fset, c.f)
 }
 
-//output a graph.dot file... for now
-//most likely for testing only
 func (c *CFGWrapper) printDOT() {
 	f, err := os.Create("graph.dot")
 	if err != nil {
 		panic(err)
 	}
 	defer f.Close()
-	c.cfg.PrintDot(f)
+	c.cfg.PrintDot(f, c.fset)
 }
 
 func TestPrintDot(t *testing.T) {
@@ -627,7 +624,7 @@ func TestPrintDot(t *testing.T) {
   }`)
 
 	var buf bytes.Buffer
-	c.cfg.PrintDot(&buf)
+	c.cfg.PrintDot(&buf, c.fset)
 	dot := buf.String()
 
 	expected := []string{
@@ -636,9 +633,9 @@ mode="heir";
 splines="ortho";
 
 `,
-		"\"assignment 0x[0-9a-f]*\" -> \"increment statement 0x[0-9a-f]*\"\n",
-		"\"ENTRY 0x[0-9a-f]*\" -> \"assignment 0x[0-9a-f]*\"\n",
-		"\"increment statement 0x[0-9a-f]*\" -> \"EXIT 0x[0-9a-f]*\"\n",
+		"\"assignment - line 5\" -> \"increment statement - line 6\"\n",
+		"\"ENTRY 0x[0-9a-f]*\" -> \"assignment - line 5\"\n",
+		"\"increment statement - line 6\" -> \"EXIT 0x[0-9a-f]*\"\n",
 	}
 	for _, re := range expected {
 		ok, _ := regexp.MatchString(re, dot)
