@@ -115,26 +115,3 @@ func TestEditedFileSystem(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-
-func TestVirtualFileSystem(t *testing.T) {
-	files := map[string]string{"a": "AAA", "b": "BBB"}
-	fs := NewVirtualFileSystem()
-	for file, contents := range files {
-		if err := fs.CreateFile(file, contents); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for file, expected := range files {
-		r, err := fs.OpenFile(file)
-		if err != nil {
-			t.Fatal(err)
-		}
-		bytes, err := ioutil.ReadAll(r)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if string(bytes) != expected {
-			t.Fatal("File contents mismatch: ", string(bytes))
-		}
-	}
-}

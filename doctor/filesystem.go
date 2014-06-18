@@ -2,6 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// This file defines a FileSystem interface and two implementations.  A
+// FileSystem is supplied to the go/loader to read files, and it is also used
+// by the refactoring driver to commit refactorings' changes to disk.
+
 package doctor
 
 import (
@@ -11,13 +15,12 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
-	"path/filepath"
-	"strings"
-	"time"
 )
 
 /* -=-=- File System Interface -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 
+// A FileSystem provides the ability to read directories and files, as well as
+// to create, rename, and remove files (if the file system is not read-only).
 type FileSystem interface {
 	// ReadDir returns a slice of os.FileInfo, sorted by Name,
 	// describing the content of the named directory.
@@ -41,6 +44,8 @@ type FileSystem interface {
 
 /* -=-=- Local File System -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 
+// LocalFileSystem implements the FileSystem interface and provides access to
+// the local file system by delegating to the os and io/ioutil packages.
 type LocalFileSystem struct{}
 
 func NewLocalFileSystem() *LocalFileSystem {
@@ -92,6 +97,11 @@ func (fs *LocalFileSystem) Remove(path string) error {
 
 /* -=-=- Edited File System -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 
+// EditedFileSystem implements the FileSystem interface and provides access to
+// a hypothetical version of the local file system after a refactoring's
+// changes have been applied.  This can be supplied to go/loader to analyze a
+// program after refactoring, without actually changing the program on disk.
+// File/directory creation, renaming, and deletion are not currently supported.
 type EditedFileSystem struct {
 	LocalFileSystem
 	Edits map[string]*EditSet
@@ -168,110 +178,10 @@ func (fs *EditedFileSystem) Remove(path string) error {
 	panic("Remove unsupported")
 }
 
-/* -=-=- Virtual File System -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
-
-type VirtualFileSystem struct {
-	files map[string]string
-}
-
-func NewVirtualFileSystem() *VirtualFileSystem {
-	return &VirtualFileSystem{files: map[string]string{}}
-}
-
-func isInGoRoot(path string) bool {
-	goRoot := os.Getenv("GOROOT")
-	if goRoot == "" {
-		return false
-	}
-	return strings.HasPrefix(path, goRoot)
-}
-
-func (fs *VirtualFileSystem) ReadDir(path string) ([]os.FileInfo, error) {
-	if isInGoRoot(path) {
-		return ioutil.ReadDir(path)
-	} else {
-		return fs.fileInfos(), nil
-	}
-}
-
-func (fs *VirtualFileSystem) fileInfos() []os.FileInfo {
-	now := time.Time{} // Zero time
-	result := make([]os.FileInfo, len(fs.files))
-	for name, contents := range fs.files {
-		fi := &vfsFileInfo{
-			name:    name,
-			size:    int64(len(contents)),
-			modTime: now,
-		}
-		result = append(result, fi)
-	}
-	return result
-}
-
-type vfsFileInfo struct {
-	name    string
-	size    int64
-	modTime time.Time
-}
-
-func (fi *vfsFileInfo) Name() string       { return fi.name }
-func (fi *vfsFileInfo) Size() int64        { return fi.size }
-func (fi *vfsFileInfo) Mode() os.FileMode  { return 0777 }
-func (fi *vfsFileInfo) ModTime() time.Time { return fi.modTime }
-func (fi *vfsFileInfo) IsDir() bool        { return false }
-func (fi *vfsFileInfo) Sys() interface{}   { return nil }
-
-func (fs *VirtualFileSystem) OpenFile(path string) (io.ReadCloser, error) {
-	if isInGoRoot(path) {
-		f, err := os.Open(path)
-		if err != nil {
-			return nil, err
-		}
-		return f, nil
-	} else {
-		_, fname := filepath.Split(path)
-		contents, ok := fs.files[fname]
-		if !ok {
-			return nil,
-				fmt.Errorf("Virtual file not found: %s", fname)
-		}
-		return ioutil.NopCloser(strings.NewReader(contents)), nil
-	}
-}
-
-func (fs *VirtualFileSystem) CreateFile(path, contents string) error {
-	if _, ok := fs.files[path]; ok {
-		return fmt.Errorf("File already exists: %s", path)
-	}
-	if fs.files == nil {
-		fs.files = map[string]string{}
-	}
-	fs.files[path] = contents
-	return nil
-}
-
-func (fs *VirtualFileSystem) Rename(path, newName string) error {
-	if _, ok := fs.files[path]; !ok {
-		return fmt.Errorf("File does not exist: %s", path)
-	}
-	if _, ok := fs.files[newName]; ok {
-		return fmt.Errorf("File already exists: %s", newName)
-	}
-	fs.files[newName] = fs.files[path]
-	delete(fs.files, path)
-	return nil
-}
-
-func (fs *VirtualFileSystem) Remove(path string) error {
-	if _, ok := fs.files[path]; !ok {
-		return fmt.Errorf("File does not exist: %s", path)
-	}
-	delete(fs.files, path)
-	return nil
-}
-
 /* -=-=- File System Changes -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 
+// A FileSystemChange describes a change to be made to the file system:
+// renaming, creating, or deleting a file/directory.
 type FileSystemChange interface {
 	ExecuteUsing(FileSystem) error
 	String() string
