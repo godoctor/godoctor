@@ -2,10 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// This file defines the EditSet interface and a default implementation,
-// including the NewEditSet method.  All Go refactorings/transformations return
-// an EditSet, which describes what file(s) will be affected by a refactoring
-// and exactly what characters in those files will be affected.
+// This file defines EditSets, which describe changes (additions, deletions,
+// and modifications) to be made to a text file.
 
 package doctor
 
@@ -26,13 +24,13 @@ import (
 //
 // Each edit replaces 0 or more characters at a given offset with a given
 // string.  Characters can be inserted by using a position with length 0;
-// characters can be deleted by using "" for the replacement string.
+// characters can be deleted by using an empty replacement string.
 //
 // Edits are added to an EditSet via the Add method, and the edits in an
 // EditSet can be applied to an input by invoking the ApplyTo method or
 // one of the utility functions ApplyToString, ApplyToFile, or ApplyToReader.
 type EditSet struct {
-	edits []edit
+	edits []edit // edits are sorted by offset and are non-overlapping
 }
 
 type edit struct {
@@ -57,9 +55,7 @@ func (e *edit) RelativeToOffset(offset int) edit {
 }
 
 // Add inserts an edit into this EditSet, returning an error if the edit has a
-// negative offset or overlaps an edit previously added to this EditSet.  If
-// the EditSet is read-only (e.g., Patch implements EditSet but cannot be
-// modified), an error will always be returned.
+// negative offset or overlaps an edit previously added to this EditSet.
 func (e *EditSet) Add(position OffsetLength, replacement string) error {
 	// Check for negative-offset or overlapping edits
 	if position.Offset < 0 {
@@ -67,6 +63,7 @@ func (e *EditSet) Add(position OffsetLength, replacement string) error {
 			position.Offset)
 	}
 
+	// Insert edit into e.edits, keeping e.edits sorted by offset
 	var pos int = len(e.edits)
 	for i := len(e.edits) - 1; i >= 0; i-- {
 		if e.edits[i].Offset >= position.Offset {
@@ -91,7 +88,7 @@ func (e *edit) String() string {
 		" with \"" + e.replacement + "\""
 }
 
-// String returns a human-readable description of this EditSet.
+// String returns a human-readable description of this EditSet (for debugging).
 func (e *EditSet) String() string {
 	var buffer bytes.Buffer
 	for _, edit := range e.edits {
@@ -112,6 +109,8 @@ func (e *EditSet) ApplyTo(in io.Reader, out io.Writer) error {
 }
 
 func (e *EditSet) applyTo(in *bufio.Reader, out *bufio.Writer) error {
+	// This uses the same idea as the linear-time merge in Merge Sort to
+	// apply the edits in this EditSet to the bytes from the input reader.
 	defer out.Flush()
 	var offset int = 0
 	for _, edit := range e.edits {
