@@ -81,7 +81,8 @@ func TestRefactorings(t *testing.T) {
 	testDirs, err := ioutil.ReadDir(directory)
 	failIfError(err, t)
 	for _, testDirInfo := range testDirs {
-		if testDirInfo.IsDir() {
+		// FIXME(jeff): Move refactoring tests into testdata/refactoring/x and remove this hack
+		if testDirInfo.IsDir() && testDirInfo.Name() != "diff" {
 			runAllTestsInSubdirectories(testDirInfo, t)
 		}
 	}

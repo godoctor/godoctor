@@ -5,47 +5,33 @@
 package doctor
 
 import (
-	"math/rand"
+	"fmt"
+	"io/ioutil"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
-var rng *rand.Rand = rand.New(rand.NewSource(99))
+const diffTestDir = "../testdata/diff/"
 
-func testDiff(a, b string, t *testing.T) {
+func TestDiffs(t *testing.T) {
+	strings := []string{"", "ABCABBA", "CBABAC"}
+	for _, a := range strings {
+		for _, b := range strings {
+			testDiffs(a, b, t)
+		}
+	}
+	for _, b := range []string{"a\nbcd", "abcfg", "defg", "abcd", "ag",
+		"bcd", "abd", "efg", "axy", "xcg", "xcdghy", "xabcdefgy"} {
+		testDiffs("abcdefg", b, t)
+	}
+}
+
+func testDiffs(a, b string, t *testing.T) {
 	diff := Diff(strings.Split(a, ""), strings.Split(b, ""))
-	actual, err := ApplyToString(diff, a)
+	result, err := ApplyToString(diff, a)
 	failIfError(err, t)
-	expected := b
-	assertEquals(expected, actual, t)
-}
-
-func TestMyersPaperExample(t *testing.T) {
-	testDiff("ABCABBA", "CBABAC", t)
-}
-
-func TestEmptyCases(t *testing.T) {
-	testDiff("", "", t)
-	testDiff("", "abcdefg", t)
-	testDiff("abcdefg", "", t)
-}
-
-func TestNoChange(t *testing.T) {
-	testDiff("a", "a", t)
-	testDiff("a\nbcd", "a\nbcd", t)
-}
-
-func TestAdditionalDiffs(t *testing.T) {
-	testDiff("abcdefg", "abcfg", t)
-	testDiff("abcdefg", "defg", t)
-	testDiff("abcdefg", "abcd", t)
-	testDiff("abcdefg", "ag", t)
-	testDiff("abcdefg", "bcd", t)
-	testDiff("abcdefg", "bdf", t)
-	testDiff("abc", "defg", t)
-	testDiff("abcdefg", "xyz", t)
-	testDiff("abc", "dea", t)
-	testDiff("abc", "deaf", t)
+	assertEquals(b, result, t)
 }
 
 func TestLineRdr(t *testing.T) {
@@ -156,287 +142,34 @@ func TestCreatePatch(t *testing.T) {
 	assertTrue(len(p.hunks[1].edits) == 1, t)
 }
 
-func testUnifiedDiff(a string, b string, expected string, t *testing.T) {
+func TestUnifiedDiff(t *testing.T) {
+	testDirs, err := ioutil.ReadDir(diffTestDir)
+	failIfError(err, t)
+	for _, testDirInfo := range testDirs {
+		if testDirInfo.IsDir() {
+			fmt.Printf("Diff Test %s\n", testDirInfo.Name())
+			dir := filepath.Join(diffTestDir, testDirInfo.Name())
+			from := readFile(filepath.Join(dir, "from.txt"), t)
+			to := readFile(filepath.Join(dir, "to.txt"), t)
+			diff := readFile(filepath.Join(dir, "diff.txt"), t)
+			testUnifiedDiff(from, to, diff, testDirInfo.Name(), t)
+		}
+	}
+}
+
+func readFile(path string, t *testing.T) string {
+	bytes, err := ioutil.ReadFile(path)
+	failIfError(err, t)
+	return string(bytes)
+}
+
+func testUnifiedDiff(a, b, expected, name string, t *testing.T) {
 	edits := Diff(strings.SplitAfter(a, "\n"), strings.SplitAfter(b, "\n"))
 	s, _ := ApplyToString(edits, a)
 	assertEquals(b, s, t)
 	patch, _ := edits.CreatePatch(strings.NewReader(a))
-	assertEquals(expected, patch.String(), t)
-}
-
-func TestUnifiedDiff(t *testing.T) {
-	a := `Line 1
-Line 2
-Line 3
-Line 4
-Line 5
-Line 6
-Line 7
-Line 8
-Line 9
-Line 10`
-	b := `Line 2
-Line 3
-Line 4
-Line 5
-Line 6 has changed
-Line 7 has also changed
-This is line 7.5
-Line 8
-Line 9
-Line 10`
-	expected := `--- filename
-+++ filename
-@@ -1,10 +1,10 @@
--Line 1
- Line 2
- Line 3
- Line 4
- Line 5
--Line 6
--Line 7
-+Line 6 has changed
-+Line 7 has also changed
-+This is line 7.5
- Line 8
- Line 9
- Line 10`
-	testUnifiedDiff(a, b, expected, t)
-}
-
-func TestUnifiedDiffLastLine(t *testing.T) {
-	a := `Line 1
-Line 2
-Line 3
-`
-	b := `Line 1
-Line 2
-Line 33`
-	expected := `--- filename
-+++ filename
-@@ -1,3 +1,3 @@
- Line 1
- Line 2
--Line 3
-+Line 33
-\ No newline at end of file
-`
-	testUnifiedDiff(a, b, expected, t)
-}
-
-func TestUnifiedDiffNoLFAtEnd(t *testing.T) {
-	a := `Line 1
-Line 2
-Line 3`
-	b := `Line 1
-Line 2
-Line 33`
-	expected := `--- filename
-+++ filename
-@@ -1,3 +1,3 @@
- Line 1
- Line 2
--Line 3
-\ No newline at end of file
-+Line 33
-\ No newline at end of file
-`
-	testUnifiedDiff(a, b, expected, t)
-}
-
-func TestUnifiedDiffNoChange(t *testing.T) {
-	a := `Line 1
-Line 2
-Line 3
-`
-	expected := ""
-	testUnifiedDiff(a, a, expected, t)
-}
-
-func TestUnifiedDiffMultipleHunks(t *testing.T) {
-	a := `Line 1
-Line 2
-Line 3
-Line 4
-Line 5
-Line 6
-Line 7
-Line 8
-Line 9
-Line 10
-`
-	b := `Line 1
-Line 3
-Line 4
-Line 5
-Line 6
-Line 7
-Line 8
-Line 9
-Line 9.5
-Line 9.75
-Line 10`
-	expected := `--- filename
-+++ filename
-@@ -1,5 +1,4 @@
- Line 1
--Line 2
- Line 3
- Line 4
- Line 5
-@@ -7,4 +6,6 @@
- Line 7
- Line 8
- Line 9
--Line 10
-+Line 9.5
-+Line 9.75
-+Line 10
-\ No newline at end of file
-`
-	testUnifiedDiff(a, b, expected, t)
-}
-
-func TestUnifiedDiffMaxIntraHunkCtx(t *testing.T) {
-	a := `Line 1
-Line 2
-Line 3
-Line 4
-Line 5
-Line 6
-Line 7
-Line 8
-Line 9
-Line 10
-Line 11
-Line 12
-Line 13
-Line 14
-Line 15
-Line 16
-Line 17
-Line 18
-Line 19
-Line 20`
-	b := `Line 1
-Line 3
-Line 4
-Line 5
-Line 6 has been changed
-Line 7
-Line 8
-Line 9
-Line 10
-Line 11
-Line 12
-Line 13 has been changed
-Line 14
-Line 15
-Line 16 has been changed
-Line 17
-Line 18
-Line 19
-Line 20
-`
-	expected := `--- filename
-+++ filename
-@@ -1,20 +1,19 @@
- Line 1
--Line 2
- Line 3
- Line 4
- Line 5
--Line 6
-+Line 6 has been changed
- Line 7
- Line 8
- Line 9
- Line 10
- Line 11
- Line 12
--Line 13
-+Line 13 has been changed
- Line 14
- Line 15
--Line 16
-+Line 16 has been changed
- Line 17
- Line 18
- Line 19
--Line 20
-\ No newline at end of file
-+Line 20
-`
-	testUnifiedDiff(a, b, expected, t)
-}
-
-func TestUnifiedDiffTwoHunks(t *testing.T) {
-	a := `Line 1
-Line 2
-Line 3
-Line 4
-Line 5
-Line 6
-Line 7
-Line 8
-Line 9
-Line 10
-Line 11
-Line 12
-Line 13
-Line 14
-Line 15
-Line 16
-Line 17
-Line 18
-Line 19
-Line 20
-`
-	b := `Line 1
-Line 3
-Line 4
-Line 5
-Line 6 has been changed
-Line 7
-Line 8
-Line 9
-Line 10
-Line 11
-Line 12
-Line 13
-Line 14 has been changed
-Line 15
-Line 16 has been changed
-Line 17
-Line 18
-Line 19
-Line 20
-`
-	expected := `--- filename
-+++ filename
-@@ -1,9 +1,8 @@
- Line 1
--Line 2
- Line 3
- Line 4
- Line 5
--Line 6
-+Line 6 has been changed
- Line 7
- Line 8
- Line 9
-@@ -11,9 +10,9 @@
- Line 11
- Line 12
- Line 13
--Line 14
-+Line 14 has been changed
- Line 15
--Line 16
-+Line 16 has been changed
- Line 17
- Line 18
- Line 19
-`
-	testUnifiedDiff(a, b, expected, t)
+	if patch.String() != expected {
+		t.Fatalf("Diff test %s failed.  Expected:\n[%s]\nActual:\n[%s]\n",
+			name, expected, patch.String())
+	}
 }
