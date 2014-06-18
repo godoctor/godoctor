@@ -1,0 +1,1 @@
+rename src/mypackage/subpackage Xyz
