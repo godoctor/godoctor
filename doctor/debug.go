@@ -17,6 +17,14 @@ import (
 	"strings"
 )
 
+const usage = `Usage: debug <options>
+where <options> can be any or all of:
+    showaffected      Show names affected if the selected identifier is renamed
+    showast           Show the abstract syntax tree for the selected file
+    showidentifiers   Show name references (ast.Object) in initial packages
+    showpackages      List all packages loaded (due to --scope)
+    showreferences    Show all direct references to the selected identifier`
+
 type debugRefactoring struct {
 	refactoringBase
 }
@@ -34,20 +42,15 @@ func (r *debugRefactoring) Description() *Description {
 }
 
 func (r *debugRefactoring) Run(config *Config) *Result {
-	if r.refactoringBase.Run(config); r.Log.ContainsErrors() {
+	r.refactoringBase.Run(config)
+	r.Edits = map[string]*EditSet{}
+
+	if r.Log.ContainsErrors() {
 		return &r.Result
 	}
 
-	r.Log.ChangeInitialErrorsToWarnings()
-
 	if len(config.Args) == 0 {
-		fmt.Println("Usage: debug <options>")
-		fmt.Println("where <options> can be any or all of:")
-		fmt.Println("    showast")
-		fmt.Println("    showpackages")
-		fmt.Println("    showidentifiers")
-		fmt.Println("    showreferences")
-		fmt.Println("    showaffected")
+		fmt.Println(usage)
 		return &r.Result
 	}
 	if !validateArgs(config, r.Description(), r.Log) {
@@ -56,44 +59,54 @@ func (r *debugRefactoring) Run(config *Config) *Result {
 
 	for _, arg := range config.Args {
 		switch strings.ToLower(strings.TrimSpace(arg.(string))) {
-		case "showast":
-			r.showAST()
-		case "showpackages":
-			r.showLoadedPackagesAndFiles()
-		case "showidentifiers":
-			r.showIdentifiers()
-		case "showreferences":
-			r.showReferences()
 		case "showaffected":
 			r.showAffected()
+		case "showast":
+			r.showAST()
+		case "showidentifiers":
+			r.showIdentifiers()
+		case "showpackages":
+			r.showLoadedPackagesAndFiles()
+		case "showreferences":
+			r.showReferences()
 		default:
 			r.Log.Log(FATAL_ERROR, "Unknown option "+arg.(string))
 			return &r.Result
 		}
 	}
 
-	r.Edits = map[string]*EditSet{}
 	return &r.Result
 }
 
-func (r *debugRefactoring) showAST() {
-	r.forEachInitialFile(func(file *ast.File) {
-		ast.Print(r.program.Fset, file)
-	})
+func (r *debugRefactoring) showAffected() {
+	errorMsg := "Please select an identifier for showaffected"
+
+	if r.selectedNode == nil {
+		r.Log.Log(FATAL_ERROR, errorMsg)
+		return
+	}
+	switch id := r.selectedNode.(type) {
+	case *ast.Ident:
+		fmt.Printf("Affected Declarations:\n")
+		search := &SearchEngine{r.program}
+		searchResult, err := search.FindDeclarationsAcrossInterfaces(id)
+		if err != nil {
+			r.Log.Log(FATAL_ERROR, err.Error())
+			return
+		}
+		for obj := range searchResult {
+			p := r.program.Fset.Position(obj.Pos())
+			fmt.Printf("  %s - %s, Line %d\n",
+				obj.Name(), p.Filename, p.Line)
+		}
+	default:
+		r.Log.Log(FATAL_ERROR, errorMsg)
+		return
+	}
 }
 
-func (r *debugRefactoring) showLoadedPackagesAndFiles() {
-	fmt.Printf("GOPATH is %s\n", os.Getenv("GOPATH"))
-	cwd, _ := os.Getwd()
-	fmt.Printf("Working directory is %s\n", cwd)
-	fmt.Println()
-	fmt.Println("Packages/files loaded:")
-	for _, pkgInfo := range r.program.AllPackages {
-		fmt.Printf("\t%s\n", pkgInfo.Pkg.Name())
-		for _, file := range pkgInfo.Files {
-			fmt.Printf("\t\t%s\n", r.filename(file))
-		}
-	}
+func (r *debugRefactoring) showAST() {
+	ast.Print(r.program.Fset, r.file)
 }
 
 func (r *debugRefactoring) showIdentifiers() {
@@ -114,6 +127,20 @@ func (r *debugRefactoring) showIdentifiers() {
 		})
 
 	})
+}
+
+func (r *debugRefactoring) showLoadedPackagesAndFiles() {
+	fmt.Printf("GOPATH is %s\n", os.Getenv("GOPATH"))
+	cwd, _ := os.Getwd()
+	fmt.Printf("Working directory is %s\n", cwd)
+	fmt.Println()
+	fmt.Println("Packages/files loaded:")
+	for _, pkgInfo := range r.program.AllPackages {
+		fmt.Printf("\t%s\n", pkgInfo.Pkg.Name())
+		for _, file := range pkgInfo.Files {
+			fmt.Printf("\t\t%s\n", r.filename(file))
+		}
+	}
 }
 
 func (r *debugRefactoring) showReferences() {
@@ -137,33 +164,6 @@ func (r *debugRefactoring) showReferences() {
 			for _, ol := range occs {
 				fmt.Printf("    %s\n", ol.String())
 			}
-		}
-	default:
-		r.Log.Log(FATAL_ERROR, errorMsg)
-		return
-	}
-}
-
-func (r *debugRefactoring) showAffected() {
-	errorMsg := "Please select an identifier for showaffected"
-
-	if r.selectedNode == nil {
-		r.Log.Log(FATAL_ERROR, errorMsg)
-		return
-	}
-	switch id := r.selectedNode.(type) {
-	case *ast.Ident:
-		fmt.Printf("Affected Declarations:\n")
-		search := &SearchEngine{r.program}
-		searchResult, err := search.FindDeclarationsAcrossInterfaces(id)
-		if err != nil {
-			r.Log.Log(FATAL_ERROR, err.Error())
-			return
-		}
-		for obj := range searchResult {
-			p := r.program.Fset.Position(obj.Pos())
-			fmt.Printf("  %s - %s, Line %d\n",
-				obj.Name(), p.Filename, p.Line)
 		}
 	default:
 		r.Log.Log(FATAL_ERROR, errorMsg)
