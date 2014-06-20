@@ -60,7 +60,8 @@ func (r *shortAssignRefactoring) createEditSet(assign *ast.AssignStmt) {
 func (r *shortAssignRefactoring) rhsExprs(assign *ast.AssignStmt) []string {
 	rhsValue := make([]string, len(assign.Rhs))
 	for j, rhs := range assign.Rhs {
-		rhsValue[j] = r.readFromFile(r.offsetLength(rhs))
+		offset, length := r.offsetLength(rhs)
+		rhsValue[j] = string(r.fileContents[offset : offset+length])
 	}
 	return rhsValue
 }
@@ -104,7 +105,6 @@ func (r *shortAssignRefactoring) createReplacementString(assign *ast.AssignStmt)
 		io.WriteString(&buf, replacement[i])
 	}
 	return buf.String()
-
 }
 
 // typeOfFunctionType receives a type of function's return type, which must be a

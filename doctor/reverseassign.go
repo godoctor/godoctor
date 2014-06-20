@@ -51,7 +51,7 @@ func (r *reverseAssignRefactoring) Run(config *Config) *Result {
 func (r *reverseAssignRefactoring) lhsNames(decl *ast.GenDecl) string {
 	offset, _ := r.offsetLength(decl.Specs[0].(*ast.ValueSpec))
 	endOffset := r.program.Fset.Position(decl.Specs[0].(*ast.ValueSpec).Names[len(decl.Specs[0].(*ast.ValueSpec).Names)-1].End()).Offset
-	return r.readFromFile(offset, (endOffset - offset))
+	return string(r.fileContents[offset:endOffset])
 }
 
 // returns the replacement string

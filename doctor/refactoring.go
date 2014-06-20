@@ -171,6 +171,7 @@ const CGO_ERROR2 = "undeclared name: C"
 type refactoringBase struct {
 	program        *loader.Program
 	file           *ast.File
+	fileContents   []byte
 	selectionStart token.Pos
 	selectionEnd   token.Pos
 	selectedNode   ast.Node
@@ -262,6 +263,12 @@ func (r *refactoringBase) Run(config *Config) *Result {
 	nodes, _ := astutil.PathEnclosingInterval(r.file,
 		r.selectionStart, r.selectionEnd)
 	r.selectedNode = nodes[0]
+
+	r.fileContents, err = ioutil.ReadFile(r.filename(r.file))
+	if err != nil {
+		r.Log.Log(FATAL_ERROR, "Unable to read "+r.filename(r.file))
+		return &r.Result
+	}
 
 	r.Edits = map[string]*EditSet{r.filename(r.file): NewEditSet()}
 	r.FSChanges = []FileSystemChange{}
@@ -437,21 +444,6 @@ func (r *refactoringBase) forEachInitialFile(f func(ast *ast.File)) {
 	}
 }
 
-func (r *refactoringBase) readFromFile(offset, len int) string {
-
-	buf := make([]byte, len)
-	file, err := os.Open(r.filename(r.file))
-	if err != nil {
-		r.Log.Log(FATAL_ERROR, fmt.Sprintf("Error on file Open %s", err))
-	}
-	defer file.Close()
-	_, err = file.ReadAt(buf, int64(offset))
-	if err != nil {
-		r.Log.Log(FATAL_ERROR, fmt.Sprintf("Error on file Open %s", err))
-	}
-	return string(buf)
-}
-
 func (r *refactoringBase) offsetLength(node ast.Node) (int, int) {
 	return r.program.Fset.Position(node.Pos()).Offset, (r.program.Fset.Position(node.End()).Offset - r.program.Fset.Position(node.Pos()).Offset)
 }
@@ -460,10 +452,12 @@ func (r *refactoringBase) lhsNames(assign *ast.AssignStmt) []bytes.Buffer {
 	var lhsbuf bytes.Buffer
 	buf := make([]bytes.Buffer, len(assign.Lhs))
 	for i, lhs := range assign.Lhs {
+		offset, length := r.offsetLength(lhs)
+		lhsText := r.fileContents[offset : offset+length]
 		if len(assign.Lhs) == len(assign.Rhs) {
-			buf[i].WriteString(r.readFromFile(r.offsetLength(lhs)))
+			buf[i].Write(lhsText)
 		} else {
-			lhsbuf.WriteString(r.readFromFile(r.offsetLength(lhs)))
+			lhsbuf.Write(lhsText)
 			if i < len(assign.Lhs)-1 {
 				lhsbuf.WriteString(", ")
 			}
