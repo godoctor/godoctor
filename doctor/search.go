@@ -40,8 +40,7 @@ func (r *SearchEngine) FindDeclarationsAcrossInterfaces(ident *ast.Ident) (map[t
 	pkgInfo := r.pkgInfo(r.fileContaining(ident))
 	obj := pkgInfo.ObjectOf(ident)
 
-     
-     	if obj == nil   && !r.isPackageName(ident)  {
+	if obj == nil && !r.isPackageName(ident) {
 		return nil, fmt.Errorf("Unable to find declaration of %s", ident.Name)
 	}
 
@@ -184,37 +183,36 @@ func (r *SearchEngine) methodDeclsMatchingSig(ident *ast.Ident, sig *types.Signa
 // map maps filenames to a slice of (offset, length) pairs describing locations
 // at which the given identifier is referenced.
 func (r *SearchEngine) FindOccurrences(ident *ast.Ident) (map[string][]OffsetLength, error) {
-	 
-  var pkgs  map[*loader.PackageInfo]bool;
-  var  result map[string][]OffsetLength;
 
-         obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
-  
-        
-	if obj == nil  && !r.isPackageName(ident) {
-              
+	var pkgs map[*loader.PackageInfo]bool
+	var result map[string][]OffsetLength
+
+	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
+
+	if obj == nil && !r.isPackageName(ident) {
+
 		return nil, fmt.Errorf("Unable to find declaration of %s", ident.Name)
 	}
-        if r.isPackageName(ident)  {
-                result = r.occurrencesofpkg(ident)
-                 pkgs =  allPackages(r.program) 
-         //fmt.Println("result in iskgname", result)
-         } else {      
-       
+	if r.isPackageName(ident) {
+		result = r.occurrencesofpkg(ident)
+		pkgs = allPackages(r.program)
+		//fmt.Println("result in iskgname", result)
+	} else {
+
 		var decls map[types.Object]bool
 		if isMethod(obj) {
-		var err error
-		decls, err = r.FindDeclarationsAcrossInterfaces(ident)
+			var err error
+			decls, err = r.FindDeclarationsAcrossInterfaces(ident)
 			if err != nil {
 				return nil, err
 			}
 		} else {
-		decls = map[types.Object]bool{obj: true}
+			decls = map[types.Object]bool{obj: true}
 		}
 
 		result = r.occurrences(decls)
-        	pkgs  = r.packages(decls)
-        }
+		pkgs = r.packages(decls)
+	}
 	//fmt.Println(result)
 	return r.occurrencesInComments(ident.Name, pkgs, result), nil
 }
@@ -239,17 +237,18 @@ func (r *SearchEngine) occurrences(decls map[types.Object]bool) map[string][]Off
 			}
 		}
 	}
-        //fmt.Println("result in occurrences",result)   
+	//fmt.Println("result in occurrences",result)
 	return result
 }
+
 //
 /*func (r *SearchEngine) occurrencesofpkg(ident *ast.Ident) map[string][]OffsetLength {
-    
+
 result := make(map[string][]OffsetLength)
    fmt.Println(allPackages(r.program))
      for pkgInfo := range allPackages(r.program)  {
     		 for _, file := range pkgInfo.Files {
-               
+
                  	ast.Inspect(file, func(n ast.Node) bool {
 					switch thisIdent := n.(type) {
 					case *ast.Ident:
@@ -257,35 +256,34 @@ result := make(map[string][]OffsetLength)
                                                  fmt.Println("identifier pkg name occured in",r.position(ident).Filename)
                                             	filename := r.position(ident).Filename
                                                 fmt.Println("result",result[filename])
-                                            // for filename,offsetLengths := range result { 
+                                            // for filename,offsetLengths := range result {
                                               //      for _,offsetLength := range offsetLengths {
-		                       		//if offsetLength !=  r.offsetLength(ident) { 		 
-                      					
+		                       		//if offsetLength !=  r.offsetLength(ident) {
+
 						result[filename] = append(result[filename],
 						 			   r.offsetLength(ident))
 						//}
                                                 //}
-                                             //}	
+                                             //}
                                             }
-					
+
 					}
-																								
+
 					return true
 
-					}) 
+					})
                }
- 
+
    }
   fmt.Println("final result", result)
-  return result         
+  return result
 }*/
 
-
 func (r *SearchEngine) occurrencesofpkg(ident *ast.Ident) map[string][]OffsetLength {
-    
-result := make(map[string][]OffsetLength)
 
-	for pkgInfo := range allPackages(r.program)  {
+	result := make(map[string][]OffsetLength)
+
+	for pkgInfo := range allPackages(r.program) {
 		for id, obj := range pkgInfo.Defs {
 			if obj == nil && id.Name == ident.Name {
 				filename := r.position(id).Filename
@@ -294,32 +292,17 @@ result := make(map[string][]OffsetLength)
 			}
 		}
 		for id, obj := range pkgInfo.Uses {
-			if obj == nil && id.Name == ident.Name{
+			if obj == nil && id.Name == ident.Name {
 				filename := r.position(id).Filename
 				result[filename] = append(result[filename],
 					r.offsetLength(id))
 			}
 		}
 	}
-        //fmt.Println("result in occurrences of pkg",result)   
+	//fmt.Println("result in occurrences of pkg",result)
 	return result
-     
+
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 func (r *SearchEngine) position(id *ast.Ident) token.Position {
 	return r.program.Fset.Position(id.NamePos)
@@ -365,8 +348,8 @@ func allPackages(prog *loader.Program) map[*loader.PackageInfo]bool {
 
 // occurrencesincomments checks if the name of the selected identifier occurs as a word in comments,if true then
 // all the source locations of name in comments are returned.
-func (r *SearchEngine) occurrencesInComments(name string, pkgs  map[*loader.PackageInfo]bool , result map[string][]OffsetLength) map[string][]OffsetLength {
-	for pkgInfo := range pkgs{
+func (r *SearchEngine) occurrencesInComments(name string, pkgs map[*loader.PackageInfo]bool, result map[string][]OffsetLength) map[string][]OffsetLength {
+	for pkgInfo := range pkgs {
 		for _, f := range pkgInfo.Files {
 			for _, comment := range f.Comments {
 				if strings.Contains(comment.List[0].Text, name) {

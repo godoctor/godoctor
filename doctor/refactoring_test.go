@@ -238,11 +238,11 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 		}
 		if shouldPass {
 			checkResult(filename, string(output), t)
-                        
+
 		}
 	}
-          //fmt.Println("filesystem changes",result.FSChanges)
-            //  checkRenamedDir(result.RenameDir,"fschanges.txt") 
+	//fmt.Println("filesystem changes",result.FSChanges)
+	//  checkRenamedDir(result.RenameDir,"fschanges.txt")
 
 	fsChangesFile := filepath.Join(directory, FSCHANGES_TXT)
 	if !exists(fsChangesFile, t) {
@@ -331,17 +331,16 @@ func checkResult(filename string, actualOutput string, t *testing.T) {
 	}
 }
 
-
 //TODO Define after getting the value of Gopath
 /*func checkRenamedDir(result.RenameDir []string,filename string) {
 
  if result.RenameDir != nil {
-  
+
     bytes, err := ioutil.ReadFile(filename)
        if err != nil {
 		t.Fatal(err)
 	}
-   expectedoutput :=  string(bytes)  	
+   expectedoutput :=  string(bytes)
 
 }
 
