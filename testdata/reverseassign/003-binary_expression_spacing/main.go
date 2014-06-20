@@ -1,4 +1,4 @@
-// <<<<< reverseassign,8,3,8,21,fail
+// <<<<< reverseassign,8,3,8,21,pass
 package main
 
 import "fmt"
