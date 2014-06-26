@@ -50,6 +50,7 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 
 	// grab logs
 	logs := make([]map[string]interface{}, 0)
+	fatalError := false
 	for _, entry := range result.Log.Entries {
 		var severity string
 		switch entry.Severity {
@@ -61,12 +62,20 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 			severity = "error"
 		case doctor.FATAL_ERROR:
 			severity = "fatal"
+			fatalError = true
 		}
 		log := map[string]interface{}{"severity": severity, "message": entry.Message}
 		logs = append(logs, log)
 	}
+	// any fatal errors? return without giving changes
+	if fatalError {
+		return Reply{map[string]interface{}{"reply": "OK", "description": refactoring.Description().Name, "log": logs}}, nil
+	}
+
 	changes := make([]map[string]string, 0)
-	if input["mode"].(string) == "patch" {
+
+	// if mode == patch or no mode was given
+	if mode, found := input["mode"]; !found || mode.(string) == "patch" {
 		for f, e := range result.Edits {
 			var p *doctor.Patch
 			var err error
@@ -91,6 +100,25 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 		}
 	}
 
+	// filesystem changes
+	var fschanges []map[string]string
+	if len(result.FSChanges) > 0 {
+		fschanges = make([]map[string]string, len(result.FSChanges))
+		for i, change := range result.FSChanges {
+			switch change := change.(type) {
+			case *doctor.FSCreateFile:
+				fschanges[i] = map[string]string{"change": "create", "file": change.Path, "content": change.Contents}
+			case *doctor.FSRemove:
+				fschanges[i] = map[string]string{"change": "delete", "path": change.Path}
+			case *doctor.FSRename:
+				fschanges[i] = map[string]string{"change": "rename", "from": change.Path, "to": change.NewName}
+			}
+		}
+		// return with filesystem changes
+		return Reply{map[string]interface{}{"reply": "OK", "description": refactoring.Description().Name, "log": logs, "files": changes, "fsChanges": fschanges}}, nil
+	}
+
+	// return without filesystem changes
 	return Reply{map[string]interface{}{"reply": "OK", "description": refactoring.Description().Name, "log": logs, "files": changes}}, nil
 }
 
