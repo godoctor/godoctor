@@ -109,6 +109,7 @@ func uses(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 		case *ast.RangeStmt: // list in _, _ = range [ list ]
 			idnts = idents(stmt.X)
 		case *ast.DeclStmt: // no uses, skip
+		case *ast.LabeledStmt: // no uses, skip
 		case ast.Stmt: // everything else is all uses
 			idnts = idents(stmt)
 		}

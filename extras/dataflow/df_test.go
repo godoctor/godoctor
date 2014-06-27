@@ -18,6 +18,33 @@ const (
 	END   = 100000000 //if there's this many statements, may god have mercy on your soul
 )
 
+func TestLiveLabeledLoop(t *testing.T) {
+	c := getWrapper(t, `
+  package main
+
+  func foo() int {
+    a := 1      //1
+loop:           //2
+    for _, i := range []int{1,2} { //3
+      b := i    //4
+      a += b    //5
+    }
+    return a    //6
+    goto loop   //7
+    //END
+  }`)
+
+	c.expectLive(t, START)
+	c.expectLive(t, 1, "a")
+	c.expectLive(t, 2, "a")
+	c.expectLive(t, 3, "a", "i")
+	c.expectLive(t, 4, "a", "b")
+	c.expectLive(t, 5, "a")
+	c.expectLive(t, 6)
+	c.expectLive(t, 7, "a")
+	c.expectLive(t, END)
+}
+
 func TestExprStuff(t *testing.T) {
 	c := getWrapper(t, `
   package main
