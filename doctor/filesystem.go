@@ -188,40 +188,40 @@ type FileSystemChange interface {
 	String(relativeTo string) string
 }
 
-type fsCreateFile struct {
-	path, contents string
+type FSCreateFile struct {
+	Path, Contents string
 }
 
-func (chg *fsCreateFile) ExecuteUsing(fs FileSystem) error {
-	return fs.CreateFile(chg.path, chg.contents)
+func (chg *FSCreateFile) ExecuteUsing(fs FileSystem) error {
+	return fs.CreateFile(chg.Path, chg.Contents)
 }
 
-func (chg *fsCreateFile) String(relativeTo string) string {
-	return fmt.Sprintf("create %s", relative(chg.path, relativeTo))
+func (chg *FSCreateFile) String(relativeTo string) string {
+	return fmt.Sprintf("create %s", relative(chg.Path, relativeTo))
 }
 
-type fsRemove struct {
-	path string
+type FSRemove struct {
+	Path string
 }
 
-func (chg *fsRemove) ExecuteUsing(fs FileSystem) error {
-	return fs.Remove(chg.path)
+func (chg *FSRemove) ExecuteUsing(fs FileSystem) error {
+	return fs.Remove(chg.Path)
 }
 
-func (chg *fsRemove) String(relativeTo string) string {
-	return fmt.Sprintf("remove %s", relative(chg.path, relativeTo))
+func (chg *FSRemove) String(relativeTo string) string {
+	return fmt.Sprintf("remove %s", relative(chg.Path, relativeTo))
 }
 
-type fsRename struct {
-	path, newName string
+type FSRename struct {
+	Path, NewName string
 }
 
-func (chg *fsRename) ExecuteUsing(fs FileSystem) error {
-	return fs.Rename(chg.path, chg.newName)
+func (chg *FSRename) ExecuteUsing(fs FileSystem) error {
+	return fs.Rename(chg.Path, chg.NewName)
 }
 
-func (chg *fsRename) String(relativeTo string) string {
-	return fmt.Sprintf("rename %s %s", relative(chg.path, relativeTo), chg.newName)
+func (chg *FSRename) String(relativeTo string) string {
+	return fmt.Sprintf("rename %s %s", relative(chg.Path, relativeTo), chg.NewName)
 }
 
 func Execute(fs FileSystem, changes []FileSystemChange) error {

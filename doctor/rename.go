@@ -168,7 +168,7 @@ func (r *renameRefactoring) addFileSystemChanges(allOccurrences map[string][]Off
 	for filename, _ := range allOccurrences {
 
 		if filepath.Base(filepath.Dir(filename)) == ident.Name && allFilesinDirectoryhaveSamePkg(filepath.Dir(filename), ident) {
-			chg := &fsRename{filepath.Dir(filename), r.newName}
+			chg := &FSRename{filepath.Dir(filename), r.newName}
 			r.FSChanges = append(r.FSChanges,
 				chg)
 
