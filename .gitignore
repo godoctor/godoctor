@@ -2,7 +2,8 @@
 ._*
 tags
 go-doctor
-doctor/doctor.test
+*.test
 *.swp
+*.out
 *~
-doctor/zz_*
+zz_*
