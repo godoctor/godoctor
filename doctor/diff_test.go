@@ -172,7 +172,8 @@ func testUnifiedDiff(a, b, expected, name string, t *testing.T) {
 	patch, _ := edits.CreatePatch(strings.NewReader(a))
 	var result bytes.Buffer
 	patch.Write("filename", "filename", &result)
-	diff := result.String()
+	diff := strings.Replace(result.String(), "\r\n", "\n", -1)
+	expected = strings.Replace(expected, "\r\n", "\n", -1)
 
 	if diff != expected {
 		t.Fatalf("Diff test %s failed.  Expected:\n[%s]\nActual:\n[%s]\n",

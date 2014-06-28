@@ -14,7 +14,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -112,7 +111,7 @@ func (fs *LocalFileSystem) Rename(oldPath, newName string) error {
 		return fmt.Errorf("newName must be a bare filename: %s",
 			newName)
 	}
-	newPath := filepath.Join(path.Dir(oldPath), newName)
+	newPath := filepath.Join(filepath.Dir(oldPath), newName)
 	return os.Rename(oldPath, newPath)
 }
 
@@ -262,7 +261,7 @@ func (fs *EditedFileSystem) ReadDir(dirPath string) ([]os.FileInfo, error) {
 		}
 		if absPath == absCwd {
 			newFileInfo := fileInfo{
-				name:    path.Base(stdin),
+				name:    filepath.Base(stdin),
 				size:    editSet.SizeChange(),
 				mode:    0777,
 				modTime: time.Now(),
@@ -308,7 +307,7 @@ func (chg *FSCreateFile) ExecuteUsing(fs FileSystem) error {
 }
 
 func (chg *FSCreateFile) String(relativeTo string) string {
-	return fmt.Sprintf("create %s", relative(chg.Path, relativeTo))
+	return fmt.Sprintf("create %s", filepath.ToSlash(relative(chg.Path, relativeTo)))
 }
 
 type FSRemove struct {
@@ -320,7 +319,7 @@ func (chg *FSRemove) ExecuteUsing(fs FileSystem) error {
 }
 
 func (chg *FSRemove) String(relativeTo string) string {
-	return fmt.Sprintf("remove %s", relative(chg.Path, relativeTo))
+	return fmt.Sprintf("remove %s", filepath.ToSlash(relative(chg.Path, relativeTo)))
 }
 
 type FSRename struct {
@@ -332,7 +331,7 @@ func (chg *FSRename) ExecuteUsing(fs FileSystem) error {
 }
 
 func (chg *FSRename) String(relativeTo string) string {
-	return fmt.Sprintf("rename %s %s", relative(chg.Path, relativeTo), chg.NewName)
+	return fmt.Sprintf("rename %s %s", filepath.ToSlash(relative(chg.Path, relativeTo)), chg.NewName)
 }
 
 func Execute(fs FileSystem, changes []FileSystemChange) error {
@@ -347,7 +346,7 @@ func Execute(fs FileSystem, changes []FileSystemChange) error {
 }
 
 func isBareFilename(filePath string) bool {
-	dir, _ := path.Split(filePath)
+	dir, _ := filepath.Split(filePath)
 	return dir == ""
 }
 

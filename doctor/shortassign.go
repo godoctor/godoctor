@@ -12,6 +12,7 @@ import (
 	"go/ast"
 	"io"
 	"reflect"
+	"strings"
 )
 
 // A ShortAssignmentRefactoring changes short assignment statements (n := 5)
@@ -54,7 +55,7 @@ func (r *shortAssignRefactoring) Run(config *Config) *Result {
 
 func (r *shortAssignRefactoring) createEditSet(assign *ast.AssignStmt) {
 	start, length := r.offsetLength(assign)
-	r.Edits[r.filename(r.file)].Add(OffsetLength{start, length + 1}, r.createReplacementString(assign))
+	r.Edits[r.filename(r.file)].Add(OffsetLength{start, length}, r.createReplacementString(assign))
 }
 
 func (r *shortAssignRefactoring) rhsExprs(assign *ast.AssignStmt) []string {
@@ -104,7 +105,7 @@ func (r *shortAssignRefactoring) createReplacementString(assign *ast.AssignStmt)
 		}
 		io.WriteString(&buf, replacement[i])
 	}
-	return buf.String()
+	return strings.TrimSuffix(buf.String(), "\n")
 }
 
 // typeOfFunctionType receives a type of function's return type, which must be a

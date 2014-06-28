@@ -65,7 +65,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -269,7 +268,7 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 				len(fschanges), len(result.FSChanges))
 		} else {
 			for i, chg := range result.FSChanges {
-				if chg.String(directory) != fschanges[i] {
+				if chg.String(directory) != strings.TrimSpace(fschanges[i]) {
 					t.Fatalf("FSChanges[%d]\nExpected: %s\nActual: %s", i, fschanges[i], chg.String(directory))
 				}
 			}
@@ -305,14 +304,15 @@ func checkResult(filename string, actualOutput string, t *testing.T) {
 		return
 	}
 	if _, err := os.Stat(filename + ".stripPaths"); err == nil {
-		dir := path.Dir(filename) + string(filepath.Separator)
+		dir := filepath.Dir(filename) + string(filepath.Separator)
 		actualOutput = strings.Replace(actualOutput, dir, "", -1)
 	}
 	bytes, err := ioutil.ReadFile(filename + "lden")
 	if err != nil {
 		t.Fatal(err)
 	}
-	expectedOutput := string(bytes)
+	expectedOutput := strings.Replace(string(bytes), "\r\n", "\n", -1)
+	actualOutput = strings.Replace(actualOutput, "\r\n", "\n", -1)
 
 	if actualOutput != expectedOutput {
 		fmt.Printf(">>>>> Output does not match %slden\n", filename)

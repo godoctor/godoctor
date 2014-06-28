@@ -55,6 +55,7 @@ func TestCreateFile2Remove(t *testing.T) {
 }
 
 func TestCreateFile3(t *testing.T) {
+	os.RemoveAll(testDir)
 	if err := os.Mkdir(testDir, os.ModeDir|0775); err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +68,9 @@ func TestCreateFile3(t *testing.T) {
 }
 
 func TestRenameFile(t *testing.T) {
+	os.RemoveAll(testDir)
 	if err := os.Mkdir(testDir, os.ModeDir|0775); err != nil {
+		os.RemoveAll(testDir)
 		t.Fatal(err)
 	}
 	path := fmt.Sprintf("%s/%s", testDir, testFile)
