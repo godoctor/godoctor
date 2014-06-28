@@ -47,6 +47,13 @@
 // compile and run it before and after performing the refactoring.  This is
 // used as a sanity check to ensure that program still compiles and still
 // produces the same output after it has been refactored.
+//
+// To additional options are available and are currently used only to test the
+// Debug refactoring.  When it does not make sense to compare against a .golden
+// file, include an empty file named filename.golden.ignoreOutput instead.  If
+// the output will contain absolute paths to files in the test folder, include
+// a file named filename.go.stripPaths, and the refactoring's output will be
+// stripped of all occurrences of the absolute path to the .go file.
 
 package doctor
 
@@ -58,6 +65,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -293,6 +301,13 @@ func exists(filename string, t *testing.T) bool {
 }
 
 func checkResult(filename string, actualOutput string, t *testing.T) {
+	if _, err := os.Stat(filename + ".ignoreOutput"); err == nil {
+		return
+	}
+	if _, err := os.Stat(filename + ".stripPaths"); err == nil {
+		dir := path.Dir(filename) + string(filepath.Separator)
+		actualOutput = strings.Replace(actualOutput, dir, "", -1)
+	}
 	bytes, err := ioutil.ReadFile(filename + "lden")
 	if err != nil {
 		t.Fatal(err)

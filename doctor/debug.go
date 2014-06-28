@@ -1,19 +1,13 @@
-// Copyright 2014 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-// This file defines a "debug" refactoring, which is not really a refactoring
-// at all.  It does not change any files; rather, it is invoked to print
-// information about the Go refactoring engine and its internals.  For example,
-// it can display the AST for a file, or display what package(s) are loaded, or
-// display what identifiers resolve to what objects.
-
+// Copyright 2014 The Go Authors. All rights reserved.  // Use of this source code is governed by a BSD-style // license that can be found in the LICENSE file.  // This file defines a "debug" refactoring, which is not really a refactoring // at all.  It does not change any files; rather, it is invoked to print // information about the Go refactoring engine and its internals.  For example, // it can display the AST for a file, or display what package(s) are loaded, or // display what identifiers resolve to what objects.
 package doctor
 
 import (
+	"bytes"
 	"fmt"
 	"go/ast"
+	"io"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -43,14 +37,13 @@ func (r *debugRefactoring) Description() *Description {
 
 func (r *debugRefactoring) Run(config *Config) *Result {
 	r.refactoringBase.Run(config)
-	r.Edits = map[string]*EditSet{}
 
 	if r.Log.ContainsErrors() {
 		return &r.Result
 	}
 
 	if len(config.Args) == 0 {
-		fmt.Println(usage)
+		r.Log.Log(FATAL_ERROR, usage)
 		return &r.Result
 	}
 	if !validateArgs(config, r.Description(), r.Log) {
@@ -58,27 +51,31 @@ func (r *debugRefactoring) Run(config *Config) *Result {
 	}
 
 	for _, arg := range config.Args {
+		var b bytes.Buffer
 		switch strings.ToLower(strings.TrimSpace(arg.(string))) {
 		case "showaffected":
-			r.showAffected()
+			r.showAffected(&b)
 		case "showast":
-			r.showAST()
+			r.showAST(&b)
 		case "showidentifiers":
-			r.showIdentifiers()
+			r.showIdentifiers(&b)
 		case "showpackages":
-			r.showLoadedPackagesAndFiles()
+			r.showLoadedPackagesAndFiles(&b)
 		case "showreferences":
-			r.showReferences()
+			r.showReferences(&b)
 		default:
 			r.Log.Log(FATAL_ERROR, "Unknown option "+arg.(string))
 			return &r.Result
+		}
+		if !r.Log.ContainsErrors() {
+			r.Edits[r.filename(r.file)].Add(OffsetLength{0,0}, b.String())
 		}
 	}
 
 	return &r.Result
 }
 
-func (r *debugRefactoring) showAffected() {
+func (r *debugRefactoring) showAffected(out io.Writer) {
 	errorMsg := "Please select an identifier for showaffected"
 
 	if r.selectedNode == nil {
@@ -87,17 +84,23 @@ func (r *debugRefactoring) showAffected() {
 	}
 	switch id := r.selectedNode.(type) {
 	case *ast.Ident:
-		fmt.Printf("Affected Declarations:\n")
+		fmt.Fprintf(out, "Affected Declarations:\n")
 		search := &SearchEngine{r.program}
 		searchResult, err := search.FindDeclarationsAcrossInterfaces(id)
 		if err != nil {
 			r.Log.Log(FATAL_ERROR, err.Error())
 			return
 		}
+		result := []string{}
 		for obj := range searchResult {
 			p := r.program.Fset.Position(obj.Pos())
-			fmt.Printf("  %s - %s, Line %d\n",
-				obj.Name(), p.Filename, p.Line)
+			result = append(result,
+				fmt.Sprintf("  %s - %s, Line %d\n",
+					obj.Name(), p.Filename, p.Line))
+		}
+		sort.Strings(result)
+		for _, line := range result {
+			fmt.Fprintf(out, line)
 		}
 	default:
 		r.Log.Log(FATAL_ERROR, errorMsg)
@@ -105,22 +108,22 @@ func (r *debugRefactoring) showAffected() {
 	}
 }
 
-func (r *debugRefactoring) showAST() {
-	ast.Print(r.program.Fset, r.file)
+func (r *debugRefactoring) showAST(out io.Writer) {
+	ast.Fprint(out, r.program.Fset, r.file, nil)
 }
 
-func (r *debugRefactoring) showIdentifiers() {
+func (r *debugRefactoring) showIdentifiers(out io.Writer) {
 	r.forEachInitialFile(func(file *ast.File) {
-		fmt.Printf("=====%s=====\n", r.filename(file))
+		fmt.Fprintf(out, "=====%s=====\n", r.filename(file))
 		ast.Inspect(file, func(n ast.Node) bool {
 			switch id := n.(type) {
 			case *ast.Ident:
 				position := r.program.Fset.Position(id.Pos())
-				fmt.Printf("%s\t(Line %d)", id.Name, position.Line)
+				fmt.Fprintf(out, "%s\t(Line %d)", id.Name, position.Line)
 				if obj := r.pkgInfo(file).ObjectOf(id); obj == nil {
-					fmt.Printf(" does not have an associated object\n")
+					fmt.Fprintf(out, " does not have an associated object\n")
 				} else {
-					fmt.Printf(" is a reference to %s (%s)\n", obj.Id(), r.program.Fset.Position(obj.Pos()))
+					fmt.Fprintf(out, " is a reference to %s (%s)\n", obj.Id(), r.program.Fset.Position(obj.Pos()))
 				}
 			}
 			return true
@@ -129,21 +132,22 @@ func (r *debugRefactoring) showIdentifiers() {
 	})
 }
 
-func (r *debugRefactoring) showLoadedPackagesAndFiles() {
-	fmt.Printf("GOPATH is %s\n", os.Getenv("GOPATH"))
+func (r *debugRefactoring) showLoadedPackagesAndFiles(out io.Writer) {
+	fmt.Fprintf(out, "GOPATH is %s\n", os.Getenv("GOPATH"))
 	cwd, _ := os.Getwd()
-	fmt.Printf("Working directory is %s\n", cwd)
-	fmt.Println()
-	fmt.Println("Packages/files loaded:")
+
+	fmt.Fprintf(out, "Working directory is %s\n", cwd)
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Packages/files loaded:")
 	for _, pkgInfo := range r.program.AllPackages {
-		fmt.Printf("\t%s\n", pkgInfo.Pkg.Name())
+		fmt.Fprintf(out, "\t%s\n", pkgInfo.Pkg.Name())
 		for _, file := range pkgInfo.Files {
-			fmt.Printf("\t\t%s\n", r.filename(file))
+			fmt.Fprintf(out, "\t\t%s\n", r.filename(file))
 		}
 	}
 }
 
-func (r *debugRefactoring) showReferences() {
+func (r *debugRefactoring) showReferences(out io.Writer) {
 	errorMsg := "Please select an identifier for showreferences"
 
 	if r.selectedNode == nil {
@@ -152,7 +156,7 @@ func (r *debugRefactoring) showReferences() {
 	}
 	switch id := r.selectedNode.(type) {
 	case *ast.Ident:
-		fmt.Printf("References to %s:\n", id.Name)
+		fmt.Fprintf(out, "References to %s:\n", id.Name)
 		search := &SearchEngine{r.program}
 		searchResult, err := search.FindOccurrences(id)
 		if err != nil {
@@ -160,9 +164,15 @@ func (r *debugRefactoring) showReferences() {
 			return
 		}
 		for filename, occs := range searchResult {
-			fmt.Printf("  in %s:\n", filename)
+			fmt.Fprintf(out, "  in %s:\n", filename)
+			strs := []string{}
 			for _, ol := range occs {
-				fmt.Printf("    %s\n", ol.String())
+				strs = append(strs,
+					fmt.Sprintf("    %s", ol.String()))
+			}
+			sort.Strings(strs)
+			for _, s := range strs {
+				fmt.Fprintln(out, s)
 			}
 		}
 	default:
