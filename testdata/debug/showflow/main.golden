@@ -1,0 +1,13 @@
+// main
+digraph mgraph {
+mode="heir";
+splines="ortho";
+
+	"ENTRY" -> "EXIT"
+}
+package main //<<<<<debug,1,1,1,1,showflow,pass
+
+import "fmt"
+
+func main() {
+}

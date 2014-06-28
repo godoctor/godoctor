@@ -11,6 +11,7 @@ import (
 	"go/ast"
 	"go/token"
 	"io"
+	"strings"
 
 	"code.google.com/p/go.tools/astutil"
 )
@@ -77,7 +78,7 @@ func (c *CFG) Blocks() []ast.Stmt {
 	return blocks
 }
 
-func (c *CFG) PrintDot(f io.Writer, fset *token.FileSet) {
+func (c *CFG) PrintDot(f io.Writer, fset *token.FileSet, addl func(n ast.Stmt) string) {
 	fmt.Fprintf(f, `digraph mgraph {
 mode="heir";
 splines="ortho";
@@ -86,25 +87,30 @@ splines="ortho";
 	for _, v := range c.blocks {
 		for _, a := range v.succs {
 			fmt.Fprintf(f, "\t\"%s\" -> \"%s\"\n",
-				c.printVertex(v, fset),
-				c.printVertex(c.blocks[a], fset))
+				c.printVertex(v, fset, addl(v.stmt)),
+				c.printVertex(c.blocks[a], fset, addl(c.blocks[a].stmt)))
 		}
 	}
 	fmt.Fprintf(f, "}\n")
 }
 
-func (c *CFG) printVertex(v *block, fset *token.FileSet) string {
+func (c *CFG) printVertex(v *block, fset *token.FileSet, addl string) string {
 	switch v.stmt {
 	case c.Entry:
-		return fmt.Sprintf("%s %p", "ENTRY", v.stmt)
+		return "ENTRY"
 	case c.Exit:
-		return fmt.Sprintf("%s %p", "EXIT", v.stmt)
+		return "EXIT"
 	case nil:
 		return ""
 	}
-	return fmt.Sprintf("%s - line %d",
+	addl = strings.Replace(addl, "\n", "\\n", -1)
+	if addl != "" {
+		addl = "\\n" + addl
+	}
+	return fmt.Sprintf("%s - line %d%s",
 		astutil.NodeDescription(v.stmt),
-		fset.Position(v.stmt.Pos()).Line)
+		fset.Position(v.stmt.Pos()).Line,
+		addl)
 }
 
 type builder struct {

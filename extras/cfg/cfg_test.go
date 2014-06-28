@@ -611,7 +611,7 @@ func (c *CFGWrapper) printDOT() {
 		panic(err)
 	}
 	defer f.Close()
-	c.cfg.PrintDot(f, c.fset)
+	c.cfg.PrintDot(f, c.fset, func(ast.Stmt) string { return "" })
 }
 
 func TestPrintDot(t *testing.T) {
@@ -624,7 +624,7 @@ func TestPrintDot(t *testing.T) {
   }`)
 
 	var buf bytes.Buffer
-	c.cfg.PrintDot(&buf, c.fset)
+	c.cfg.PrintDot(&buf, c.fset, func(ast.Stmt) string { return "" })
 	dot := buf.String()
 
 	expected := []string{
@@ -634,8 +634,8 @@ splines="ortho";
 
 `,
 		"\"assignment - line 5\" -> \"increment statement - line 6\"\n",
-		"\"ENTRY 0x[0-9a-f]*\" -> \"assignment - line 5\"\n",
-		"\"increment statement - line 6\" -> \"EXIT 0x[0-9a-f]*\"\n",
+		"\"ENTRY\" -> \"assignment - line 5\"\n",
+		"\"increment statement - line 6\" -> \"EXIT\"\n",
 	}
 	for _, re := range expected {
 		ok, _ := regexp.MatchString(re, dot)

@@ -9,12 +9,18 @@ import (
 	"os"
 	"sort"
 	"strings"
+
+	"code.google.com/p/go.tools/go/types"
+
+	"golang-refactoring.org/go-doctor/extras/cfg"
+	"golang-refactoring.org/go-doctor/extras/dataflow"
 )
 
 const usage = `Usage: debug <options>
 where <options> can be any or all of:
     showaffected      Show names affected if the selected identifier is renamed
     showast           Show the abstract syntax tree for the selected file
+    showflow          Show GraphViz DOT flow graphs for the selected file
     showidentifiers   Show name references (ast.Object) in initial packages
     showpackages      List all packages loaded (due to --scope)
     showreferences    Show all direct references to the selected identifier`
@@ -58,6 +64,8 @@ func (r *debugRefactoring) Run(config *Config) *Result {
 			r.showAffected(&b)
 		case "showast":
 			r.showAST(&b)
+		case "showflow":
+			r.showCFG(&b)
 		case "showidentifiers":
 			r.showIdentifiers(&b)
 		case "showpackages":
@@ -111,6 +119,48 @@ func (r *debugRefactoring) showAffected(out io.Writer) {
 
 func (r *debugRefactoring) showAST(out io.Writer) {
 	ast.Fprint(out, r.program.Fset, r.file, nil)
+}
+
+func (r *debugRefactoring) showCFG(out io.Writer) {
+	ast.Inspect(r.file, func(n ast.Node) bool {
+		switch x := n.(type) {
+		case *ast.FuncDecl:
+			if x.Name != nil {
+				fmt.Fprintf(out, "// %s\n", x.Name.Name)
+			} else {
+				fmt.Fprintf(out, "// (anonymous)\n")
+			}
+			cfg := cfg.FromFunc(x)
+			cfg.PrintDot(out, r.program.Fset, r.describeDefsUses)
+		}
+		return true
+	})
+}
+
+func (r *debugRefactoring) describeDefsUses(stmt ast.Stmt) string {
+	var buf bytes.Buffer
+	defs, uses := dataflow.ReferencedVars([]ast.Stmt{stmt}, r.pkgInfo(r.file))
+	if len(defs) > 0 {
+		fmt.Fprintf(&buf, "Defs: %s\n", listNames(defs))
+	}
+	if len(uses) > 0 {
+		fmt.Fprintf(&buf, "Uses: %s\n", listNames(uses))
+	}
+	return strings.TrimSuffix(buf.String(), "\n")
+}
+
+func listNames(vars map[*types.Var]struct{}) string {
+	names := []string{}
+	for v, _ := range vars {
+		names = append(names, v.Name())
+	}
+	sort.Strings(names)
+
+	var buf bytes.Buffer
+	for _, name := range names {
+		fmt.Fprintf(&buf, ", %s", name)
+	}
+	return strings.TrimPrefix(buf.String(), ", ")
 }
 
 func (r *debugRefactoring) showIdentifiers(out io.Writer) {
