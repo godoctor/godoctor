@@ -18,6 +18,46 @@ const (
 	END   = 100000000 //if there's this many statements, may god have mercy on your soul
 )
 
+func TestLiveLabeledLoopAndSwitch(t *testing.T) {
+	c := getWrapper(t, `
+  package main
+
+  func main() {
+    y:=5           // 1
+    foo(y)         // 2
+ABC:               // 3
+    for {          // 4
+      x := 1       // 5
+      switch {     // 6
+      case x > 0:  // 7
+        foo(0)     // 8
+        break ABC  // 9
+      case x == 1: // 10
+        foo(x)     // 11
+      default:     // 12
+        foo(2)     // 13
+      }
+    }
+  }
+  func foo(n int) {}`)
+
+	c.expectLive(t, START)
+	c.expectLive(t, 1, "y")
+	c.expectLive(t, 2)
+	c.expectLive(t, 3)
+	c.expectLive(t, 4)
+	c.expectLive(t, 5, "x")
+	c.expectLive(t, 6, "x")
+	c.expectLive(t, 7)
+	c.expectLive(t, 8)
+	c.expectLive(t, 9)
+	c.expectLive(t, 10, "x")
+	c.expectLive(t, 11)
+	c.expectLive(t, 12)
+	c.expectLive(t, 13)
+	c.expectLive(t, END)
+}
+
 func TestLiveLabeledLoop(t *testing.T) {
 	c := getWrapper(t, `
   package main

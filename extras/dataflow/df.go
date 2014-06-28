@@ -106,10 +106,22 @@ func uses(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 			for _, s := range stmt.Rhs {
 				idnts = union(idnts, idents(s))
 			}
+		case *ast.BlockStmt: // no uses, skip
+		case *ast.BranchStmt: // no uses, skip
+		case *ast.DeclStmt: // no uses, skip
+		case *ast.DeferStmt:
+			idnts = idents(stmt.Call)
+		case *ast.ForStmt:
+			idnts = idents(stmt.Cond)
+		case *ast.IfStmt:
+			idnts = idents(stmt.Cond)
+		case *ast.LabeledStmt: // no uses, skip
 		case *ast.RangeStmt: // list in _, _ = range [ list ]
 			idnts = idents(stmt.X)
-		case *ast.DeclStmt: // no uses, skip
-		case *ast.LabeledStmt: // no uses, skip
+		case *ast.SelectStmt: // no uses, skip
+		case *ast.SwitchStmt:
+			idnts = idents(stmt.Tag)
+		case *ast.TypeSwitchStmt: // no uses, skip
 		case ast.Stmt: // everything else is all uses
 			idnts = idents(stmt)
 		}
