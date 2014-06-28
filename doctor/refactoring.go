@@ -217,7 +217,7 @@ func (r *refactoringBase) Run(config *Config) *Result {
 		var filename string = err.(types.Error).Fset.File(pos).Name()
 		var length int = 0
 		// TODO: This is temporary until go/loader handles cgo
-		if strings.Contains(message, CGO_ERROR1) && strings.HasSuffix(message, CGO_ERROR2) {
+		if !strings.Contains(message, CGO_ERROR1) && !strings.HasSuffix(message, CGO_ERROR2) {
 			r.Log.LogInitial(ERROR, message, filename, offset, length)
 		}
 	}

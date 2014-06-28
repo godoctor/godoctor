@@ -43,11 +43,6 @@
 //                         package-file.go
 //                         package-file.golden
 //
-// If a test directory contains a file named main.go, the test runner will
-// compile and run it before and after performing the refactoring.  This is
-// used as a sanity check to ensure that program still compiles and still
-// produces the same output after it has been refactored.
-//
 // To additional options are available and are currently used only to test the
 // Debug refactoring.  When it does not make sense to compare against a .golden
 // file, include an empty file named filename.golden.ignoreOutput instead.  If
@@ -64,7 +59,6 @@ import (
 	"go/token"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -194,15 +188,6 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 	relativePath, _ := filepath.Rel(cwd, absPath)
 	fmt.Println(name, relativePath, selection.ShortString())
 
-	if filename == MAIN_DOT_GO {
-		cmd := exec.Command("go", "run", MAIN_DOT_GO)
-		_, err := cmd.Output()
-		if err != nil {
-			t.Logf("go run %s failed:", MAIN_DOT_GO)
-			t.Fatal(err)
-		}
-	}
-
 	mainFile := filepath.Join(directory, MAIN_DOT_GO)
 	if !exists(mainFile, t) {
 		mainFile = filepath.Join(filepath.Join(directory, "src"), MAIN_DOT_GO)
@@ -216,10 +201,18 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 		t.Fatal(err)
 	}
 
-	// TODO: This assumes that all refactoring arguments are strings
+	// NOTE: This assumes that "true" and "false" will always be bool args
+	// and all other refactoring arguments are strings
 	args := []interface{}{}
 	for _, opt := range remainder {
-		args = append(args, opt)
+		switch opt {
+		case "true":
+			args = append(args, true)
+		case "false":
+			args = append(args, false)
+		default:
+			args = append(args, opt)
+		}
 	}
 
 	fileSystem := &LocalFileSystem{}

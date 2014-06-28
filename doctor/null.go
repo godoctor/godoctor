@@ -15,15 +15,27 @@ type nullRefactoring struct {
 
 func (r *nullRefactoring) Description() *Description {
 	return &Description{
-		Name:    "Null Refactoring",
-		Params:  nil,
+		Name: "Null Refactoring",
+		Params: []Parameter{Parameter{
+			Label:        "Allow Errors",
+			Prompt:       "Allow Errors",
+			DefaultValue: true,
+		}},
 		Quality: Development,
 	}
 }
 
 func (r *nullRefactoring) Run(config *Config) *Result {
 	r.refactoringBase.Run(config)
-	//r.Log.ChangeInitialErrorsToWarnings()
+
+	if !validateArgs(config, r.Description(), r.Log) {
+		return &r.Result
+	}
+
+	if config.Args[0].(bool) {
+		r.Log.ChangeInitialErrorsToWarnings()
+	}
+
 	if r.Log.ContainsErrors() {
 		return &r.Result
 	}

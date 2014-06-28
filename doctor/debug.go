@@ -38,6 +38,7 @@ func (r *debugRefactoring) Description() *Description {
 func (r *debugRefactoring) Run(config *Config) *Result {
 	r.refactoringBase.Run(config)
 
+	r.Log.ChangeInitialErrorsToWarnings()
 	if r.Log.ContainsErrors() {
 		return &r.Result
 	}
