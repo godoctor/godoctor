@@ -95,15 +95,6 @@ func Diff(a []string, b []string) *EditSet {
 	panic("Length of SES longer than max (internal error)")
 }
 
-// abs returns the absolute value of an integer
-func abs(n int) int {
-	if n < 0 {
-		return -n
-	} else {
-		return n
-	}
-}
-
 // constructEditSet uses the matrix vs (computed by Diff) to compute a
 // sequence of deletions and additions.
 func constructEditSet(a, b []string, vs [][]int, edits *EditSet, k int) {
