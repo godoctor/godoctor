@@ -83,6 +83,18 @@ func (e *EditSet) Add(position OffsetLength, replacement string) error {
 	return nil
 }
 
+// SizeChange returns the total number of bytes that will be added or removed
+// when this EditSet is applied.  A positive value indicates that bytes will be
+// added; negative, bytes will be removed.  A zero value indicates that the
+// total number of bytes will stay the same after the EditSet is applied.
+func (e *EditSet) SizeChange() int64 {
+	var total int64
+	for _, edit := range e.edits {
+		total += int64(len(edit.replacement) - edit.Length)
+	}
+	return total
+}
+
 func (e *edit) String() string {
 	return "Replace " + e.OffsetLength.String() +
 		" with \"" + e.replacement + "\""

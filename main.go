@@ -12,6 +12,21 @@ package main
 
 // TODO(jeff/robert): Support "put" command for Web demo
 
+// TODO(jeff/robert): The user should give "-" as the filename to indicate that
+// input will come from stdin.  Allowing the filename to be omitted is
+// confusing.
+// TODO(jeff/robert): If input is coming from stdin, don't support the -w
+// (write files) flag.
+
+// TODO(jeff/robert): If input is coming from std, check that it is a valid
+// go program (parse it).  If it is empty, or if it is not a valid Go program,
+// the go/loader gives cryptic error messages.
+
+// TODO(jeff/robert): If an error occurs when the refactoring is being loaded
+// (e.g., the file on stdin is empty or invalid), display the refactoring
+// error log before displaying the error.  I think there are useful error
+// messages in the log that are never getting displayed.
+
 import (
 	"bytes"
 	"encoding/json"
@@ -105,17 +120,17 @@ func main() {
 	var filename, src string
 	// no file given (assume stdin), e.g. go-doctor refactor params...
 	if r != nil {
-		if stat, err := os.Stdin.Stat(); err != nil {
-			printError(err)
-		} else if stat.Size() < 1 {
-			printError(fmt.Errorf("no filename given and no input given on stdin, see -h"))
-		}
+		//		if stat, err := os.Stdin.Stat(); err != nil {
+		//			printError(err)
+		//		} else if stat.Size() < 1 {
+		//			printError(fmt.Errorf("no filename given and no input given on stdin, see -h"))
+		//		}
 		bytes, err := ioutil.ReadAll(os.Stdin)
 		if err != nil {
 			printError(err)
 		}
 		src = string(bytes)
-		filename = "main.go" // was os.Stdin.Name()
+		filename = doctor.FakeStdinFilename
 		args = args[1:]
 	} else { // file given, e.g. go-doctor file refactor params...
 		filename = args[0]
@@ -362,9 +377,13 @@ func refactor(file string, src string, args []string, r doctor.Refactoring) (*do
 
 	var fs doctor.FileSystem
 	if src != "" {
-		// FIXME(reed): Need a filename for what's being passed on standard input -- must exist on the file system already -- then pass in absolute path to file in editor rather than "main.go"
+		// FIXME(reed): Need a filename for what's being passed on standard input -- must exist on the file system already -- then pass in absolute path to file in editor rather than doctor.FakeStdinPath
 		// FIXME(reed): Make sure the resulting edit set only changes the one file passed on stdin.  If it changes any others, bail with an error message
-		fs, err = doctor.NewSingleEditedFileSystem("main.go", src)
+		stdin, err := doctor.FakeStdinPath()
+		if err != nil {
+			return nil, err
+		}
+		fs, err = doctor.NewSingleEditedFileSystem(stdin, src)
 		if err != nil {
 			return nil, err
 		}

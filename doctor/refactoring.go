@@ -264,7 +264,12 @@ func (r *refactoringBase) Run(config *Config) *Result {
 		r.selectionStart, r.selectionEnd)
 	r.selectedNode = nodes[0]
 
-	r.fileContents, err = ioutil.ReadFile(r.filename(r.file))
+	reader, err := config.FileSystem.OpenFile(r.filename(r.file))
+	if err != nil {
+		r.Log.Log(FATAL_ERROR, "Unable to open "+r.filename(r.file))
+		return &r.Result
+	}
+	r.fileContents, err = ioutil.ReadAll(reader)
 	if err != nil {
 		r.Log.Log(FATAL_ERROR, "Unable to read "+r.filename(r.file))
 		return &r.Result

@@ -16,7 +16,31 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
+	"time"
 )
+
+// The filename assigned to Go source code supplied on standard input.  It is
+// assumed that a file with this name does not actually exist.
+//
+// This peculiar choice of names is due to the fact that go/loader requires
+// source files to have a .go filename extension, so using a more obvious name
+// like "-" or even os.DevNull or os.Stdin.Name does not currently work.
+//
+// An EditedFileSystem can "pretend" that a file with this name exists in the
+// current directory; the absolute path to this file is returned by
+// FakeStdinPath.
+const FakeStdinFilename = "-.go"
+
+// FakeStdinPath returns the absolute path of a (likely nonexistent) file in
+// the current directory whose name is given by FakeStdinFilename.
+func FakeStdinPath() (string, error) {
+	result, err := filepath.Abs(FakeStdinFilename)
+	if err != nil {
+		return FakeStdinFilename, err
+	}
+	return result, nil
+}
 
 /* -=-=- File System Interface -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 
@@ -88,7 +112,7 @@ func (fs *LocalFileSystem) Rename(oldPath, newName string) error {
 		return fmt.Errorf("newName must be a bare filename: %s",
 			newName)
 	}
-	newPath := path.Join(path.Dir(oldPath), newName)
+	newPath := filepath.Join(path.Dir(oldPath), newName)
 	return os.Rename(oldPath, newPath)
 }
 
@@ -97,6 +121,21 @@ func (fs *LocalFileSystem) Remove(path string) error {
 }
 
 /* -=-=- Edited File System -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
+
+type fileInfo struct {
+	name    string
+	size    int64
+	mode    os.FileMode
+	modTime time.Time
+	isDir   bool
+}
+
+func (fi *fileInfo) Name() string       { return fi.name }
+func (fi *fileInfo) Size() int64        { return fi.size }
+func (fi *fileInfo) Mode() os.FileMode  { return fi.mode }
+func (fi *fileInfo) ModTime() time.Time { return fi.modTime }
+func (fi *fileInfo) IsDir() bool        { return fi.isDir }
+func (fi *fileInfo) Sys() interface{}   { return nil }
 
 // EditedFileSystem implements the FileSystem interface and provides access to
 // a hypothetical version of the local file system after a refactoring's
@@ -123,9 +162,14 @@ func NewSingleEditedFileSystem(filename, contents string) (*EditedFileSystem, er
 }
 
 func sizeOf(filename string) (int, error) {
-	if filename == os.Stdin.Name() {
+	stdin, err := FakeStdinPath()
+	if err != nil {
+		return 0, err
+	}
+	if filename == stdin {
 		return 0, nil
 	}
+
 	f, err := os.Open(filename)
 	if err != nil {
 		//if os.IsNotExist(err) {
@@ -148,19 +192,86 @@ func sizeOf(filename string) (int, error) {
 }
 
 func (fs *EditedFileSystem) OpenFile(path string) (io.ReadCloser, error) {
-	localReader, err := fs.LocalFileSystem.OpenFile(path)
+	var localReader io.ReadCloser
+	stdin, err := FakeStdinPath()
+	if err != nil {
+		return nil, err
+	}
+	if path == stdin {
+		localReader = ioutil.NopCloser(strings.NewReader(""))
+	} else {
+		localReader, err = fs.LocalFileSystem.OpenFile(path)
+		if err != nil {
+			return nil, err
+		}
+	}
 	editSet, ok := fs.Edits[path]
-	if err != nil || !ok {
-		return localReader, err
+	if !ok {
+		return localReader, nil
 	}
 	contents, err := ApplyToReader(editSet, localReader)
 	if err != nil {
+		localReader.Close()
 		return nil, err
 	}
 	if err := localReader.Close(); err != nil {
 		return nil, err
 	}
 	return ioutil.NopCloser(bytes.NewReader(contents)), nil
+}
+
+func (fs *EditedFileSystem) ReadDir(dirPath string) ([]os.FileInfo, error) {
+	origInfos, err := ioutil.ReadDir(dirPath)
+	if err != nil {
+		return nil, err
+	}
+
+	result := []os.FileInfo{}
+	for _, fi := range origInfos {
+		filePath := filepath.Join(dirPath, fi.Name())
+		if editSet, ok := fs.Edits[filePath]; !ok {
+			result = append(result, fi)
+		} else {
+			newFileInfo := fileInfo{
+				name:    fi.Name(),
+				size:    fi.Size() + editSet.SizeChange(),
+				mode:    fi.Mode(),
+				modTime: fi.ModTime(),
+				isDir:   fi.IsDir(),
+			}
+			result = append(result, &newFileInfo)
+		}
+	}
+
+	stdin, err := FakeStdinPath()
+	if err != nil {
+		return result, err
+	}
+	if editSet, ok := fs.Edits[stdin]; ok {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return result, err
+		}
+		absCwd, err := filepath.Abs(cwd)
+		if err != nil {
+			return result, err
+		}
+		absPath, err := filepath.Abs(dirPath)
+		if err != nil {
+			return result, err
+		}
+		if absPath == absCwd {
+			newFileInfo := fileInfo{
+				name:    path.Base(stdin),
+				size:    editSet.SizeChange(),
+				mode:    0777,
+				modTime: time.Now(),
+				isDir:   false,
+			}
+			result = append(result, &newFileInfo)
+		}
+	}
+	return result, nil
 }
 
 func (fs *EditedFileSystem) CreateFile(path, contents string) error {
@@ -176,7 +287,7 @@ func (fs *EditedFileSystem) Rename(path, newName string) error {
 }
 
 func (fs *EditedFileSystem) Remove(path string) error {
-	panic("Remove unsupallPackages(r.program) ported")
+	panic("Remove unsupported")
 }
 
 /* -=-=- File System Changes -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
@@ -245,7 +356,6 @@ func relative(path, relativeTo string) string {
 	if err != nil {
 		return path
 	}
-	//fmt.Println("path: ", path, "relativeTo:", relativeTo)
 	result, err := filepath.Rel(relativeTo, path)
 	if err != nil {
 		return path
