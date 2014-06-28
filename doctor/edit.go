@@ -54,32 +54,39 @@ func (e *edit) RelativeToOffset(offset int) edit {
 		e.replacement}
 }
 
+// overlaps returns true iff this edit overlaps the given interval
+func (e *edit) overlaps(pos *OffsetLength) bool {
+	return e.OffsetLength.Intersect(pos) != nil
+}
+
 // Add inserts an edit into this EditSet, returning an error if the edit has a
 // negative offset or overlaps an edit previously added to this EditSet.
-func (e *EditSet) Add(position OffsetLength, replacement string) error {
-	// Check for negative-offset or overlapping edits
-	if position.Offset < 0 {
+// FIXME(jeff): pos should be *OffsetLength, not OffsetLength
+func (e *EditSet) Add(pos OffsetLength, replacement string) error {
+	if pos.Offset < 0 {
 		return fmt.Errorf("edit has negative offset (%d)",
-			position.Offset)
+			pos.Offset)
 	}
 
 	// Insert edit into e.edits, keeping e.edits sorted by offset
-	var pos int = len(e.edits)
+	var idx int = len(e.edits)
 	for i := len(e.edits) - 1; i >= 0; i-- {
-		if e.edits[i].Offset >= position.Offset {
-			pos = i
+		if e.edits[i].Offset >= pos.Offset {
+			idx = i
 		} else {
 			break
 		}
 	}
-	if pos > 0 && e.edits[pos-1].OffsetPastEnd() > position.Offset {
-		return fmt.Errorf("overlapping edit at offset %d",
-			position.Offset)
+	if idx > 0 && e.edits[idx-1].overlaps(&pos) {
+		return fmt.Errorf("overlapping edit at offset %d", pos.Offset)
 	}
-	newEdit := edit{position, replacement}
+	if idx < len(e.edits) && e.edits[idx].overlaps(&pos) {
+		return fmt.Errorf("overlapping edit at offset %d", pos.Offset)
+	}
+	newEdit := edit{pos, replacement}
 	e.edits = append(e.edits, newEdit)
-	copy(e.edits[pos+1:], e.edits[pos:])
-	e.edits[pos] = newEdit
+	copy(e.edits[idx+1:], e.edits[idx:])
+	e.edits[idx] = newEdit
 	return nil
 }
 

@@ -23,11 +23,47 @@ func TestEditString(t *testing.T) {
 
 	es.Add(OffsetLength{5, 6}, "x")
 	es.Add(OffsetLength{1, 2}, "y")
-	es.Add(OffsetLength{3, 4}, "z")
+	es.Add(OffsetLength{3, 1}, "z")
 	assertEquals(`Replace offset 1, length 2 with "y"
-Replace offset 3, length 4 with "z"
+Replace offset 3, length 1 with "z"
 Replace offset 5, length 6 with "x"
 `, es.String(), t)
+}
+
+func TestOverlap(t *testing.T) {
+	type test struct {
+		offset, length  int
+		overlapExpected bool // Does this overlap OffsetLength{3,4}?
+	}
+
+	//                                                   123456789
+	// Which intervals should overlap OffsetLength{3,4}?   |--|
+	tests := []test{
+		test{2, 1, false}, // Regions starting to the left of offset 3
+		test{2, 2, true},
+		test{3, 0, false}, // Regions starting inside the interval
+		test{3, 1, true},
+		test{3, 4, true},
+		test{3, 6, true},
+		test{4, 1, true},
+		test{4, 3, true},
+		test{4, 9, true},
+		test{6, 0, true},
+		test{6, 1, true},
+		test{6, 7, true},
+		test{7, 0, false}, // Regions to the right of the interval
+		test{7, 3, false},
+	}
+
+	for _, tst := range tests {
+		es := NewEditSet()
+		es.Add(OffsetLength{3, 4}, "x")
+		edit := OffsetLength{tst.offset, tst.length}
+		err := es.Add(edit, "z")
+		if tst.overlapExpected != (err != nil) {
+			t.Fatalf("Overlapping edit %s undetected", edit)
+		}
+	}
 }
 
 func TestEditApply(t *testing.T) {

@@ -335,18 +335,6 @@ type hunk struct {
 	edits       []edit       // Edits to be applied to hunk
 }
 
-func (h *hunk) String() string {
-	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "Line: %d\nOffset: %d\n", h.startLine, h.startOffset)
-	fmt.Fprintf(&buf, "Number of Lines: %d\n", h.numLines)
-	fmt.Fprintf(&buf, "Original Text:\nvvvvv\n%s\n^^^^^\n", h.hunk.String())
-	fmt.Fprintf(&buf, "Edits:\n")
-	for _, edit := range h.edits {
-		fmt.Fprintf(&buf, "%s\n", edit.String())
-	}
-	return buf.String()
-}
-
 // addLine adds a single line of text to the hunk.
 func (h *hunk) addLine(line string) {
 	h.hunk.WriteString(line)
