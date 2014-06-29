@@ -177,6 +177,7 @@ func main() {
 			}
 
 			var b bytes.Buffer
+			fmt.Fprintf(&b, "diff -u %s %s\n", f, f)
 			p.Write(f, f, &b)
 			changes[f] = b.Bytes()
 		}
