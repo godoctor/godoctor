@@ -201,19 +201,7 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 		t.Fatal(err)
 	}
 
-	// NOTE: This assumes that "true" and "false" will always be bool args
-	// and all other refactoring arguments are strings
-	args := []interface{}{}
-	for _, opt := range remainder {
-		switch opt {
-		case "true":
-			args = append(args, true)
-		case "false":
-			args = append(args, false)
-		default:
-			args = append(args, opt)
-		}
-	}
+	args := InterpretArgs(remainder, r.Description().Params)
 
 	fileSystem := &LocalFileSystem{}
 	config := &Config{

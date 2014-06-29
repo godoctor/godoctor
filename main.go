@@ -137,6 +137,7 @@ func main() {
 		r = doctor.GetRefactoring(args[1])
 		args = args[2:]
 	}
+
 	// at this point args = refactoring's args, possibly none
 
 	// do the refactoring
@@ -176,10 +177,12 @@ func main() {
 				printError(err)
 			}
 
-			var b bytes.Buffer
-			fmt.Fprintf(&b, "diff -u %s %s\n", f, f)
-			p.Write(f, f, &b)
-			changes[f] = b.Bytes()
+			if !p.IsEmpty() {
+				var b bytes.Buffer
+				fmt.Fprintf(&b, "diff -u %s %s\n", f, f)
+				p.Write(f, f, &b)
+				changes[f] = b.Bytes()
+			}
 		}
 		printResults(r.Description().Name, log, changes)
 	}
@@ -274,12 +277,18 @@ func printResults(refactoring string, l *doctor.Log, changes map[string][]byte) 
 	// log to stderr if not json
 	if *formatFlag == "plain" {
 		for _, e := range l.Entries {
-			exitCode = 1
 			fmt.Fprintln(os.Stderr, e.String())
+		}
+		if l.ContainsErrors() {
+			exitCode = 1
 		}
 	}
 
-	fmt.Printf("%s\n", repl)
+	if *diffFlag {
+		fmt.Printf("%s", repl)
+	} else {
+		fmt.Printf("%s\n", repl)
+	}
 	os.Exit(exitCode)
 }
 
@@ -370,9 +379,7 @@ func refactor(file string, src string, args []string, r doctor.Refactoring) (*do
 	}
 
 	var scope []string
-	if *scopeFlag == "" {
-		scope = append(scope, ts.Filename)
-	} else {
+	if *scopeFlag != "" {
 		scope = parseScopes(*scopeFlag)
 	}
 
@@ -392,10 +399,7 @@ func refactor(file string, src string, args []string, r doctor.Refactoring) (*do
 		fs = &doctor.LocalFileSystem{}
 	}
 
-	argArray := []interface{}{}
-	for _, arg := range args { // cast to interface{}
-		argArray = append(argArray, arg)
-	}
+	argArray := doctor.InterpretArgs(args, r.Description().Params)
 
 	config := &doctor.Config{
 		FileSystem: fs,

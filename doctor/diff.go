@@ -168,6 +168,11 @@ type Patch struct {
 	hunks    []*hunk
 }
 
+// IsEmpty returns true iff this patch contains no hunks
+func (p *Patch) IsEmpty() bool {
+	return len(p.hunks) == 0
+}
+
 // add appends a hunk to this patch.  It is the caller's responsibility to
 // ensure that hunks are added in the correct order.
 func (p *Patch) add(hunk *hunk) {
@@ -177,7 +182,7 @@ func (p *Patch) add(hunk *hunk) {
 // Write writes a unified diff to the given io.Writer.  The given filenames
 // are used in the diff output.
 func (p *Patch) Write(origFile string, newFile string, out io.Writer) error {
-	if len(p.hunks) > 0 {
+	if !p.IsEmpty() {
 		fmt.Fprintf(out, "--- %s\n+++ %s\n", origFile, newFile)
 		lineOffset := 0
 		for _, hunk := range p.hunks {

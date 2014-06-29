@@ -42,6 +42,9 @@ func init() {
 	}
 }
 
+// The maximum number of errors from the go/loader that will be reported
+const maxInitialErrors = 10
+
 // AllRefactorings returns all of the transformations that can be performed.
 // The keys of the returned map are short, single-word, all-lowercase names
 // (rename, fiximports, etc.); the values implement the Refactoring interface.
@@ -75,6 +78,16 @@ type Parameter struct {
 	// (string or boolean) can be determined from the type of its default
 	// value.
 	DefaultValue interface{}
+}
+
+// IsBoolean returns true iff this Parameter must be either true or false.
+func (p *Parameter) IsBoolean() bool {
+	switch p.DefaultValue.(type) {
+	case bool:
+		return true
+	default:
+		return false
+	}
 }
 
 // Quality determines whether a refactoring is exposed to end users
@@ -217,24 +230,21 @@ func (r *refactoringBase) Run(config *Config) *Result {
 		var filename string = err.(types.Error).Fset.File(pos).Name()
 		var length int = 0
 		// TODO: This is temporary until go/loader handles cgo
-		if !strings.Contains(message, CGO_ERROR1) && !strings.HasSuffix(message, CGO_ERROR2) {
+		if !strings.Contains(message, CGO_ERROR1) &&
+			!strings.HasSuffix(message, CGO_ERROR2) &&
+			r.Log.Size() < maxInitialErrors {
 			r.Log.LogInitial(ERROR, message, filename, offset, length)
 		}
 	}
 	// FIXME: Jeff: handle error
 
-	/*if src != "" {
-		// passed on stdin, create *ast.File
-		f, err := config.ParseFile(selection.Filename, nil)
-		if err != nil {
-			return false
-		}
-		config.CreateFromFiles(selection.Filename, f)
-	} else*/if config.Scope != nil {
-		lconfig.FromArgs(config.Scope, false)
+	if config.Scope == nil {
+		config.Scope = r.guessScope(config)
+		r.Log.Log(WARNING, "No scope provided; guessing "+strings.Join(config.Scope, " "))
 	} else {
-		lconfig.FromArgs([]string{config.Selection.Filename}, false)
+		r.Log.Log(INFO, "Scope is "+strings.Join(config.Scope, " "))
 	}
+	lconfig.FromArgs(config.Scope, true)
 
 	var err error
 	r.program, err = lconfig.Load()
@@ -254,6 +264,7 @@ func (r *refactoringBase) Run(config *Config) *Result {
 				"found in the provided scope: %s",
 				config.Selection.Filename,
 				config.Scope))
+		// This can happen on files containing +build
 		return &r.Result
 	}
 
@@ -279,6 +290,49 @@ func (r *refactoringBase) Run(config *Config) *Result {
 	r.FSChanges = []FileSystemChange{}
 
 	return &r.Result
+}
+
+// guessScope makes a reasonable guess at the refactoring scope if the user
+// does not provide an explicit scope.  It guesses as follows:
+//     1. If filename is not in $GOPATH/src, filename is used as the scope.
+//     2. If filename is in $GOPATH/src, a package name is guessed by stripping
+//        $GOPATH/src/ from the filename, and that package is used as the scope.
+func (r *refactoringBase) guessScope(config *Config) []string {
+	fnameScope := []string{config.Selection.Filename}
+
+	absFilename, err := filepath.Abs(config.Selection.Filename)
+	if err != nil {
+		r.Log.Log(FATAL_ERROR, err.Error())
+		return fnameScope
+	}
+
+	gopath := config.GoPath
+	if gopath == "" {
+		gopath = os.Getenv("GOPATH")
+	}
+	if gopath == "" {
+		r.Log.Log(WARNING, "GOPATH not set")
+		return fnameScope
+	}
+	gopath, err = filepath.Abs(gopath)
+	if err != nil {
+		r.Log.Log(FATAL_ERROR, err.Error())
+		return fnameScope
+	}
+
+	gopathSrc := filepath.Join(gopath, "src")
+
+	relFilename, err := filepath.Rel(gopathSrc, absFilename)
+	if err != nil {
+		r.Log.Log(FATAL_ERROR, err.Error())
+		return fnameScope
+	}
+
+	if strings.HasPrefix(relFilename, "..") {
+		return fnameScope
+	}
+
+	return []string{filepath.ToSlash(filepath.Dir(relFilename))}
 }
 
 // validateArgs determines whether the arguments supplied in the given Config
@@ -391,6 +445,25 @@ func (r *refactoringBase) findAnyOccurrences(name string) bool {
 */
 
 /* -=-=- Utility Methods -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
+
+func InterpretArgs(args []string, params []Parameter) []interface{} {
+	result := []interface{}{}
+	for i, opt := range args {
+		if i < len(params) && params[i].IsBoolean() {
+			switch opt {
+			case "true":
+				result = append(result, true)
+			case "false":
+				result = append(result, false)
+			default:
+				result = append(result, opt)
+			}
+		} else {
+			result = append(result, opt)
+		}
+	}
+	return result
+}
 
 func (r *refactoringBase) pkgInfo(file *ast.File) *loader.PackageInfo {
 	for _, pkgInfo := range r.program.AllPackages {

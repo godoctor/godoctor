@@ -84,6 +84,11 @@ func (log *Log) Clear() {
 	log.Entries = []LogEntry{}
 }
 
+// Size returns the number of Entries in the error log.
+func (log *Log) Size() int {
+	return len(log.Entries)
+}
+
 // LogInitial adds a message to the given log with the given severity, and
 // marks the entry as an initial error.  Initial errors are semantic errors
 // that are present in the file before refactoring starts; some refactorings
