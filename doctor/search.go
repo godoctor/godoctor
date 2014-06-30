@@ -196,7 +196,7 @@ func (r *SearchEngine) FindOccurrences(ident *ast.Ident) (map[string][]OffsetLen
 	if r.isPackageName(ident) {
 		result = r.occurrencesofpkg(ident)
 		pkgs = allPackages(r.program)
-		//fmt.Println("result in iskgname", result)
+
 	} else {
 
 		var decls map[types.Object]bool
@@ -213,7 +213,8 @@ func (r *SearchEngine) FindOccurrences(ident *ast.Ident) (map[string][]OffsetLen
 		result = r.occurrences(decls)
 		pkgs = r.packages(decls)
 	}
-	//fmt.Println(result)
+
+
 	return r.occurrencesInComments(ident.Name, pkgs, result), nil
 }
 
@@ -237,47 +238,12 @@ func (r *SearchEngine) occurrences(decls map[types.Object]bool) map[string][]Off
 			}
 		}
 	}
-	//fmt.Println("result in occurrences",result)
+
 	return result
 }
 
-//
-/*func (r *SearchEngine) occurrencesofpkg(ident *ast.Ident) map[string][]OffsetLength {
 
-result := make(map[string][]OffsetLength)
-   fmt.Println(allPackages(r.program))
-     for pkgInfo := range allPackages(r.program)  {
-    		 for _, file := range pkgInfo.Files {
 
-                 	ast.Inspect(file, func(n ast.Node) bool {
-					switch thisIdent := n.(type) {
-					case *ast.Ident:
-                                           if thisIdent.Name == ident.Name &&  r.pkgInfo(r.fileContaining(ident)).ObjectOf(thisIdent) == nil {
-                                                 fmt.Println("identifier pkg name occured in",r.position(ident).Filename)
-                                            	filename := r.position(ident).Filename
-                                                fmt.Println("result",result[filename])
-                                            // for filename,offsetLengths := range result {
-                                              //      for _,offsetLength := range offsetLengths {
-		                       		//if offsetLength !=  r.offsetLength(ident) {
-
-						result[filename] = append(result[filename],
-						 			   r.offsetLength(ident))
-						//}
-                                                //}
-                                             //}
-                                            }
-
-					}
-
-					return true
-
-					})
-               }
-
-   }
-  fmt.Println("final result", result)
-  return result
-}*/
 
 func (r *SearchEngine) occurrencesofpkg(ident *ast.Ident) map[string][]OffsetLength {
 
@@ -299,7 +265,7 @@ func (r *SearchEngine) occurrencesofpkg(ident *ast.Ident) map[string][]OffsetLen
 			}
 		}
 	}
-	//fmt.Println("result in occurrences of pkg",result)
+
 	return result
 
 }

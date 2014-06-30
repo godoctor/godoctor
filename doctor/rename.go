@@ -2,10 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// This file defines a refactoring to rename variables, functions, methods, structs,interfaces andpackages
 package doctor
-
-// This file defines a refactoring to rename variables, functions, methods, structs,interfaces and packages
-// (TODO: It cannot yet rename packages.)
 
 import (
 	"go/ast"
@@ -70,6 +68,11 @@ func (r *renameRefactoring) Run(config *Config) *Result {
 			r.Log.Log(FATAL_ERROR, "newName cannot be non Exportable if selected identifier name is Exportable")
 			return &r.Result
 		}
+		if ident.Name == "main" && r.pkgInfo(r.fileContaining(ident)).Pkg.Name() == "main" {
+			r.Log.Log(FATAL_ERROR, "cannot rename main function inside main package ,it eliminates the program entry 							point")
+			return &r.Result
+		}
+
 		r.rename(ident)
 
 	default:
@@ -156,10 +159,11 @@ func (r *renameRefactoring) addOccurrences(allOccurrences map[string][]OffsetLen
 }
 
 func (r *SearchEngine) isPackageName(ident *ast.Ident) bool {
-
-	if r.pkgInfo(r.fileContaining(ident)).Pkg.Name() == ident.Name {
+	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
+	if r.pkgInfo(r.fileContaining(ident)).Pkg.Name() == ident.Name && obj == nil {
 		return true
 	}
+
 
 	return false
 }
@@ -168,7 +172,16 @@ func (r *renameRefactoring) addFileSystemChanges(allOccurrences map[string][]Off
 	for filename, _ := range allOccurrences {
 
 		if filepath.Base(filepath.Dir(filename)) == ident.Name && allFilesinDirectoryhaveSamePkg(filepath.Dir(filename), ident) {
-			chg := &FSRename{filepath.Dir(filename), r.newName}
+			chg := &FSRename{filepath.Dir(filename), r.newName
+}
+	return false
+}
+
+func (r *renameRefactoring) addFileSystemChanges(allOccurrences map[string][]OffsetLength, ident *ast.Ident) {
+	for filename, _ := range allOccurrences {
+
+		if filepath.Base(filepath.Dir(filename)) == ident.Name && allFilesinDirectoryhaveSamePkg(filepath.Dir(filename), ident) {
+			chg := &fsRename{filepath.Dir(filename), r.newName}
 			r.FSChanges = append(r.FSChanges,
 				chg)
 
