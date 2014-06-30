@@ -214,7 +214,6 @@ func (r *SearchEngine) FindOccurrences(ident *ast.Ident) (map[string][]OffsetLen
 		pkgs = r.packages(decls)
 	}
 
-
 	return r.occurrencesInComments(ident.Name, pkgs, result), nil
 }
 
@@ -241,9 +240,6 @@ func (r *SearchEngine) occurrences(decls map[types.Object]bool) map[string][]Off
 
 	return result
 }
-
-
-
 
 func (r *SearchEngine) occurrencesofpkg(ident *ast.Ident) map[string][]OffsetLength {
 

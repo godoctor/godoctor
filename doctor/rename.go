@@ -164,7 +164,6 @@ func (r *SearchEngine) isPackageName(ident *ast.Ident) bool {
 		return true
 	}
 
-
 	return false
 }
 
@@ -172,19 +171,8 @@ func (r *renameRefactoring) addFileSystemChanges(allOccurrences map[string][]Off
 	for filename, _ := range allOccurrences {
 
 		if filepath.Base(filepath.Dir(filename)) == ident.Name && allFilesinDirectoryhaveSamePkg(filepath.Dir(filename), ident) {
-			chg := &FSRename{filepath.Dir(filename), r.newName
-}
-	return false
-}
-
-func (r *renameRefactoring) addFileSystemChanges(allOccurrences map[string][]OffsetLength, ident *ast.Ident) {
-	for filename, _ := range allOccurrences {
-
-		if filepath.Base(filepath.Dir(filename)) == ident.Name && allFilesinDirectoryhaveSamePkg(filepath.Dir(filename), ident) {
-			chg := &fsRename{filepath.Dir(filename), r.newName}
-			r.FSChanges = append(r.FSChanges,
-				chg)
-
+			chg := &FSRename{filepath.Dir(filename), r.newName}
+			r.FSChanges = append(r.FSChanges, chg)
 		}
 	}
 }
