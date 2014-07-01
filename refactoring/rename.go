@@ -51,35 +51,38 @@ func (r *renameRefactoring) Run(config *Config) *Result {
 
 	r.newName = config.Args[0].(string)
 	if !r.isIdentifierValid(r.newName) {
-		r.Log.Log(FATAL_ERROR, "The new name "+r.newName+" is not a valid Go identifier")
+		r.Log.Errorf("The new name %s is not a valid Go identifier", r.newName)
 		return &r.Result
 	}
 
 	if r.selectedNode == nil {
-		r.Log.Log(FATAL_ERROR, "Please select an identifier to rename.")
+		r.Log.Error("Please select an identifier to rename.")
+		r.Log.AssociatePos(r.program.Fset, r.selectionStart, r.selectionEnd)
 		return &r.Result
 	}
 
 	if r.newName == "" {
-		r.Log.Log(FATAL_ERROR, "newName cannot be empty")
+		r.Log.Error("newName cannot be empty")
 		return &r.Result
 	}
 
 	switch ident := r.selectedNode.(type) {
 	case *ast.Ident:
 		if ast.IsExported(ident.Name) && !ast.IsExported(r.newName) {
-			r.Log.Log(FATAL_ERROR, "newName cannot be non Exportable if selected identifier name is Exportable")
+			r.Log.Error("newName cannot be non Exportable if selected identifier name is Exportable")
 			return &r.Result
 		}
 		if ident.Name == "main" && r.pkgInfo(r.fileContaining(ident)).Pkg.Name() == "main" {
-			r.Log.Log(FATAL_ERROR, "cannot rename main function inside main package ,it eliminates the program entry 							point")
+			r.Log.Error("cannot rename main function inside main package ,it eliminates the program entry 							point")
+			r.Log.AssociateNode(r.program, ident)
 			return &r.Result
 		}
 
 		r.rename(ident)
 
 	default:
-		r.Log.Log(FATAL_ERROR, "Please select an identifier to rename.")
+		r.Log.Error("Please select an identifier to rename.")
+		r.Log.AssociatePos(r.program.Fset, r.selectionStart, r.selectionEnd)
 	}
 	return &r.Result
 }
@@ -98,7 +101,7 @@ func (r *renameRefactoring) rename(ident *ast.Ident) {
 		search := names.NewSearchEngine(r.program)
 		searchResult, err := search.FindOccurrences(ident)
 		if err != nil {
-			r.Log.Log(FATAL_ERROR, err.Error())
+			r.Log.Error(err)
 			return
 		}
 
@@ -120,7 +123,8 @@ func (r *renameRefactoring) IdentifierExists(ident *ast.Ident) bool {
 
 	if obj == nil && !search.IsPackageName(ident) {
 
-		r.Log.Log(FATAL_ERROR, "unable to find declaration of selected identifier")
+		r.Log.Error("unable to find declaration of selected identifier")
+		r.Log.AssociateNode(r.program, ident)
 		return true
 	}
 
@@ -132,7 +136,8 @@ func (r *renameRefactoring) IdentifierExists(ident *ast.Ident) bool {
 	if names.IsMethod(obj) {
 		objfound, _, pointerindirections := types.LookupFieldOrMethod(names.MethodReceiver(obj).Type(), obj.Pkg(), r.newName)
 		if names.IsMethod(objfound) && pointerindirections {
-			r.Log.Log(FATAL_ERROR, "newname already exists in scope,please select other value for the newname")
+			r.Log.Error("newname already exists in scope,please select other value for the newname")
+			r.Log.AssociateNode(r.program, ident)
 			return true
 		} else {
 			return false
@@ -140,8 +145,8 @@ func (r *renameRefactoring) IdentifierExists(ident *ast.Ident) bool {
 	}
 
 	if identscope.LookupParent(r.newName) != nil {
-
-		r.Log.Log(FATAL_ERROR, "newname already exists in scope,please select other value for the newname")
+		r.Log.Error("newname already exists in scope,please select other value for the newname")
+		r.Log.AssociateNode(r.program, ident)
 		return true
 	}
 
@@ -149,7 +154,7 @@ func (r *renameRefactoring) IdentifierExists(ident *ast.Ident) bool {
 }
 
 //addOccurrences adds all the Occurences to the editset
-func (r *renameRefactoring) addOccurrences(allOccurrences map[string][]text.OffsetLength) {
+func (r *renameRefactoring) addOccurrences(allOccurrences map[string][]text.Extent) {
 	for filename, occurrences := range allOccurrences {
 		for _, occurrence := range occurrences {
 			if r.Edits[filename] == nil {
@@ -161,11 +166,11 @@ func (r *renameRefactoring) addOccurrences(allOccurrences map[string][]text.Offs
 	}
 }
 
-func (r *renameRefactoring) addFileSystemChanges(allOccurrences map[string][]text.OffsetLength, ident *ast.Ident) {
+func (r *renameRefactoring) addFileSystemChanges(allOccurrences map[string][]text.Extent, ident *ast.Ident) {
 	for filename, _ := range allOccurrences {
 
 		if filepath.Base(filepath.Dir(filename)) == ident.Name && allFilesinDirectoryhaveSamePkg(filepath.Dir(filename), ident) {
-			chg := &filesystem.FSRename{filepath.Dir(filename), r.newName}
+			chg := &filesystem.Rename{filepath.Dir(filename), r.newName}
 			r.FSChanges = append(r.FSChanges, chg)
 		}
 	}

@@ -158,7 +158,7 @@ func NewSingleEditedFileSystem(filename, contents string) (*EditedFileSystem, er
 		return nil, err
 	}
 	es := text.NewEditSet()
-	es.Add(text.OffsetLength{0, size}, contents)
+	es.Add(text.Extent{0, size}, contents)
 	return NewEditedFileSystem(map[string]*text.EditSet{filename: es}), nil
 }
 
@@ -289,77 +289,4 @@ func (fs *EditedFileSystem) Rename(path, newName string) error {
 
 func (fs *EditedFileSystem) Remove(path string) error {
 	panic("Remove unsupported")
-}
-
-/* -=-=- File System Changes -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
-
-// A FileSystemChange describes a change to be made to the file system:
-// renaming, creating, or deleting a file/directory.
-type FileSystemChange interface {
-	ExecuteUsing(FileSystem) error
-	String(relativeTo string) string
-}
-
-type FSCreateFile struct {
-	Path, Contents string
-}
-
-func (chg *FSCreateFile) ExecuteUsing(fs FileSystem) error {
-	return fs.CreateFile(chg.Path, chg.Contents)
-}
-
-func (chg *FSCreateFile) String(relativeTo string) string {
-	return fmt.Sprintf("create %s", filepath.ToSlash(relative(chg.Path, relativeTo)))
-}
-
-type FSRemove struct {
-	Path string
-}
-
-func (chg *FSRemove) ExecuteUsing(fs FileSystem) error {
-	return fs.Remove(chg.Path)
-}
-
-func (chg *FSRemove) String(relativeTo string) string {
-	return fmt.Sprintf("remove %s", filepath.ToSlash(relative(chg.Path, relativeTo)))
-}
-
-type FSRename struct {
-	Path, NewName string
-}
-
-func (chg *FSRename) ExecuteUsing(fs FileSystem) error {
-	return fs.Rename(chg.Path, chg.NewName)
-}
-
-func (chg *FSRename) String(relativeTo string) string {
-	return fmt.Sprintf("rename %s %s", filepath.ToSlash(relative(chg.Path, relativeTo)), chg.NewName)
-}
-
-func Execute(fs FileSystem, changes []FileSystemChange) error {
-	// TODO: the changes should be executed atomically (all-or-nothing),
-	// but currently it can fail in the middle of execution
-	for _, chg := range changes {
-		if err := chg.ExecuteUsing(fs); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func isBareFilename(filePath string) bool {
-	dir, _ := filepath.Split(filePath)
-	return dir == ""
-}
-
-func relative(path, relativeTo string) string {
-	relativeTo, err := filepath.Abs(relativeTo)
-	if err != nil {
-		return path
-	}
-	result, err := filepath.Rel(relativeTo, path)
-	if err != nil {
-		return path
-	}
-	return result
 }

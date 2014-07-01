@@ -12,20 +12,20 @@ import (
 	"testing"
 )
 
-func TestOffsetLength(t *testing.T) {
-	ol := OffsetLength{Offset: 5, Length: 20}
+func TestExtent(t *testing.T) {
+	ol := Extent{Offset: 5, Length: 20}
 	assertEquals("offset 5, length 20", ol.String(), t)
 }
 
-func TestOffsetLengthIntersect(t *testing.T) {
-	ol15 := &OffsetLength{Offset: 1, Length: 5}
-	ol30 := &OffsetLength{Offset: 3, Length: 0}
-	ol33 := &OffsetLength{Offset: 3, Length: 3}
-	ol51 := &OffsetLength{Offset: 5, Length: 1}
-	ol61 := &OffsetLength{Offset: 6, Length: 1}
+func TestExtentIntersect(t *testing.T) {
+	ol15 := &Extent{Offset: 1, Length: 5}
+	ol30 := &Extent{Offset: 3, Length: 0}
+	ol33 := &Extent{Offset: 3, Length: 3}
+	ol51 := &Extent{Offset: 5, Length: 1}
+	ol61 := &Extent{Offset: 6, Length: 1}
 
 	type test struct {
-		ol1, ol2 *OffsetLength
+		ol1, ol2 *Extent
 		expect   string
 	}
 

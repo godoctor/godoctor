@@ -41,7 +41,8 @@ func (r *shortAssignRefactoring) Run(config *Config) *Result {
 	}
 
 	if r.selectedNode == nil {
-		r.Log.Log(ERROR, "The selection cannot be null.Please select a valid node!")
+		r.Log.Error("The selection cannot be null.Please select a valid node!")
+		r.Log.AssociatePos(r.program.Fset, r.selectionStart, r.selectionEnd)
 		return &r.Result
 	}
 
@@ -49,7 +50,8 @@ func (r *shortAssignRefactoring) Run(config *Config) *Result {
 	case *ast.AssignStmt:
 		r.createEditSet(selectedNode)
 	default:
-		r.Log.Log(FATAL_ERROR, fmt.Sprintf("Select a short assignment (:=) statement! Selected node is %s", reflect.TypeOf(r.selectedNode)))
+		r.Log.Errorf("Select a short assignment (:=) statement! Selected node is %s", reflect.TypeOf(r.selectedNode))
+		r.Log.AssociatePos(r.program.Fset, r.selectionStart, r.selectionEnd)
 	}
 	r.checkForErrors()
 	return &r.Result
@@ -57,7 +59,7 @@ func (r *shortAssignRefactoring) Run(config *Config) *Result {
 
 func (r *shortAssignRefactoring) createEditSet(assign *ast.AssignStmt) {
 	start, length := r.offsetLength(assign)
-	r.Edits[r.filename(r.file)].Add(text.OffsetLength{start, length}, r.createReplacementString(assign))
+	r.Edits[r.filename(r.file)].Add(text.Extent{start, length}, r.createReplacementString(assign))
 }
 
 func (r *shortAssignRefactoring) rhsExprs(assign *ast.AssignStmt) []string {

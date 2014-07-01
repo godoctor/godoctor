@@ -37,14 +37,16 @@ func (r *reverseAssignRefactoring) Run(config *Config) *Result {
 	}
 
 	if r.selectedNode == nil {
-		r.Log.Log(FATAL_ERROR, "selection cannot be null")
+		r.Log.Error("selection cannot be null")
+		r.Log.AssociatePos(r.program.Fset, r.selectionStart, r.selectionEnd)
 		return &r.Result
 	}
 	switch selectedNode := r.selectedNode.(type) {
 	case *ast.GenDecl:
 		r.callEditset(selectedNode)
 	default:
-		r.Log.Log(FATAL_ERROR, fmt.Sprintf("Select a short assignment (:=) statement! Selected node is %s", reflect.TypeOf(r.selectedNode)))
+		r.Log.Errorf("Select a short assignment (:=) statement! Selected node is %s", reflect.TypeOf(r.selectedNode))
+		r.Log.AssociatePos(r.program.Fset, r.selectionStart, r.selectionEnd)
 	}
 	r.checkForErrors()
 	return &r.Result
@@ -65,5 +67,5 @@ func (r *reverseAssignRefactoring) replacement(decl *ast.GenDecl) string {
 func (r *reverseAssignRefactoring) callEditset(decl *ast.GenDecl) {
 	start, _ := r.offsetLength(decl)
 	repstrlen := r.program.Fset.Position(decl.Specs[0].(*ast.ValueSpec).Values[0].Pos()).Offset - r.program.Fset.Position(decl.Pos()).Offset
-	r.Edits[r.filename(r.file)].Add(text.OffsetLength{start, repstrlen}, r.replacement(decl))
+	r.Edits[r.filename(r.file)].Add(text.Extent{start, repstrlen}, r.replacement(decl))
 }

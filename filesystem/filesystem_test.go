@@ -98,7 +98,7 @@ func TestEditedFileSystem(t *testing.T) {
 		t.Fatal(err)
 	}
 	es := text.NewEditSet()
-	es.Add(text.OffsetLength{3, 5}, "xyz")
+	es.Add(text.Extent{3, 5}, "xyz")
 	expected := "123xyz9\nABCDEFGHIJ"
 	fs := NewEditedFileSystem(map[string]*text.EditSet{testFile: es})
 	editedFile, err := fs.OpenFile(testFile)

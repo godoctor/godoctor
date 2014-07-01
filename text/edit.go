@@ -34,7 +34,7 @@ type EditSet struct {
 }
 
 type edit struct {
-	OffsetLength
+	Extent
 	replacement string
 }
 
@@ -47,7 +47,7 @@ func NewEditSet() *EditSet {
 // minus the given offset, i.e., it is an edit relative to the given offset.
 func (e *edit) RelativeToOffset(offset int) edit {
 	return edit{
-		OffsetLength{
+		Extent{
 			Offset: e.Offset - offset,
 			Length: e.Length,
 		},
@@ -55,14 +55,14 @@ func (e *edit) RelativeToOffset(offset int) edit {
 }
 
 // overlaps returns true iff this edit overlaps the given interval
-func (e *edit) overlaps(pos *OffsetLength) bool {
-	return e.OffsetLength.Intersect(pos) != nil
+func (e *edit) overlaps(pos *Extent) bool {
+	return e.Extent.Intersect(pos) != nil
 }
 
 // Add inserts an edit into this EditSet, returning an error if the edit has a
 // negative offset or overlaps an edit previously added to this EditSet.
-// FIXME(jeff): pos should be *OffsetLength, not OffsetLength
-func (e *EditSet) Add(pos OffsetLength, replacement string) error {
+// FIXME(jeff): pos should be *Extent, not Extent
+func (e *EditSet) Add(pos Extent, replacement string) error {
 	if pos.Offset < 0 {
 		return fmt.Errorf("edit has negative offset (%d)",
 			pos.Offset)
@@ -103,7 +103,7 @@ func (e *EditSet) SizeChange() int64 {
 }
 
 func (e *edit) String() string {
-	return "Replace " + e.OffsetLength.String() +
+	return "Replace " + e.Extent.String() +
 		" with \"" + e.replacement + "\""
 }
 

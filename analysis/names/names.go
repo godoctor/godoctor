@@ -187,10 +187,10 @@ func (r *SearchEngine) methodDeclsMatchingSig(ident *ast.Ident, sig *types.Signa
 // indirect references to the same object as given identifier.  The returned
 // map maps filenames to a slice of (offset, length) pairs describing locations
 // at which the given identifier is referenced.
-func (r *SearchEngine) FindOccurrences(ident *ast.Ident) (map[string][]text.OffsetLength, error) {
+func (r *SearchEngine) FindOccurrences(ident *ast.Ident) (map[string][]text.Extent, error) {
 
 	var pkgs map[*loader.PackageInfo]bool
-	var result map[string][]text.OffsetLength
+	var result map[string][]text.Extent
 
 	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
 
@@ -224,8 +224,8 @@ func (r *SearchEngine) FindOccurrences(ident *ast.Ident) (map[string][]text.Offs
 
 // occurrences returns the source locations of all identifiers that resolve
 // to one of the given objects.
-func (r *SearchEngine) occurrences(decls map[types.Object]bool) map[string][]text.OffsetLength {
-	result := make(map[string][]text.OffsetLength)
+func (r *SearchEngine) occurrences(decls map[types.Object]bool) map[string][]text.Extent {
+	result := make(map[string][]text.Extent)
 	for pkgInfo := range r.packages(decls) {
 		for id, obj := range pkgInfo.Defs {
 			if decls[obj] {
@@ -246,9 +246,9 @@ func (r *SearchEngine) occurrences(decls map[types.Object]bool) map[string][]tex
 	return result
 }
 
-func (r *SearchEngine) occurrencesofpkg(ident *ast.Ident) map[string][]text.OffsetLength {
+func (r *SearchEngine) occurrencesofpkg(ident *ast.Ident) map[string][]text.Extent {
 
-	result := make(map[string][]text.OffsetLength)
+	result := make(map[string][]text.Extent)
 
 	for pkgInfo := range allPackages(r.program) {
 		for id, obj := range pkgInfo.Defs {
@@ -275,11 +275,11 @@ func (r *SearchEngine) position(id *ast.Ident) token.Position {
 	return r.program.Fset.Position(id.NamePos)
 }
 
-func (r *SearchEngine) offsetLength(id *ast.Ident) text.OffsetLength {
+func (r *SearchEngine) offsetLength(id *ast.Ident) text.Extent {
 	position := r.position(id)
 	offset := position.Offset
 	length := len(id.Name)
-	return text.OffsetLength{offset, length}
+	return text.Extent{offset, length}
 }
 
 // packages returns a set of PackageInfos that may reference the given
@@ -315,7 +315,7 @@ func allPackages(prog *loader.Program) map[*loader.PackageInfo]bool {
 
 // occurrencesincomments checks if the name of the selected identifier occurs as a word in comments,if true then
 // all the source locations of name in comments are returned.
-func (r *SearchEngine) occurrencesInComments(name string, pkgs map[*loader.PackageInfo]bool, result map[string][]text.OffsetLength) map[string][]text.OffsetLength {
+func (r *SearchEngine) occurrencesInComments(name string, pkgs map[*loader.PackageInfo]bool, result map[string][]text.Extent) map[string][]text.Extent {
 	for pkgInfo := range pkgs {
 		for _, f := range pkgInfo.Files {
 			for _, comment := range f.Comments {
@@ -331,7 +331,7 @@ func (r *SearchEngine) occurrencesInComments(name string, pkgs map[*loader.Packa
 // occurrencesInFileComments finds the source location of  selected identifier names in
 // comments, appends them to the already found source locations of
 // selected identifier objects (result), and returns the result.
-func (r *SearchEngine) occurrencesInFileComments(f *ast.File, comment *ast.CommentGroup, name string, result map[string][]text.OffsetLength, prog *loader.Program) map[string][]text.OffsetLength {
+func (r *SearchEngine) occurrencesInFileComments(f *ast.File, comment *ast.CommentGroup, name string, result map[string][]text.Extent, prog *loader.Program) map[string][]text.Extent {
 	var whitespaceindex int = 1
 	regexpstring := fmt.Sprintf("[\\PL]%s[\\PL]|//%s[\\PL]|/*%s[\\PL]|[\\PL]%s$", name, name, name, name)
 	re := regexp.MustCompile(regexpstring)
@@ -340,7 +340,7 @@ func (r *SearchEngine) occurrencesInFileComments(f *ast.File, comment *ast.Comme
 		offset := prog.Fset.Position(comment.List[0].Slash).Offset + matchindex[0] + whitespaceindex
 		length := len(name)
 		filename := prog.Fset.Position(f.Pos()).Filename
-		result[filename] = append(result[filename], text.OffsetLength{offset, length})
+		result[filename] = append(result[filename], text.Extent{offset, length})
 	}
 	return result
 }

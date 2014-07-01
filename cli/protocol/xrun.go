@@ -29,7 +29,7 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 	}
 	// setup TextSelection
 	textselection := input["textselection"].(map[string]interface{})
-	ts := text.TextSelection{
+	ts := &text.Selection{
 		Filename:  filepath.Join(state.Dir, textselection["filename"].(string)),
 		StartLine: int(textselection["startline"].(float64)),
 		StartCol:  int(textselection["startcol"].(float64)),
@@ -52,26 +52,18 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 
 	// grab logs
 	logs := make([]map[string]interface{}, 0)
-	fatalError := false
 	for _, entry := range result.Log.Entries {
 		var severity string
 		switch entry.Severity {
-		case refactoring.INFO:
+		case refactoring.Info:
 			// No prefix
-		case refactoring.WARNING:
+		case refactoring.Warning:
 			severity = "warning"
-		case refactoring.ERROR:
+		case refactoring.Error:
 			severity = "error"
-		case refactoring.FATAL_ERROR:
-			severity = "fatal"
-			fatalError = true
 		}
 		log := map[string]interface{}{"severity": severity, "message": entry.Message}
 		logs = append(logs, log)
-	}
-	// any fatal errors? return without giving changes
-	if fatalError {
-		return Reply{map[string]interface{}{"reply": "OK", "description": refac.Description().Name, "log": logs}}, nil
 	}
 
 	changes := make([]map[string]string, 0)
@@ -108,11 +100,11 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 		fschanges = make([]map[string]string, len(result.FSChanges))
 		for i, change := range result.FSChanges {
 			switch change := change.(type) {
-			case *filesystem.FSCreateFile:
+			case *filesystem.CreateFile:
 				fschanges[i] = map[string]string{"change": "create", "file": change.Path, "content": change.Contents}
-			case *filesystem.FSRemove:
+			case *filesystem.Remove:
 				fschanges[i] = map[string]string{"change": "delete", "path": change.Path}
-			case *filesystem.FSRename:
+			case *filesystem.Rename:
 				fschanges[i] = map[string]string{"change": "rename", "from": change.Path, "to": change.NewName}
 			}
 		}
