@@ -197,22 +197,6 @@ func (log *Log) String() string {
 	return buffer.String()
 }
 
-// ContainsNonInitialErrors returns true if the log contains at least one error
-// that is not an initial entry.
-func (log *Log) ContainsNonInitialErrors() bool {
-	return log.contains(func(entry *Entry) bool {
-		return entry.Severity >= Error && !entry.isInitial
-	})
-}
-
-// ContainsInitialErrors returns true if the log contains at least one error
-// that is also an initial entry.
-func (log *Log) ContainsInitialErrors() bool {
-	return log.contains(func(entry *Entry) bool {
-		return entry.Severity >= Error && entry.isInitial
-	})
-}
-
 // ContainsErrors returns true if the log contains at least one error.  The
 // error may be an initial entry, or it may not.
 func (log *Log) ContainsErrors() bool {
