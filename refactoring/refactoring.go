@@ -180,8 +180,8 @@ type Result struct {
 	FSChanges []filesystem.Change
 }
 
-const CGO_ERROR1 = "could not import C (cannot"
-const CGO_ERROR2 = "undeclared name: C"
+const cgoError1 = "could not import C (cannot"
+const cgoError2 = "undeclared name: C"
 
 type refactoringBase struct {
 	program        *loader.Program
@@ -228,8 +228,8 @@ func (r *refactoringBase) Run(config *Config) *Result {
 		message := err.Error()
 		// FIXME: Needs to be thread-safe
 		// TODO: This is temporary until go/loader handles cgo
-		if !strings.Contains(message, CGO_ERROR1) &&
-			!strings.HasSuffix(message, CGO_ERROR2) &&
+		if !strings.Contains(message, cgoError1) &&
+			!strings.HasSuffix(message, cgoError2) &&
 			len(r.Log.Entries) < maxInitialErrors {
 			r.Log.Error(message)
 			r.Log.AssociatePos(err.(types.Error).Fset,
