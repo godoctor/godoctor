@@ -65,6 +65,25 @@ func defs(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 		}
 	case *ast.RangeStmt: // only [ x, y ] on Lhs
 		idnts = union(idents(stmt.Key), idents(stmt.Value))
+	case *ast.TypeSwitchStmt:
+		// The assigned variable does not have a types.Var
+		// associated in this stmt; rather, the uses of that
+		// variable in the case clauses have several different
+		// types.Vars associated with them, depending on type
+		if asgt, ok := stmt.Assign.(*ast.AssignStmt); ok {
+			if asgtId, ok := asgt.Lhs[0].(*ast.Ident); ok {
+				// Collect all uses of that variable name in
+				// the body.  This is an overapproximation,
+				// but it suffices for live variables
+				// analysis
+				ast.Inspect(stmt.Body, func(n ast.Node) bool {
+					if usedId, ok := n.(*ast.Ident); ok && usedId.Name == asgtId.Name {
+						idnts = union(idnts, idents(n))
+					}
+					return true
+				})
+			}
+		}
 	}
 
 	var vars []*types.Var
@@ -108,6 +127,7 @@ func uses(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 			}
 		case *ast.BlockStmt: // no uses, skip
 		case *ast.BranchStmt: // no uses, skip
+		case *ast.CaseClause: // no uses, skip
 		case *ast.DeclStmt: // no uses, skip
 		case *ast.DeferStmt:
 			idnts = idents(stmt.Call)

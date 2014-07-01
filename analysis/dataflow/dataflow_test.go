@@ -22,6 +22,29 @@ const (
 	END   = 100000000 //if there's this many statements, may god have mercy on your soul
 )
 
+func TestLiveTypeSwitch(t *testing.T) {
+	c := getWrapper(t, `
+  package main
+
+  func main() {
+    var x interface{} = 1.2 // 1
+    switch i := x.(type) {  // 2 (switch), 3 (assignment)
+    case int:               // 4
+      fooi(i)               // 5
+    }
+  }
+  func fooi(n int) {}
+  func foof(n float64) {}`)
+
+	c.expectLive(t, START)
+	c.expectLive(t, 1, "x")
+	c.expectLive(t, 2, "x", "i")
+	c.expectLive(t, 3, "i")
+	c.expectLive(t, 4, "i")
+	c.expectLive(t, 5)
+	c.expectLive(t, END)
+}
+
 func TestLiveLabeledLoopAndSwitch(t *testing.T) {
 	c := getWrapper(t, `
   package main
