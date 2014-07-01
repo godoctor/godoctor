@@ -23,7 +23,7 @@ import (
 	"golang-refactoring.org/go-doctor/text"
 )
 
-// A renameRefactoring is used to rename identifiers in Go programs.
+// A Rename refactoring is used to rename identifiers in Go programs.
 type Rename struct {
 	refactoringBase
 	newName   string
@@ -99,7 +99,7 @@ func (r *Rename) isIdentifierValid(newName string) bool {
 }
 
 func (r *Rename) rename(ident *ast.Ident) {
-	if !r.IdentifierExists(ident) {
+	if !r.identExists(ident) {
 		search := names.NewSearchEngine(r.program)
 		searchResult, err := search.FindOccurrences(ident)
 		if err != nil {
@@ -118,7 +118,7 @@ func (r *Rename) rename(ident *ast.Ident) {
 }
 
 //IdentifierExists checks if there already exists an Identifier with the newName,with in the scope of the oldname.
-func (r *Rename) IdentifierExists(ident *ast.Ident) bool {
+func (r *Rename) identExists(ident *ast.Ident) bool {
 
 	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
 	search := names.NewSearchEngine(r.program)

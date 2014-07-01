@@ -17,15 +17,15 @@ import (
 	"golang-refactoring.org/go-doctor/text"
 )
 
-// A ShortAssignmentRefactoring changes short assignment statements (n := 5)
-// into explicitly-typed variable declarations (var n int = 5).
+// A ShortAssign refactoring changes short assignment statements (n := 5) into
+// explicitly-typed variable declarations (var n int = 5).
 type ShortAssign struct {
 	refactoringBase
 }
 
 func (r *ShortAssign) Description() *Description {
 	return &Description{
-		Name:    "Short Assignment Refactoring",
+		Name:    "Convert := to var",
 		Params:  nil,
 		Quality: Development,
 	}

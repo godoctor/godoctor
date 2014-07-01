@@ -15,15 +15,15 @@ import (
 	"golang-refactoring.org/go-doctor/text"
 )
 
-// A reverseAssignmentRefactoring changes explicitly-typed variable
-// declarations (var n int = 5) into short assignment statements (n := 5).
+// A ReverseAssign refactoring changes explicitly-typed variable declarations
+// (var n int = 5) into short assignment statements (n := 5).
 type ReverseAssign struct {
 	refactoringBase
 }
 
 func (r *ReverseAssign) Description() *Description {
 	return &Description{
-		Name:    "Reverse Assignment Refactoring",
+		Name:    "Convert var to :=",
 		Params:  nil,
 		Quality: Development,
 	}
