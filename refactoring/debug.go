@@ -79,7 +79,7 @@ func (r *debugRefactoring) Run(config *Config) *Result {
 			return &r.Result
 		}
 		if !r.Log.ContainsErrors() {
-			r.Edits[r.filename(r.file)].Add(text.OffsetLength{0, 0}, b.String())
+			r.Edits[r.filename(r.file)].Add(text.Extent{0, 0}, b.String())
 		}
 	}
 

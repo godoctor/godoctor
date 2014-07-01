@@ -131,7 +131,7 @@ type Config struct {
 	// file containing the text selection.
 	Scope []string
 	// The range of text on which to invoke the refactoring.
-	Selection text.TextSelection
+	Selection text.Selection
 	// Refactoring-specific arguments.  To determine what arguments are
 	// required for each refactoring, see Refactoring.Description().Params.
 	// For example, for the Rename refactoring, you must specify a new name

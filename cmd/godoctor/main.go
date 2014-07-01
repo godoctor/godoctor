@@ -333,7 +333,7 @@ func parseLineCol(linecol string) (int, int) {
 }
 
 // e.g. pos=3,6:3,9
-func parsePositionToTextSelection(pos string) (t text.TextSelection, err error) {
+func parsePositionToTextSelection(pos string) (t text.Selection, err error) {
 	args := strings.Split(pos, ":")
 
 	if len(args) < 2 {
@@ -349,7 +349,7 @@ func parsePositionToTextSelection(pos string) (t text.TextSelection, err error) 
 		return
 	}
 
-	t = text.TextSelection{StartLine: sl, StartCol: sc,
+	t = text.Selection{StartLine: sl, StartCol: sc,
 		EndLine: el, EndCol: ec}
 
 	return

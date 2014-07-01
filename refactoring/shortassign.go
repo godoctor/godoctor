@@ -57,7 +57,7 @@ func (r *shortAssignRefactoring) Run(config *Config) *Result {
 
 func (r *shortAssignRefactoring) createEditSet(assign *ast.AssignStmt) {
 	start, length := r.offsetLength(assign)
-	r.Edits[r.filename(r.file)].Add(text.OffsetLength{start, length}, r.createReplacementString(assign))
+	r.Edits[r.filename(r.file)].Add(text.Extent{start, length}, r.createReplacementString(assign))
 }
 
 func (r *shortAssignRefactoring) rhsExprs(assign *ast.AssignStmt) []string {

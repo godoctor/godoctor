@@ -149,7 +149,7 @@ func (r *renameRefactoring) IdentifierExists(ident *ast.Ident) bool {
 }
 
 //addOccurrences adds all the Occurences to the editset
-func (r *renameRefactoring) addOccurrences(allOccurrences map[string][]text.OffsetLength) {
+func (r *renameRefactoring) addOccurrences(allOccurrences map[string][]text.Extent) {
 	for filename, occurrences := range allOccurrences {
 		for _, occurrence := range occurrences {
 			if r.Edits[filename] == nil {
@@ -161,11 +161,11 @@ func (r *renameRefactoring) addOccurrences(allOccurrences map[string][]text.Offs
 	}
 }
 
-func (r *renameRefactoring) addFileSystemChanges(allOccurrences map[string][]text.OffsetLength, ident *ast.Ident) {
+func (r *renameRefactoring) addFileSystemChanges(allOccurrences map[string][]text.Extent, ident *ast.Ident) {
 	for filename, _ := range allOccurrences {
 
 		if filepath.Base(filepath.Dir(filename)) == ident.Name && allFilesinDirectoryhaveSamePkg(filepath.Dir(filename), ident) {
-			chg := &filesystem.FSRename{filepath.Dir(filename), r.newName}
+			chg := &filesystem.Rename{filepath.Dir(filename), r.newName}
 			r.FSChanges = append(r.FSChanges, chg)
 		}
 	}

@@ -11,16 +11,16 @@ import (
 )
 
 func TestLogEntry(t *testing.T) {
-	e := LogEntry{false, INFO, "Message", "", text.OffsetLength{}}
+	e := LogEntry{false, INFO, "Message", "", text.Extent{}}
 	assertEquals("Message", e.String(), t)
-	e = LogEntry{false, WARNING, "Message", "", text.OffsetLength{}}
+	e = LogEntry{false, WARNING, "Message", "", text.Extent{}}
 	assertEquals("Warning: Message", e.String(), t)
-	e = LogEntry{false, ERROR, "Message", "", text.OffsetLength{}}
+	e = LogEntry{false, ERROR, "Message", "", text.Extent{}}
 	assertEquals("Error: Message", e.String(), t)
-	e = LogEntry{false, FATAL_ERROR, "Message", "", text.OffsetLength{}}
+	e = LogEntry{false, FATAL_ERROR, "Message", "", text.Extent{}}
 	assertEquals("ERROR: Message", e.String(), t)
 
-	e = LogEntry{false, WARNING, "Msg", "fn", text.OffsetLength{1, 2}}
+	e = LogEntry{false, WARNING, "Msg", "fn", text.Extent{1, 2}}
 	assertEquals("Warning: fn, offset 1, length 2: Msg", e.String(), t)
 }
 
@@ -44,5 +44,3 @@ func assertEquals(expected string, actual string, t *testing.T) {
 		t.Fatalf("Expected: %s Actual: %s", expected, actual)
 	}
 }
-
-

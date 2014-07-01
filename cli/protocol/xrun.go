@@ -29,7 +29,7 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 	}
 	// setup TextSelection
 	textselection := input["textselection"].(map[string]interface{})
-	ts := text.TextSelection{
+	ts := text.Selection{
 		Filename:  filepath.Join(state.Dir, textselection["filename"].(string)),
 		StartLine: int(textselection["startline"].(float64)),
 		StartCol:  int(textselection["startcol"].(float64)),
