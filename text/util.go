@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// This file defines miscellaneous structs and utility methods that are used
-// throughout the system.
+// This file defines text.Extent and text.Selection, which describe regions
+// within a particular text file.
 
 package text
 

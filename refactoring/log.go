@@ -7,14 +7,12 @@
 // generated during the refactoring process.  If the log is nonempty, it should
 // be displayed to the user before a refactoring's changes are applied.
 //
-// Terminology:
-//
-// Initial entries are those that are added when the program is first loaded,
-// before the refactoring begins.  They are used to record semantic errors that
-// are present file before refactoring starts.  Some refactorings work in the
-// presence of errors, and others may not.  Therefore, there are two methods
-// to modify initial entries: one that converts initial errors to warnings, and
-// another that removes initial entries altogether.
+// TERMINOLOGY: "Initial entries" are those that are added when the program is
+// first loaded, before the refactoring begins.  They are used to record
+// semantic errors that are present file before refactoring starts.  Some
+// refactorings work in the presence of errors, and others may not.  Therefore,
+// there are two methods to modify initial entries: one that converts initial
+// errors to warnings, and another that removes initial entries altogether.
 
 package refactoring
 
@@ -197,22 +195,6 @@ func (log *Log) String() string {
 		buffer.WriteString("\n")
 	}
 	return buffer.String()
-}
-
-// ContainsNonInitialErrors returns true if the log contains at least one error
-// that is not an initial entry.
-func (log *Log) ContainsNonInitialErrors() bool {
-	return log.contains(func(entry *Entry) bool {
-		return entry.Severity >= Error && !entry.isInitial
-	})
-}
-
-// ContainsInitialErrors returns true if the log contains at least one error
-// that is also an initial entry.
-func (log *Log) ContainsInitialErrors() bool {
-	return log.contains(func(entry *Entry) bool {
-		return entry.Severity >= Error && entry.isInitial
-	})
 }
 
 // ContainsErrors returns true if the log contains at least one error.  The

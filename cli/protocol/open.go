@@ -1,4 +1,5 @@
 // TODO open with version
+
 package protocol
 
 type Open struct {

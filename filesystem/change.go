@@ -2,7 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// This file defines changes that can be made to a FileSystem.
+// This file defines changes that can be made to a FileSystem.  It defines the
+// Change interface, as well as objects representing various types of changes
+// to a file system.
 
 package filesystem
 

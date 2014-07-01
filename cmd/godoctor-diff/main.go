@@ -1,4 +1,4 @@
-// Copyright 2013 The Go Authors. All rights reserved.
+// Copyright 2014 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 // differences between them, and writes a unified diff to standard output.  It
 // is intended for debugging, not for production use.
 
+// The godoctor-diff command computes a unified diff between two files.
 package main
 
 import (

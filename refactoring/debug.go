@@ -1,4 +1,14 @@
-// Copyright 2014 The Go Authors. All rights reserved.  // Use of this source code is governed by a BSD-style // license that can be found in the LICENSE file.  // This file defines a "debug" refactoring, which is not really a refactoring // at all.  It does not change any files; rather, it is invoked to print // information about the Go refactoring engine and its internals.  For example, // it can display the AST for a file, or display what package(s) are loaded, or // display what identifiers resolve to what objects.
+// Copyright 2014 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// This file defines a "debug" refactoring, which is not really a refactoring
+// at all.  It does not change any files; rather, it is invoked to print
+// information about the Go refactoring engine and its internals.  For example,
+// it can display the AST for a file, output a GraphViz DOT file with a file's
+// control flow graphs, display what package(s) are loaded, or display what
+// identifiers resolve to what objects.
+
 package refactoring
 
 import (

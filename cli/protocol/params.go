@@ -1,4 +1,5 @@
 // TODO validation of file and textselection fields
+
 package protocol
 
 import (

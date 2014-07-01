@@ -2,8 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package cfg contains an implementation for constructing a
-// statement-level Control Flow Graph (CFG) for Go source code.
+// Package cfg provides intraprocedural control flow graphs (CFGs) with
+// statement-level granularity, i.e., CFGs whose nodes correspond 1-1 to the
+// Stmt nodes from an abstract syntax tree.
 package cfg
 
 import (
