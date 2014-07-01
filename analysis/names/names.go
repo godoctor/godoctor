@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package doctor
+package names
 
 import (
 	"fmt"
@@ -13,10 +13,15 @@ import (
 
 	"code.google.com/p/go.tools/go/loader"
 	"code.google.com/p/go.tools/go/types"
+	"golang-refactoring.org/go-doctor/text"
 )
 
 type SearchEngine struct {
 	program *loader.Program
+}
+
+func NewSearchEngine(program *loader.Program) *SearchEngine {
+	return &SearchEngine{program}
 }
 
 /* -=-=- Search Across Interfaces =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
@@ -40,11 +45,11 @@ func (r *SearchEngine) FindDeclarationsAcrossInterfaces(ident *ast.Ident) (map[t
 	pkgInfo := r.pkgInfo(r.fileContaining(ident))
 	obj := pkgInfo.ObjectOf(ident)
 
-	if obj == nil && !r.isPackageName(ident) {
+	if obj == nil && !r.IsPackageName(ident) {
 		return nil, fmt.Errorf("Unable to find declaration of %s", ident.Name)
 	}
 
-	if isMethod(obj) {
+	if IsMethod(obj) {
 		// If obj is a method, search across interfaces: there may be
 		// many other methods that need to change to ensure that all
 		// types continue to implement the same interfaces
@@ -56,13 +61,13 @@ func (r *SearchEngine) FindDeclarationsAcrossInterfaces(ident *ast.Ident) (map[t
 
 }
 
-// isMethod reports whether obj is a method.
-func isMethod(obj types.Object) bool {
-	return methodReceiver(obj) != nil
+// IsMethod reports whether obj is a method.
+func IsMethod(obj types.Object) bool {
+	return MethodReceiver(obj) != nil
 }
 
-// methodReceiver returns the receiver if obj is a method and nil otherwise.
-func methodReceiver(obj types.Object) *types.Var {
+// MethodReceiver returns the receiver if obj is a method and nil otherwise.
+func MethodReceiver(obj types.Object) *types.Var {
 	if obj, ok := obj.(*types.Func); ok {
 		return obj.Type().(*types.Signature).Recv()
 	}
@@ -87,7 +92,7 @@ func (r *SearchEngine) reachableMethods(ident *ast.Ident, obj *types.Func, pkgIn
 	}
 	for method := range methods {
 		methodInterfaces[method] = map[*types.Interface]bool{}
-		recv := methodReceiver(method).Type()
+		recv := MethodReceiver(method).Type()
 		for iface := range interfaces {
 			if types.Implements(recv, iface) {
 				methodInterfaces[method][iface] = true
@@ -173,7 +178,7 @@ func (r *SearchEngine) methodDeclsMatchingSig(ident *ast.Ident, sig *types.Signa
 // TODO(review D7): I think I mentioned this before but this function has a
 // strange signature: it mixes objects from two non-adjacent layers of the
 // design abstraction: semantic objects (e.g. types.Object) and concrete syntax
-// (OffsetLength). In between these two layers is that of abstract syntax (e.g.
+// (text.OffsetLength). In between these two layers is that of abstract syntax (e.g.
 // ast.Ident). This suggests that the function is doing too much; perhaps it
 // should just be returning a set of *ast.Idents for a later function to map
 // down to concrete syntax.
@@ -182,25 +187,25 @@ func (r *SearchEngine) methodDeclsMatchingSig(ident *ast.Ident, sig *types.Signa
 // indirect references to the same object as given identifier.  The returned
 // map maps filenames to a slice of (offset, length) pairs describing locations
 // at which the given identifier is referenced.
-func (r *SearchEngine) FindOccurrences(ident *ast.Ident) (map[string][]OffsetLength, error) {
+func (r *SearchEngine) FindOccurrences(ident *ast.Ident) (map[string][]text.OffsetLength, error) {
 
 	var pkgs map[*loader.PackageInfo]bool
-	var result map[string][]OffsetLength
+	var result map[string][]text.OffsetLength
 
 	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
 
-	if obj == nil && !r.isPackageName(ident) {
+	if obj == nil && !r.IsPackageName(ident) {
 
 		return nil, fmt.Errorf("Unable to find declaration of %s", ident.Name)
 	}
-	if r.isPackageName(ident) {
+	if r.IsPackageName(ident) {
 		result = r.occurrencesofpkg(ident)
 		pkgs = allPackages(r.program)
 
 	} else {
 
 		var decls map[types.Object]bool
-		if isMethod(obj) {
+		if IsMethod(obj) {
 			var err error
 			decls, err = r.FindDeclarationsAcrossInterfaces(ident)
 			if err != nil {
@@ -219,8 +224,8 @@ func (r *SearchEngine) FindOccurrences(ident *ast.Ident) (map[string][]OffsetLen
 
 // occurrences returns the source locations of all identifiers that resolve
 // to one of the given objects.
-func (r *SearchEngine) occurrences(decls map[types.Object]bool) map[string][]OffsetLength {
-	result := make(map[string][]OffsetLength)
+func (r *SearchEngine) occurrences(decls map[types.Object]bool) map[string][]text.OffsetLength {
+	result := make(map[string][]text.OffsetLength)
 	for pkgInfo := range r.packages(decls) {
 		for id, obj := range pkgInfo.Defs {
 			if decls[obj] {
@@ -241,9 +246,9 @@ func (r *SearchEngine) occurrences(decls map[types.Object]bool) map[string][]Off
 	return result
 }
 
-func (r *SearchEngine) occurrencesofpkg(ident *ast.Ident) map[string][]OffsetLength {
+func (r *SearchEngine) occurrencesofpkg(ident *ast.Ident) map[string][]text.OffsetLength {
 
-	result := make(map[string][]OffsetLength)
+	result := make(map[string][]text.OffsetLength)
 
 	for pkgInfo := range allPackages(r.program) {
 		for id, obj := range pkgInfo.Defs {
@@ -270,11 +275,11 @@ func (r *SearchEngine) position(id *ast.Ident) token.Position {
 	return r.program.Fset.Position(id.NamePos)
 }
 
-func (r *SearchEngine) offsetLength(id *ast.Ident) OffsetLength {
+func (r *SearchEngine) offsetLength(id *ast.Ident) text.OffsetLength {
 	position := r.position(id)
 	offset := position.Offset
 	length := len(id.Name)
-	return OffsetLength{offset, length}
+	return text.OffsetLength{offset, length}
 }
 
 // packages returns a set of PackageInfos that may reference the given
@@ -310,7 +315,7 @@ func allPackages(prog *loader.Program) map[*loader.PackageInfo]bool {
 
 // occurrencesincomments checks if the name of the selected identifier occurs as a word in comments,if true then
 // all the source locations of name in comments are returned.
-func (r *SearchEngine) occurrencesInComments(name string, pkgs map[*loader.PackageInfo]bool, result map[string][]OffsetLength) map[string][]OffsetLength {
+func (r *SearchEngine) occurrencesInComments(name string, pkgs map[*loader.PackageInfo]bool, result map[string][]text.OffsetLength) map[string][]text.OffsetLength {
 	for pkgInfo := range pkgs {
 		for _, f := range pkgInfo.Files {
 			for _, comment := range f.Comments {
@@ -326,7 +331,7 @@ func (r *SearchEngine) occurrencesInComments(name string, pkgs map[*loader.Packa
 // occurrencesInFileComments finds the source location of  selected identifier names in
 // comments, appends them to the already found source locations of
 // selected identifier objects (result), and returns the result.
-func (r *SearchEngine) occurrencesInFileComments(f *ast.File, comment *ast.CommentGroup, name string, result map[string][]OffsetLength, prog *loader.Program) map[string][]OffsetLength {
+func (r *SearchEngine) occurrencesInFileComments(f *ast.File, comment *ast.CommentGroup, name string, result map[string][]text.OffsetLength, prog *loader.Program) map[string][]text.OffsetLength {
 	var whitespaceindex int = 1
 	regexpstring := fmt.Sprintf("[\\PL]%s[\\PL]|//%s[\\PL]|/*%s[\\PL]|[\\PL]%s$", name, name, name, name)
 	re := regexp.MustCompile(regexpstring)
@@ -335,12 +340,22 @@ func (r *SearchEngine) occurrencesInFileComments(f *ast.File, comment *ast.Comme
 		offset := prog.Fset.Position(comment.List[0].Slash).Offset + matchindex[0] + whitespaceindex
 		length := len(name)
 		filename := prog.Fset.Position(f.Pos()).Filename
-		result[filename] = append(result[filename], OffsetLength{offset, length})
+		result[filename] = append(result[filename], text.OffsetLength{offset, length})
 	}
 	return result
 }
 
 /* -=-=- Utility Methods -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
+
+func (r *SearchEngine) IsPackageName(ident *ast.Ident) bool {
+	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
+	if r.pkgInfo(r.fileContaining(ident)).Pkg.Name() == ident.Name && obj == nil {
+		return true
+	}
+
+	return false
+}
+
 // TODO: These are duplicated from refactoring.go
 func (r *SearchEngine) fileContaining(node ast.Node) *ast.File {
 	tfile := r.program.Fset.File(node.Pos())

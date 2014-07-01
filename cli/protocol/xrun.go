@@ -8,7 +8,9 @@ import (
 	"regexp"
 	"strings"
 
-	"golang-refactoring.org/go-doctor/doctor"
+	"golang-refactoring.org/go-doctor/filesystem"
+	"golang-refactoring.org/go-doctor/refactoring"
+	"golang-refactoring.org/go-doctor/text"
 )
 
 type XRun struct {
@@ -27,7 +29,7 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 	}
 	// setup TextSelection
 	textselection := input["textselection"].(map[string]interface{})
-	ts := doctor.TextSelection{
+	ts := text.TextSelection{
 		Filename:  filepath.Join(state.Dir, textselection["filename"].(string)),
 		StartLine: int(textselection["startline"].(float64)),
 		StartCol:  int(textselection["startcol"].(float64)),
@@ -36,9 +38,9 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 	}
 
 	// get refactoring
-	refactoring := doctor.GetRefactoring(input["transformation"].(string))
+	refac := refactoring.GetRefactoring(input["transformation"].(string))
 
-	config := &doctor.Config{
+	config := &refactoring.Config{
 		FileSystem: state.Filesystem,
 		Scope:      nil,
 		Selection:  ts,
@@ -46,7 +48,7 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 	}
 
 	// run
-	result := refactoring.Run(config)
+	result := refac.Run(config)
 
 	// grab logs
 	logs := make([]map[string]interface{}, 0)
@@ -54,13 +56,13 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 	for _, entry := range result.Log.Entries {
 		var severity string
 		switch entry.Severity {
-		case doctor.INFO:
+		case refactoring.INFO:
 			// No prefix
-		case doctor.WARNING:
+		case refactoring.WARNING:
 			severity = "warning"
-		case doctor.ERROR:
+		case refactoring.ERROR:
 			severity = "error"
-		case doctor.FATAL_ERROR:
+		case refactoring.FATAL_ERROR:
 			severity = "fatal"
 			fatalError = true
 		}
@@ -69,7 +71,7 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 	}
 	// any fatal errors? return without giving changes
 	if fatalError {
-		return Reply{map[string]interface{}{"reply": "OK", "description": refactoring.Description().Name, "log": logs}}, nil
+		return Reply{map[string]interface{}{"reply": "OK", "description": refac.Description().Name, "log": logs}}, nil
 	}
 
 	changes := make([]map[string]string, 0)
@@ -77,9 +79,9 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 	// if mode == patch or no mode was given
 	if mode, found := input["mode"]; !found || mode.(string) == "patch" {
 		for f, e := range result.Edits {
-			var p *doctor.Patch
+			var p *text.Patch
 			var err error
-			p, err = doctor.CreatePatchForFile(e, f)
+			p, err = text.CreatePatchForFile(e, f)
 			if err != nil {
 				return Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}}, err
 			}
@@ -92,7 +94,7 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 		}
 	} else {
 		for f, e := range result.Edits {
-			content, err := doctor.ApplyToFile(e, f)
+			content, err := text.ApplyToFile(e, f)
 			if err != nil {
 				return Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}}, err
 			}
@@ -106,20 +108,20 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 		fschanges = make([]map[string]string, len(result.FSChanges))
 		for i, change := range result.FSChanges {
 			switch change := change.(type) {
-			case *doctor.FSCreateFile:
+			case *filesystem.FSCreateFile:
 				fschanges[i] = map[string]string{"change": "create", "file": change.Path, "content": change.Contents}
-			case *doctor.FSRemove:
+			case *filesystem.FSRemove:
 				fschanges[i] = map[string]string{"change": "delete", "path": change.Path}
-			case *doctor.FSRename:
+			case *filesystem.FSRename:
 				fschanges[i] = map[string]string{"change": "rename", "from": change.Path, "to": change.NewName}
 			}
 		}
 		// return with filesystem changes
-		return Reply{map[string]interface{}{"reply": "OK", "description": refactoring.Description().Name, "log": logs, "files": changes, "fsChanges": fschanges}}, nil
+		return Reply{map[string]interface{}{"reply": "OK", "description": refac.Description().Name, "log": logs, "files": changes, "fsChanges": fschanges}}, nil
 	}
 
 	// return without filesystem changes
-	return Reply{map[string]interface{}{"reply": "OK", "description": refactoring.Description().Name, "log": logs, "files": changes}}, nil
+	return Reply{map[string]interface{}{"reply": "OK", "description": refac.Description().Name, "log": logs, "files": changes}}, nil
 }
 
 // TODO validate TextSelection, FileSelection, arguments
@@ -130,7 +132,7 @@ func (x *XRun) Validate(state *State, input map[string]interface{}) (bool, error
 
 	// check transformation is valid
 	var valid bool
-	for shortName, _ := range doctor.AllRefactorings() {
+	for shortName, _ := range refactoring.AllRefactorings() {
 		if shortName == input["transformation"].(string) {
 			valid = true
 		}

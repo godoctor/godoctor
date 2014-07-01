@@ -10,7 +10,7 @@ import (
 	"code.google.com/p/go.tools/go/loader"
 	"code.google.com/p/go.tools/go/types"
 
-	"golang-refactoring.org/go-doctor/extras/cfg"
+	"golang-refactoring.org/go-doctor/analysis/cfg"
 )
 
 const (

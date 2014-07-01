@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package doctor
+package text
 
 import (
 	"bytes"
@@ -13,7 +13,7 @@ import (
 	"testing"
 )
 
-const diffTestDir = "../testdata/diff/"
+const diffTestDir = "testdata/diff/"
 
 func TestDiffs(t *testing.T) {
 	strings := []string{"", "ABCABBA", "CBABAC"}
@@ -31,7 +31,9 @@ func TestDiffs(t *testing.T) {
 func testDiffs(a, b string, t *testing.T) {
 	diff := Diff(strings.Split(a, ""), strings.Split(b, ""))
 	result, err := ApplyToString(diff, a)
-	failIfError(err, t)
+	if err != nil {
+		t.Fatal(err)
+	}
 	assertEquals(b, result, t)
 }
 
@@ -145,7 +147,9 @@ func TestCreatePatch(t *testing.T) {
 
 func TestUnifiedDiff(t *testing.T) {
 	testDirs, err := ioutil.ReadDir(diffTestDir)
-	failIfError(err, t)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, testDirInfo := range testDirs {
 		if testDirInfo.IsDir() {
 			fmt.Printf("Diff Test %s\n", testDirInfo.Name())
@@ -160,7 +164,9 @@ func TestUnifiedDiff(t *testing.T) {
 
 func readFile(path string, t *testing.T) string {
 	bytes, err := ioutil.ReadFile(path)
-	failIfError(err, t)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return string(bytes)
 }
 

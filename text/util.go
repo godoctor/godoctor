@@ -5,7 +5,7 @@
 // This file defines miscellaneous structs and utility methods that are used
 // throughout the system.
 
-package doctor
+package text
 
 import (
 	"fmt"

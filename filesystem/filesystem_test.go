@@ -2,13 +2,15 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package doctor
+package filesystem
 
 import (
 	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"golang-refactoring.org/go-doctor/text"
 )
 
 // Use zz_* for test file and directory names, since those paths are in
@@ -95,10 +97,10 @@ func TestEditedFileSystem(t *testing.T) {
 	if err := lfs.CreateFile(testFile, contents); err != nil {
 		t.Fatal(err)
 	}
-	es := NewEditSet()
-	es.Add(OffsetLength{3, 5}, "xyz")
+	es := text.NewEditSet()
+	es.Add(text.OffsetLength{3, 5}, "xyz")
 	expected := "123xyz9\nABCDEFGHIJ"
-	fs := NewEditedFileSystem(map[string]*EditSet{testFile: es})
+	fs := NewEditedFileSystem(map[string]*text.EditSet{testFile: es})
 	editedFile, err := fs.OpenFile(testFile)
 	if err != nil {
 		os.Remove(testFile)

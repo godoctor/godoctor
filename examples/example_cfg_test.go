@@ -1,4 +1,4 @@
-package cfg_test
+package examples
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"go/parser"
 	"go/token"
 
-	"golang-refactoring.org/go-doctor/extras/cfg"
+	"golang-refactoring.org/go-doctor/analysis/cfg"
 )
 
 func ExampleCFG() {

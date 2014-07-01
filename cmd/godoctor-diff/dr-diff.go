@@ -17,7 +17,7 @@ import (
 	"os"
 	"syscall"
 
-	"golang-refactoring.org/go-doctor/doctor"
+	"golang-refactoring.org/go-doctor/text"
 )
 
 var helpFlag = flag.Bool("h", false, "Prints this help information")
@@ -52,7 +52,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	editSet := doctor.Diff(file1, file2)
+	editSet := text.Diff(file1, file2)
 
 	file1Reader, err := os.OpenFile(args[0], syscall.O_RDWR, 0666)
 	if err != nil {

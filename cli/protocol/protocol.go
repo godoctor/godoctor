@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"golang-refactoring.org/go-doctor/doctor"
+	"golang-refactoring.org/go-doctor/filesystem"
 )
 
 type Reply struct {
@@ -20,7 +20,7 @@ type State struct {
 	State      int
 	Mode       string
 	Dir        string
-	Filesystem doctor.FileSystem
+	Filesystem filesystem.FileSystem
 }
 
 func Run(args []string) {

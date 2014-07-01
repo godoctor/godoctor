@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"regexp"
 
-	"golang-refactoring.org/go-doctor/doctor"
+	"golang-refactoring.org/go-doctor/filesystem"
 )
 
 type Setdir struct {
@@ -22,12 +22,12 @@ func (s *Setdir) Run(state *State, input map[string]interface{}) (Reply, error) 
 		// local mode? get directory and local filesystem
 		if mode == "local" {
 			state.Dir = input["directory"].(string)
-			state.Filesystem = doctor.NewLocalFileSystem()
+			state.Filesystem = filesystem.NewLocalFileSystem()
 		}
 
 		// web mode? get that virtual filesystem
 		if mode == "web" {
-			//state.Filesystem = doctor.NewVirtualFileSystem()
+			//state.Filesystem = filesystem.NewVirtualFileSystem()
 			return Reply{map[string]interface{}{"reply": "Error", "message": "Web mode not supported"}}, err
 		}
 
@@ -61,7 +61,7 @@ func (s *Setdir) Validate(state *State, input map[string]interface{}) (bool, err
 				return false, errors.New("\"directory\" key required if \"mode\" is local")
 			}
 			// validate directory
-			fs := doctor.NewLocalFileSystem()
+			fs := filesystem.NewLocalFileSystem()
 			_, err := fs.ReadDir(input["directory"].(string))
 			if err != nil {
 				return false, err

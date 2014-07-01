@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 // This file defines a refactoring to rename variables, functions, methods, structs,interfaces andpackages
-package doctor
+package refactoring
 
 import (
 	"go/ast"
@@ -16,6 +16,9 @@ import (
 	"strings"
 
 	"code.google.com/p/go.tools/go/types"
+	"golang-refactoring.org/go-doctor/analysis/names"
+	"golang-refactoring.org/go-doctor/filesystem"
+	"golang-refactoring.org/go-doctor/text"
 )
 
 // A renameRefactoring is used to rename identifiers in Go programs.
@@ -92,7 +95,7 @@ func (r *renameRefactoring) isIdentifierValid(newName string) bool {
 
 func (r *renameRefactoring) rename(ident *ast.Ident) {
 	if !r.IdentifierExists(ident) {
-		search := &SearchEngine{r.program}
+		search := names.NewSearchEngine(r.program)
 		searchResult, err := search.FindOccurrences(ident)
 		if err != nil {
 			r.Log.Log(FATAL_ERROR, err.Error())
@@ -100,7 +103,7 @@ func (r *renameRefactoring) rename(ident *ast.Ident) {
 		}
 
 		r.addOccurrences(searchResult)
-		if search.isPackageName(ident) {
+		if search.IsPackageName(ident) {
 			r.addFileSystemChanges(searchResult, ident)
 		}
 		//TODO: r.checkForErrors()
@@ -113,22 +116,22 @@ func (r *renameRefactoring) rename(ident *ast.Ident) {
 func (r *renameRefactoring) IdentifierExists(ident *ast.Ident) bool {
 
 	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
-	search := &SearchEngine{r.program}
+	search := names.NewSearchEngine(r.program)
 
-	if obj == nil && !search.isPackageName(ident) {
+	if obj == nil && !search.IsPackageName(ident) {
 
 		r.Log.Log(FATAL_ERROR, "unable to find declaration of selected identifier")
 		return true
 	}
 
-	if search.isPackageName(ident) {
+	if search.IsPackageName(ident) {
 		return false
 	}
 	identscope := obj.Parent()
 
-	if isMethod(obj) {
-		objfound, _, pointerindirections := types.LookupFieldOrMethod(methodReceiver(obj).Type(), obj.Pkg(), r.newName)
-		if isMethod(objfound) && pointerindirections {
+	if names.IsMethod(obj) {
+		objfound, _, pointerindirections := types.LookupFieldOrMethod(names.MethodReceiver(obj).Type(), obj.Pkg(), r.newName)
+		if names.IsMethod(objfound) && pointerindirections {
 			r.Log.Log(FATAL_ERROR, "newname already exists in scope,please select other value for the newname")
 			return true
 		} else {
@@ -146,11 +149,11 @@ func (r *renameRefactoring) IdentifierExists(ident *ast.Ident) bool {
 }
 
 //addOccurrences adds all the Occurences to the editset
-func (r *renameRefactoring) addOccurrences(allOccurrences map[string][]OffsetLength) {
+func (r *renameRefactoring) addOccurrences(allOccurrences map[string][]text.OffsetLength) {
 	for filename, occurrences := range allOccurrences {
 		for _, occurrence := range occurrences {
 			if r.Edits[filename] == nil {
-				r.Edits[filename] = NewEditSet()
+				r.Edits[filename] = text.NewEditSet()
 			}
 			r.Edits[filename].Add(occurrence, r.newName)
 
@@ -158,20 +161,11 @@ func (r *renameRefactoring) addOccurrences(allOccurrences map[string][]OffsetLen
 	}
 }
 
-func (r *SearchEngine) isPackageName(ident *ast.Ident) bool {
-	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
-	if r.pkgInfo(r.fileContaining(ident)).Pkg.Name() == ident.Name && obj == nil {
-		return true
-	}
-
-	return false
-}
-
-func (r *renameRefactoring) addFileSystemChanges(allOccurrences map[string][]OffsetLength, ident *ast.Ident) {
+func (r *renameRefactoring) addFileSystemChanges(allOccurrences map[string][]text.OffsetLength, ident *ast.Ident) {
 	for filename, _ := range allOccurrences {
 
 		if filepath.Base(filepath.Dir(filename)) == ident.Name && allFilesinDirectoryhaveSamePkg(filepath.Dir(filename), ident) {
-			chg := &FSRename{filepath.Dir(filename), r.newName}
+			chg := &filesystem.FSRename{filepath.Dir(filename), r.newName}
 			r.FSChanges = append(r.FSChanges, chg)
 		}
 	}

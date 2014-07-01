@@ -6,7 +6,7 @@
 // It is for testing only (and can be used as a template for building new
 // refactorings).
 
-package doctor
+package refactoring
 
 // A nullRefactoring makes no changes to a program.
 type nullRefactoring struct {

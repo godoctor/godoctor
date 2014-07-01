@@ -1,5 +1,5 @@
 // Copyright 2014 The Go Authors. All rights reserved.  // Use of this source code is governed by a BSD-style // license that can be found in the LICENSE file.  // This file defines a "debug" refactoring, which is not really a refactoring // at all.  It does not change any files; rather, it is invoked to print // information about the Go refactoring engine and its internals.  For example, // it can display the AST for a file, or display what package(s) are loaded, or // display what identifiers resolve to what objects.
-package doctor
+package refactoring
 
 import (
 	"bytes"
@@ -12,8 +12,10 @@ import (
 
 	"code.google.com/p/go.tools/go/types"
 
-	"golang-refactoring.org/go-doctor/extras/cfg"
-	"golang-refactoring.org/go-doctor/extras/dataflow"
+	"golang-refactoring.org/go-doctor/analysis/cfg"
+	"golang-refactoring.org/go-doctor/analysis/dataflow"
+	"golang-refactoring.org/go-doctor/analysis/names"
+	"golang-refactoring.org/go-doctor/text"
 )
 
 const usage = `Usage: debug <options>
@@ -77,7 +79,7 @@ func (r *debugRefactoring) Run(config *Config) *Result {
 			return &r.Result
 		}
 		if !r.Log.ContainsErrors() {
-			r.Edits[r.filename(r.file)].Add(OffsetLength{0, 0}, b.String())
+			r.Edits[r.filename(r.file)].Add(text.OffsetLength{0, 0}, b.String())
 		}
 	}
 
@@ -94,7 +96,7 @@ func (r *debugRefactoring) showAffected(out io.Writer) {
 	switch id := r.selectedNode.(type) {
 	case *ast.Ident:
 		fmt.Fprintf(out, "Affected Declarations:\n")
-		search := &SearchEngine{r.program}
+		search := names.NewSearchEngine(r.program)
 		searchResult, err := search.FindDeclarationsAcrossInterfaces(id)
 		if err != nil {
 			r.Log.Log(FATAL_ERROR, err.Error())
@@ -208,7 +210,7 @@ func (r *debugRefactoring) showReferences(out io.Writer) {
 	switch id := r.selectedNode.(type) {
 	case *ast.Ident:
 		fmt.Fprintf(out, "References to %s:\n", id.Name)
-		search := &SearchEngine{r.program}
+		search := names.NewSearchEngine(r.program)
 		searchResult, err := search.FindOccurrences(id)
 		if err != nil {
 			r.Log.Log(FATAL_ERROR, err.Error())

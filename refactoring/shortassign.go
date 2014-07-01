@@ -2,17 +2,19 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package doctor
+package refactoring
 
 import (
 	"bytes"
-	"code.google.com/p/go.tools/astutil"
-	"code.google.com/p/go.tools/go/types"
 	"fmt"
 	"go/ast"
 	"io"
 	"reflect"
 	"strings"
+
+	"code.google.com/p/go.tools/astutil"
+	"code.google.com/p/go.tools/go/types"
+	"golang-refactoring.org/go-doctor/text"
 )
 
 // A ShortAssignmentRefactoring changes short assignment statements (n := 5)
@@ -55,7 +57,7 @@ func (r *shortAssignRefactoring) Run(config *Config) *Result {
 
 func (r *shortAssignRefactoring) createEditSet(assign *ast.AssignStmt) {
 	start, length := r.offsetLength(assign)
-	r.Edits[r.filename(r.file)].Add(OffsetLength{start, length}, r.createReplacementString(assign))
+	r.Edits[r.filename(r.file)].Add(text.OffsetLength{start, length}, r.createReplacementString(assign))
 }
 
 func (r *shortAssignRefactoring) rhsExprs(assign *ast.AssignStmt) []string {

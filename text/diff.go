@@ -11,7 +11,7 @@
 // "diff - compare two files", section: "Diff -u or -U Output Format"
 // http://pubs.opengroup.org/onlinepubs/9699919799/utilities/diff.html
 
-package doctor
+package text
 
 import (
 	"bufio"

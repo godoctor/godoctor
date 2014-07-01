@@ -6,13 +6,14 @@ import (
 	"reflect"
 	"regexp"
 
-	"golang-refactoring.org/go-doctor/doctor"
+	"golang-refactoring.org/go-doctor/refactoring"
+	"golang-refactoring.org/go-doctor/text"
 )
 
 type List struct {
-	Fileselection []string             `json:"fileselection"`
-	Textselection doctor.TextSelection `json:"textselection"`
-	Quality       string               `json:"quality" chk:"in_testing|in_development|production"`
+	Fileselection []string           `json:"fileselection"`
+	Textselection text.TextSelection `json:"textselection"`
+	Quality       string             `json:"quality" chk:"in_testing|in_development|production"`
 }
 
 func (l *List) Run(state *State, input map[string]interface{}) (Reply, error) {
@@ -20,7 +21,7 @@ func (l *List) Run(state *State, input map[string]interface{}) (Reply, error) {
 	if valid, err := l.Validate(state, input); valid {
 		// get all of the refactoring names
 		namesList := make([]map[string]string, 0)
-		for shortName, refactoring := range doctor.AllRefactorings() {
+		for shortName, refactoring := range refactoring.AllRefactorings() {
 			namesList = append(namesList, map[string]string{"shortName": shortName, "name": refactoring.Description().Name})
 		}
 		return Reply{map[string]interface{}{"reply": "OK", "transformations": namesList}}, nil

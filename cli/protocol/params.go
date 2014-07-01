@@ -5,19 +5,20 @@ import (
 	"errors"
 	"reflect"
 
-	"golang-refactoring.org/go-doctor/doctor"
+	"golang-refactoring.org/go-doctor/refactoring"
+	"golang-refactoring.org/go-doctor/text"
 )
 
 type Params struct {
-	Transformation string               `json:"transformation"`
-	Fileselection  []string             `json:"fileselection"`
-	Textselection  doctor.TextSelection `json:"textselection"`
+	Transformation string             `json:"transformation"`
+	Fileselection  []string           `json:"fileselection"`
+	Textselection  text.TextSelection `json:"textselection"`
 }
 
 func (p *Params) Run(state *State, input map[string]interface{}) (Reply, error) {
-	//refactoring := doctor.GetRefactoring("rename")
+	//refactoring := refactoring.GetRefactoring("rename")
 	if valid, err := p.Validate(state, input); valid {
-		refactoring := doctor.GetRefactoring(input["transformation"].(string))
+		refactoring := refactoring.GetRefactoring(input["transformation"].(string))
 		// since GetParams returns just a string, assume it as prompt and label
 		params := make([]map[string]interface{}, 0)
 		for _, param := range refactoring.Description().Params {

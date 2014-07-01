@@ -6,7 +6,7 @@ import (
 	"code.google.com/p/go.tools/go/loader"
 	"code.google.com/p/go.tools/go/types"
 	"github.com/willf/bitset"
-	"golang-refactoring.org/go-doctor/extras/cfg"
+	"golang-refactoring.org/go-doctor/analysis/cfg"
 )
 
 // File defines live variables analysis for a statement

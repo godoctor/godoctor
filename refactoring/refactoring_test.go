@@ -50,7 +50,7 @@
 // a file named filename.go.stripPaths, and the refactoring's output will be
 // stripped of all occurrences of the absolute path to the .go file.
 
-package doctor
+package refactoring
 
 import (
 	"flag"
@@ -63,6 +63,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"golang-refactoring.org/go-doctor/filesystem"
+	"golang-refactoring.org/go-doctor/text"
 )
 
 const MARKER = "<<<<<"
@@ -76,7 +79,7 @@ const FSCHANGES_TXT = "fschanges.txt"
 var filterFlag = flag.String("filter", "",
 	"Only tests from directories containing this substring will be run")
 
-const directory = "../testdata/"
+const directory = "testdata/"
 
 func TestRefactorings(t *testing.T) {
 	testDirs, err := ioutil.ReadDir(directory)
@@ -203,7 +206,7 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 
 	args := InterpretArgs(remainder, r.Description().Params)
 
-	fileSystem := &LocalFileSystem{}
+	fileSystem := &filesystem.LocalFileSystem{}
 	config := &Config{
 		FileSystem: fileSystem,
 		Scope:      []string{mainFile},
@@ -220,7 +223,7 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 	}
 
 	for filename, edits := range result.Edits {
-		output, err := ApplyToFile(edits, filename)
+		output, err := text.ApplyToFile(edits, filename)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -353,7 +356,7 @@ func describe(s string) string {
 	return s
 }
 
-func splitMarker(filename string, marker string, t *testing.T) (refac string, selection TextSelection, remainder []string, result string) {
+func splitMarker(filename string, marker string, t *testing.T) (refac string, selection text.TextSelection, remainder []string, result string) {
 	filename, err := filepath.Abs(filename)
 	if err != nil {
 		t.Fatal(err)
@@ -367,7 +370,7 @@ func splitMarker(filename string, marker string, t *testing.T) (refac string, se
 	startCol := parseInt(fields[2], t)
 	endLine := parseInt(fields[3], t)
 	endCol := parseInt(fields[4], t)
-	selection = TextSelection{filename,
+	selection = text.TextSelection{filename,
 		startLine, startCol, endLine, endCol}
 	remainder = fields[5 : len(fields)-1]
 	result = fields[len(fields)-1]

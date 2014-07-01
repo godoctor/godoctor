@@ -6,7 +6,7 @@
 // FileSystem is supplied to the go/loader to read files, and it is also used
 // by the refactoring driver to commit refactorings' changes to disk.
 
-package doctor
+package filesystem
 
 import (
 	"bytes"
@@ -17,6 +17,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"golang-refactoring.org/go-doctor/text"
 )
 
 // The filename assigned to Go source code supplied on standard input.  It is
@@ -143,10 +145,10 @@ func (fi *fileInfo) Sys() interface{}   { return nil }
 // File/directory creation, renaming, and deletion are not currently supported.
 type EditedFileSystem struct {
 	LocalFileSystem
-	Edits map[string]*EditSet
+	Edits map[string]*text.EditSet
 }
 
-func NewEditedFileSystem(edits map[string]*EditSet) *EditedFileSystem {
+func NewEditedFileSystem(edits map[string]*text.EditSet) *EditedFileSystem {
 	return &EditedFileSystem{Edits: edits}
 }
 
@@ -155,9 +157,9 @@ func NewSingleEditedFileSystem(filename, contents string) (*EditedFileSystem, er
 	if err != nil {
 		return nil, err
 	}
-	es := NewEditSet()
-	es.Add(OffsetLength{0, size}, contents)
-	return NewEditedFileSystem(map[string]*EditSet{filename: es}), nil
+	es := text.NewEditSet()
+	es.Add(text.OffsetLength{0, size}, contents)
+	return NewEditedFileSystem(map[string]*text.EditSet{filename: es}), nil
 }
 
 func sizeOf(filename string) (int, error) {
@@ -208,7 +210,7 @@ func (fs *EditedFileSystem) OpenFile(path string) (io.ReadCloser, error) {
 	if !ok {
 		return localReader, nil
 	}
-	contents, err := ApplyToReader(editSet, localReader)
+	contents, err := text.ApplyToReader(editSet, localReader)
 	if err != nil {
 		localReader.Close()
 		return nil, err

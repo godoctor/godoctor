@@ -7,12 +7,14 @@
 // generated during the refactoring process.  If the log is nonempty, it should
 // be displayed to the user before a refactoring's changes are applied.
 
-package doctor
+package refactoring
 
 import (
 	"bytes"
 	"os"
 	"path/filepath"
+
+	"golang-refactoring.org/go-doctor/text"
 )
 
 // Every LogEntry has a severity: INFO, WARNING, ERROR, or FATAL_ERROR.  An
@@ -38,10 +40,10 @@ const (
 // imports, etc.) before the refactoring was started.
 type LogEntry struct {
 	isInitial bool
-	Severity  Severity     `json:"severity"`
-	Message   string       `json:"message"`
-	Filename  string       `json:"filename"`
-	Position  OffsetLength `json:"position"`
+	Severity  Severity          `json:"severity"`
+	Message   string            `json:"message"`
+	Filename  string            `json:"filename"`
+	Position  text.OffsetLength `json:"position"`
 }
 
 // A Log is used to store informational messages, warnings, and errors that
@@ -101,7 +103,7 @@ func (log *Log) LogInitial(severity Severity, message string,
 		Severity:  severity,
 		Message:   message,
 		Filename:  displayablePath(filename),
-		Position:  OffsetLength{offset, length}})
+		Position:  text.OffsetLength{offset, length}})
 }
 
 // displayablePath returns a path for the given file relative to the current
@@ -134,7 +136,7 @@ func (log *Log) Log(severity Severity, message string) {
 		Severity:  severity,
 		Message:   message,
 		Filename:  "",
-		Position:  OffsetLength{0, 0}})
+		Position:  text.OffsetLength{0, 0}})
 }
 
 func (log *Log) String() string {

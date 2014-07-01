@@ -6,9 +6,7 @@
 // several methods common to refactorings based on refactoringBase, including
 // a base implementation of the Run method.
 
-// Package doctor provides infrastructure for building refactorings and similar
-// source code-level program transformations for Go programs.
-package doctor
+package refactoring
 
 import (
 	"bytes"
@@ -26,6 +24,8 @@ import (
 	"code.google.com/p/go.tools/astutil"
 	"code.google.com/p/go.tools/go/loader"
 	"code.google.com/p/go.tools/go/types"
+	"golang-refactoring.org/go-doctor/filesystem"
+	"golang-refactoring.org/go-doctor/text"
 )
 
 // All available refactorings, keyed by a unique, one-short, all-lowercase name
@@ -123,7 +123,7 @@ type Description struct {
 // At a minimum, the FileSystem, Scope, and Selection arguments must be set.
 type Config struct {
 	// The file system on which the refactoring will operate.
-	FileSystem FileSystem
+	FileSystem filesystem.FileSystem
 	// A set of initial packages to load.  This slice will be passed as-is
 	// to the Config.FromArgs method of go.tools/go/loader.  Typically, the
 	// scope will consist of a package name or a file containing the
@@ -131,7 +131,7 @@ type Config struct {
 	// file containing the text selection.
 	Scope []string
 	// The range of text on which to invoke the refactoring.
-	Selection TextSelection
+	Selection text.TextSelection
 	// Refactoring-specific arguments.  To determine what arguments are
 	// required for each refactoring, see Refactoring.Description().Params.
 	// For example, for the Rename refactoring, you must specify a new name
@@ -169,13 +169,13 @@ type Result struct {
 	Log *Log
 	// Maps filenames to the text edits that should be applied to those
 	// files.
-	Edits map[string]*EditSet
+	Edits map[string]*text.EditSet
 	// File system changes: files and directories to rename, create, or
 	// delete after the Edits have been applied.  These changes should be
 	// applied in order, since changes later in the list may depend on the
 	// successful completion of changes earlier in the list (e.g., a path
 	// to a file may be invalid after its containing directory is renamed).
-	FSChanges []FileSystemChange
+	FSChanges []filesystem.FileSystemChange
 }
 
 const CGO_ERROR1 = "could not import C (cannot"
@@ -286,8 +286,8 @@ func (r *refactoringBase) Run(config *Config) *Result {
 		return &r.Result
 	}
 
-	r.Edits = map[string]*EditSet{r.filename(r.file): NewEditSet()}
-	r.FSChanges = []FileSystemChange{}
+	r.Edits = map[string]*text.EditSet{r.filename(r.file): text.NewEditSet()}
+	r.FSChanges = []filesystem.FileSystemChange{}
 
 	return &r.Result
 }
@@ -395,7 +395,7 @@ func (r *refactoringBase) checkForErrors() {
 	}
 	sourceFromFile := string(contents)
 
-	string, err := ApplyToString(r.Edits[r.filename(r.file)], sourceFromFile)
+	string, err := text.ApplyToString(r.Edits[r.filename(r.file)], sourceFromFile)
 	if err != nil {
 		r.Log.Log(ERROR, "Transformation produced invalid EditSet: "+
 			err.Error())
@@ -434,7 +434,7 @@ func (r *refactoringBase) findAnyOccurrences(name string) bool {
 	//if r.pkgInfo.ObjectOf(thisIdent) == decl {
 	//offset := r.program.Fset.Position(thisIdent.NamePos).Offset
 	//length := utf8.RuneCountInString(thisIdent.Name)
-	//result = append(result, OffsetLength{offset, length})
+	//result = append(result, text.OffsetLength{offset, length})
 	//}
 	//}
 

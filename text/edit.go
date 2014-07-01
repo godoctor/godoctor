@@ -5,7 +5,7 @@
 // This file defines EditSets, which describe changes (additions, deletions,
 // and modifications) to be made to a text file.
 
-package doctor
+package text
 
 import (
 	"bufio"

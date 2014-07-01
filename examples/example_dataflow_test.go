@@ -1,4 +1,4 @@
-package dataflow_test
+package examples
 
 import (
 	"fmt"
@@ -6,8 +6,8 @@ import (
 
 	"code.google.com/p/go.tools/go/loader"
 
-	"golang-refactoring.org/go-doctor/extras/cfg"
-	"golang-refactoring.org/go-doctor/extras/dataflow"
+	"golang-refactoring.org/go-doctor/analysis/cfg"
+	"golang-refactoring.org/go-doctor/analysis/dataflow"
 )
 
 func ExampleReachingDefs() {

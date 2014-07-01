@@ -5,12 +5,14 @@
 // A ReverseAssignmentRefactoring changes explicitly-typed variable declarations (var n int = 5)
 //into short assignment statements (n := 5)
 
-package doctor
+package refactoring
 
 import (
 	"fmt"
 	"go/ast"
 	"reflect"
+
+	"golang-refactoring.org/go-doctor/text"
 )
 
 type reverseAssignRefactoring struct {
@@ -63,5 +65,5 @@ func (r *reverseAssignRefactoring) replacement(decl *ast.GenDecl) string {
 func (r *reverseAssignRefactoring) callEditset(decl *ast.GenDecl) {
 	start, _ := r.offsetLength(decl)
 	repstrlen := r.program.Fset.Position(decl.Specs[0].(*ast.ValueSpec).Values[0].Pos()).Offset - r.program.Fset.Position(decl.Pos()).Offset
-	r.Edits[r.filename(r.file)].Add(OffsetLength{start, repstrlen}, r.replacement(decl))
+	r.Edits[r.filename(r.file)].Add(text.OffsetLength{start, repstrlen}, r.replacement(decl))
 }

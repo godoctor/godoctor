@@ -2,23 +2,25 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package doctor
+package refactoring
 
 import (
 	"testing"
+
+	"golang-refactoring.org/go-doctor/text"
 )
 
 func TestLogEntry(t *testing.T) {
-	e := LogEntry{false, INFO, "Message", "", OffsetLength{}}
+	e := LogEntry{false, INFO, "Message", "", text.OffsetLength{}}
 	assertEquals("Message", e.String(), t)
-	e = LogEntry{false, WARNING, "Message", "", OffsetLength{}}
+	e = LogEntry{false, WARNING, "Message", "", text.OffsetLength{}}
 	assertEquals("Warning: Message", e.String(), t)
-	e = LogEntry{false, ERROR, "Message", "", OffsetLength{}}
+	e = LogEntry{false, ERROR, "Message", "", text.OffsetLength{}}
 	assertEquals("Error: Message", e.String(), t)
-	e = LogEntry{false, FATAL_ERROR, "Message", "", OffsetLength{}}
+	e = LogEntry{false, FATAL_ERROR, "Message", "", text.OffsetLength{}}
 	assertEquals("ERROR: Message", e.String(), t)
 
-	e = LogEntry{false, WARNING, "Msg", "fn", OffsetLength{1, 2}}
+	e = LogEntry{false, WARNING, "Msg", "fn", text.OffsetLength{1, 2}}
 	assertEquals("Warning: fn, offset 1, length 2: Msg", e.String(), t)
 }
 
@@ -33,3 +35,14 @@ func TestLog(t *testing.T) {
 	expected += "Information\nERROR: A fatal error\n"
 	assertEquals(expected, log.String(), t)
 }
+
+// assertEquals is a utility method for unit tests that marks a function as
+// having failed if expected != actual
+// TODO(jeff): Copied from util_test.go
+func assertEquals(expected string, actual string, t *testing.T) {
+	if expected != actual {
+		t.Fatalf("Expected: %s Actual: %s", expected, actual)
+	}
+}
+
+

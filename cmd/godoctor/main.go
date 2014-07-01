@@ -38,8 +38,10 @@ import (
 	"strconv"
 	"strings"
 
-	"golang-refactoring.org/go-doctor/doctor"
-	"golang-refactoring.org/go-doctor/protocol"
+	"golang-refactoring.org/go-doctor/cli/protocol"
+	"golang-refactoring.org/go-doctor/filesystem"
+	"golang-refactoring.org/go-doctor/refactoring"
+	"golang-refactoring.org/go-doctor/text"
 )
 
 var (
@@ -73,7 +75,7 @@ The <flag> arguments are:
 
 `,
 		func() (s string) {
-			for key, _ := range doctor.AllRefactorings() {
+			for key, _ := range refactoring.AllRefactorings() {
 				s += "\n  " + key
 			}
 			return
@@ -107,7 +109,7 @@ func main() {
 		printError(fmt.Errorf("given flag requires args, see -h"))
 	}
 
-	r := doctor.GetRefactoring(args[0])
+	r := refactoring.GetRefactoring(args[0])
 
 	if *paramsFlag {
 		if r == nil {
@@ -130,11 +132,11 @@ func main() {
 			printError(err)
 		}
 		src = string(bytes)
-		filename = doctor.FakeStdinFilename
+		filename = filesystem.FakeStdinFilename
 		args = args[1:]
 	} else { // file given, e.g. go-doctor file refactor params...
 		filename = args[0]
-		r = doctor.GetRefactoring(args[1])
+		r = refactoring.GetRefactoring(args[1])
 		args = args[2:]
 	}
 
@@ -163,7 +165,7 @@ func main() {
 	if *diffFlag {
 		// compute diff for each file changed
 		for f, e := range edits {
-			var p *doctor.Patch
+			var p *text.Patch
 			var err error
 			if src != "" {
 				// TODO(reed): I suppose passing on stdin we can trust
@@ -171,7 +173,7 @@ func main() {
 				// if scope is passed then multiple files could be effected.
 				p, err = e.CreatePatch(strings.NewReader(src))
 			} else {
-				p, err = doctor.CreatePatchForFile(e, f)
+				p, err = text.CreatePatchForFile(e, f)
 			}
 			if err != nil {
 				printError(err)
@@ -190,13 +192,13 @@ func main() {
 	// write all edits out to new file contents in []byte; something to work with
 	for file, _ := range edits {
 		if src != "" {
-			str, err := doctor.ApplyToString(edits[file], src)
+			str, err := text.ApplyToString(edits[file], src)
 			if err != nil {
 				printError(err)
 			}
 			changes[file] = []byte(str)
 		} else {
-			changes[file], err = doctor.ApplyToFile(edits[file], file)
+			changes[file], err = text.ApplyToFile(edits[file], file)
 			if err != nil {
 				printError(err)
 			}
@@ -258,7 +260,7 @@ func printError(err error) {
 	os.Exit(2)
 }
 
-func printResults(refactoring string, l *doctor.Log, changes map[string][]byte) {
+func printResults(refactoring string, l *refactoring.Log, changes map[string][]byte) {
 	c := make(map[string]string)
 	var contents []string
 	var exitCode int
@@ -292,7 +294,7 @@ func printResults(refactoring string, l *doctor.Log, changes map[string][]byte) 
 	os.Exit(exitCode)
 }
 
-func printRefactoringParams(r doctor.Refactoring) {
+func printRefactoringParams(r refactoring.Refactoring) {
 	params := []string{}
 	for _, param := range r.Description().Params {
 		params = append(params, param.Label)
@@ -306,7 +308,7 @@ func printRefactoringParams(r doctor.Refactoring) {
 
 func printAllRefactorings(format string) {
 	var names []string
-	for name, _ := range doctor.AllRefactorings() {
+	for name, _ := range refactoring.AllRefactorings() {
 		names = append(names, name)
 	}
 
@@ -331,7 +333,7 @@ func parseLineCol(linecol string) (int, int) {
 }
 
 // e.g. pos=3,6:3,9
-func parsePositionToTextSelection(pos string) (t doctor.TextSelection, err error) {
+func parsePositionToTextSelection(pos string) (t text.TextSelection, err error) {
 	args := strings.Split(pos, ":")
 
 	if len(args) < 2 {
@@ -347,7 +349,7 @@ func parsePositionToTextSelection(pos string) (t doctor.TextSelection, err error
 		return
 	}
 
-	t = doctor.TextSelection{StartLine: sl, StartCol: sc,
+	t = text.TextSelection{StartLine: sl, StartCol: sc,
 		EndLine: el, EndCol: ec}
 
 	return
@@ -363,7 +365,7 @@ func parseScopes(scope string) []string {
 //
 // This will do all of the configuration and execution for
 // a refactoring r, returning the results.
-func refactor(file string, src string, args []string, r doctor.Refactoring) (*doctor.Result, error) {
+func refactor(file string, src string, args []string, r refactoring.Refactoring) (*refactoring.Result, error) {
 	if r == nil {
 		return nil, fmt.Errorf("no refactoring given or in wrong place, see -h")
 	}
@@ -383,25 +385,25 @@ func refactor(file string, src string, args []string, r doctor.Refactoring) (*do
 		scope = parseScopes(*scopeFlag)
 	}
 
-	var fs doctor.FileSystem
+	var fs filesystem.FileSystem
 	if src != "" {
-		// FIXME(reed): Need a filename for what's being passed on standard input -- must exist on the file system already -- then pass in absolute path to file in editor rather than doctor.FakeStdinPath
+		// FIXME(reed): Need a filename for what's being passed on standard input -- must exist on the file system already -- then pass in absolute path to file in editor rather than filesystem.FakeStdinPath
 		// FIXME(reed): Make sure the resulting edit set only changes the one file passed on stdin.  If it changes any others, bail with an error message
-		stdin, err := doctor.FakeStdinPath()
+		stdin, err := filesystem.FakeStdinPath()
 		if err != nil {
 			return nil, err
 		}
-		fs, err = doctor.NewSingleEditedFileSystem(stdin, src)
+		fs, err = filesystem.NewSingleEditedFileSystem(stdin, src)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		fs = &doctor.LocalFileSystem{}
+		fs = &filesystem.LocalFileSystem{}
 	}
 
-	argArray := doctor.InterpretArgs(args, r.Description().Params)
+	argArray := refactoring.InterpretArgs(args, r.Description().Params)
 
-	config := &doctor.Config{
+	config := &refactoring.Config{
 		FileSystem: fs,
 		Scope:      scope,
 		Selection:  ts,
