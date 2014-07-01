@@ -6,6 +6,7 @@
 // differences between them, and writes a unified diff to standard output.  It
 // is intended for debugging, not for production use.
 
+// The godoctor-diff command computes a unified diff between two files.
 package main
 
 import (
