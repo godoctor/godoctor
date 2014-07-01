@@ -24,13 +24,13 @@ import (
 )
 
 // A renameRefactoring is used to rename identifiers in Go programs.
-type renameRefactoring struct {
+type Rename struct {
 	refactoringBase
 	newName   string
 	signature *types.Signature
 }
 
-func (r *renameRefactoring) Description() *Description {
+func (r *Rename) Description() *Description {
 	return &Description{
 		Name: "Rename",
 		Params: []Parameter{Parameter{
@@ -42,7 +42,7 @@ func (r *renameRefactoring) Description() *Description {
 	}
 }
 
-func (r *renameRefactoring) Run(config *Config) *Result {
+func (r *Rename) Run(config *Config) *Result {
 	if r.refactoringBase.Run(config); r.Log.ContainsErrors() {
 		return &r.Result
 	}
@@ -89,7 +89,7 @@ func (r *renameRefactoring) Run(config *Config) *Result {
 	return &r.Result
 }
 
-func (r *renameRefactoring) isIdentifierValid(newName string) bool {
+func (r *Rename) isIdentifierValid(newName string) bool {
 	matched, err := regexp.MatchString("^[A-Za-z_][0-9A-Za-z_]*$", newName)
 	if matched && err == nil {
 		keyword, err := regexp.MatchString("^(break|case|chan|const|continue|default|defer|else|fallthrough|for|func|go|goto|if|import|interface|map|package|range|return|select|struct|switch|type|var)$", newName)
@@ -98,7 +98,7 @@ func (r *renameRefactoring) isIdentifierValid(newName string) bool {
 	return false
 }
 
-func (r *renameRefactoring) rename(ident *ast.Ident) {
+func (r *Rename) rename(ident *ast.Ident) {
 	if !r.IdentifierExists(ident) {
 		search := names.NewSearchEngine(r.program)
 		searchResult, err := search.FindOccurrences(ident)
@@ -118,7 +118,7 @@ func (r *renameRefactoring) rename(ident *ast.Ident) {
 }
 
 //IdentifierExists checks if there already exists an Identifier with the newName,with in the scope of the oldname.
-func (r *renameRefactoring) IdentifierExists(ident *ast.Ident) bool {
+func (r *Rename) IdentifierExists(ident *ast.Ident) bool {
 
 	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
 	search := names.NewSearchEngine(r.program)
@@ -156,7 +156,7 @@ func (r *renameRefactoring) IdentifierExists(ident *ast.Ident) bool {
 }
 
 //addOccurrences adds all the Occurences to the editset
-func (r *renameRefactoring) addOccurrences(allOccurrences map[string][]text.Extent) {
+func (r *Rename) addOccurrences(allOccurrences map[string][]text.Extent) {
 	for filename, occurrences := range allOccurrences {
 		for _, occurrence := range occurrences {
 			if r.Edits[filename] == nil {
@@ -168,7 +168,7 @@ func (r *renameRefactoring) addOccurrences(allOccurrences map[string][]text.Exte
 	}
 }
 
-func (r *renameRefactoring) addFileSystemChanges(allOccurrences map[string][]text.Extent, ident *ast.Ident) {
+func (r *Rename) addFileSystemChanges(allOccurrences map[string][]text.Extent, ident *ast.Ident) {
 	for filename, _ := range allOccurrences {
 
 		if filepath.Base(filepath.Dir(filename)) == ident.Name && allFilesinDirectoryhaveSamePkg(filepath.Dir(filename), ident) {

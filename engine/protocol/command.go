@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 
+	"golang-refactoring.org/go-doctor/engine"
 	"golang-refactoring.org/go-doctor/filesystem"
 	"golang-refactoring.org/go-doctor/refactoring"
 	"golang-refactoring.org/go-doctor/text"
@@ -63,7 +64,7 @@ func (l *List) Run(state *State, input map[string]interface{}) (Reply, error) {
 	if valid, err := l.Validate(state, input); valid {
 		// get all of the refactoring names
 		namesList := make([]map[string]string, 0)
-		for shortName, refactoring := range refactoring.AllRefactorings() {
+		for shortName, refactoring := range engine.AllRefactorings() {
 			namesList = append(namesList, map[string]string{"shortName": shortName, "name": refactoring.Description().Name})
 		}
 		return Reply{map[string]interface{}{"reply": "OK", "transformations": namesList}}, nil
@@ -121,9 +122,9 @@ type Params struct {
 }
 
 func (p *Params) Run(state *State, input map[string]interface{}) (Reply, error) {
-	//refactoring := refactoring.GetRefactoring("rename")
+	//refactoring := engine.GetRefactoring("rename")
 	if valid, err := p.Validate(state, input); valid {
-		refactoring := refactoring.GetRefactoring(input["transformation"].(string))
+		refactoring := engine.GetRefactoring(input["transformation"].(string))
 		// since GetParams returns just a string, assume it as prompt and label
 		params := make([]map[string]interface{}, 0)
 		for _, param := range refactoring.Description().Params {
@@ -237,7 +238,7 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 	}
 
 	// get refactoring
-	refac := refactoring.GetRefactoring(input["transformation"].(string))
+	refac := engine.GetRefactoring(input["transformation"].(string))
 
 	config := &refactoring.Config{
 		FileSystem: state.Filesystem,
@@ -323,7 +324,7 @@ func (x *XRun) Validate(state *State, input map[string]interface{}) (bool, error
 
 	// check transformation is valid
 	var valid bool
-	for shortName, _ := range refactoring.AllRefactorings() {
+	for shortName, _ := range engine.AllRefactorings() {
 		if shortName == input["transformation"].(string) {
 			valid = true
 		}

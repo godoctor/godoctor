@@ -38,7 +38,8 @@ import (
 	"strconv"
 	"strings"
 
-	"golang-refactoring.org/go-doctor/cli/protocol"
+	"golang-refactoring.org/go-doctor/engine"
+	"golang-refactoring.org/go-doctor/engine/protocol"
 	"golang-refactoring.org/go-doctor/filesystem"
 	"golang-refactoring.org/go-doctor/refactoring"
 	"golang-refactoring.org/go-doctor/text"
@@ -75,7 +76,7 @@ The <flag> arguments are:
 
 `,
 		func() (s string) {
-			for key, _ := range refactoring.AllRefactorings() {
+			for key, _ := range engine.AllRefactorings() {
 				s += "\n  " + key
 			}
 			return
@@ -109,7 +110,7 @@ func main() {
 		printError(fmt.Errorf("given flag requires args, see -h"))
 	}
 
-	r := refactoring.GetRefactoring(args[0])
+	r := engine.GetRefactoring(args[0])
 
 	if *paramsFlag {
 		if r == nil {
@@ -136,7 +137,7 @@ func main() {
 		args = args[1:]
 	} else { // file given, e.g. go-doctor file refactor params...
 		filename = args[0]
-		r = refactoring.GetRefactoring(args[1])
+		r = engine.GetRefactoring(args[1])
 		args = args[2:]
 	}
 
@@ -308,7 +309,7 @@ func printRefactoringParams(r refactoring.Refactoring) {
 
 func printAllRefactorings(format string) {
 	var names []string
-	for name, _ := range refactoring.AllRefactorings() {
+	for name, _ := range engine.AllRefactorings() {
 		names = append(names, name)
 	}
 
