@@ -53,7 +53,7 @@ func (r *addGodocRefactoring) removeSemicolonsBetweenDecls() {
 		if r.program.Fset.Position(r.file.Decls[i].Pos()).Line == r.program.Fset.Position(r.file.Decls[i+1].Pos()).Line {
 			// inserts 2 new lines to separate funcs, structs,
 			// and interfaces and get rid of the semicolon
-			r.Edits[r.filename(r.file)].Add(text.OffsetLength{r.program.Fset.Position(r.file.Decls[i].End()).Offset, r.program.Fset.Position(r.file.Decls[i+1].Pos()).Offset - r.program.Fset.Position(r.file.Decls[i].End()).Offset}, "\n\n")
+			r.Edits[r.filename(r.file)].Add(text.Extent{r.program.Fset.Position(r.file.Decls[i].End()).Offset, r.program.Fset.Position(r.file.Decls[i+1].Pos()).Offset - r.program.Fset.Position(r.file.Decls[i].End()).Offset}, "\n\n")
 		}
 	}
 }
@@ -69,7 +69,7 @@ func (r *addGodocRefactoring) addComments() {
 			startOfLine := r.program.Fset.Position(x.Pos()).Offset
 			if ast.IsExported(x.Name.Name) {
 				if x.Doc == nil {
-					r.Edits[r.filename(r.file)].Add(text.OffsetLength{startOfLine, 0}, fcomment)
+					r.Edits[r.filename(r.file)].Add(text.Extent{startOfLine, 0}, fcomment)
 				}
 			}
 		// check the structs/interfaces for the comments
@@ -87,7 +87,7 @@ func (r *addGodocRefactoring) addComments() {
 						// check if the comment section of the
 						// struct or interface is missing comments
 						if x.Doc == nil {
-							r.Edits[r.filename(r.file)].Add(text.OffsetLength{startOfLine, 0}, sIcomment)
+							r.Edits[r.filename(r.file)].Add(text.Extent{startOfLine, 0}, sIcomment)
 						}
 					}
 				}
