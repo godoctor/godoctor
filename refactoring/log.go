@@ -6,63 +6,71 @@
 // returns a Log, which contains informational messages, warnings, and errors
 // generated during the refactoring process.  If the log is nonempty, it should
 // be displayed to the user before a refactoring's changes are applied.
+//
+// Terminology:
+//
+// Initial entries are those that are added when the program is first loaded,
+// before the refactoring begins.  They are used to record semantic errors that
+// are present file before refactoring starts.  Some refactorings work in the
+// presence of errors, and others may not.  Therefore, there are two methods
+// to modify initial entries: one that converts initial errors to warnings, and
+// another that removes initial entries altogether.
 
 package refactoring
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
+
+	"code.google.com/p/go.tools/go/loader"
+
+	"go/ast"
+	"go/token"
 
 	"golang-refactoring.org/go-doctor/text"
 )
 
-// Every LogEntry has a severity: INFO, WARNING, ERROR, or FATAL_ERROR.  An
-// ERROR (non-fatal) indicates that the refactoring may not preserve behavior,
-// but the transformation can still be applied at the user's risk.  In contrast,
-// a FATAL_ERROR indicates that the refactoring cannot continue because it is
-// impossible to construct or apply the transformation (e.g., the selection is
-// invalid, the input file cannot be parsed, etc.)
+// A Severity indicates whether a log entry describes an informational message,
+// a warning, or an error.
 type Severity int
 
 const (
-	INFO Severity = iota
-	WARNING
-	ERROR
-	FATAL_ERROR
+	Info    Severity = iota // informational message
+	Warning                 // warning, something to be cautious of
+	Error                   // the refactoring transformation is, or might be, invalid
 )
 
-// A LogEntry constitutes a single entry in a Log.  Every LogEntry has a
-// severity and a message.  If the filename is a nonempty string, the LogEntry
+// A Entry constitutes a single entry in a Log.  Every Entry has a
+// severity and a message.  If the filename is a nonempty string, the Entry
 // is associated with a particular position in the given file.  Some log
 // entries are marked as "initial."  These indicate semantic errors that were
 // present in the input file (e.g., unresolved identifiers, unnecessary
 // imports, etc.) before the refactoring was started.
-type LogEntry struct {
+type Entry struct {
 	isInitial bool
-	Severity  Severity    `json:"severity"`
-	Message   string      `json:"message"`
-	Filename  string      `json:"filename"`
-	Position  text.Extent `json:"position"`
+	Severity  Severity     `json:"severity"`
+	Message   string       `json:"message"`
+	Filename  string       `json:"filename"`
+	Position  *text.Extent `json:"position"`
 }
 
 // A Log is used to store informational messages, warnings, and errors that
 // will be presented to the user before a refactoring's changes are applied.
 type Log struct {
-	Entries []LogEntry `json:"entries"`
+	Entries []*Entry `json:"entries"`
 }
 
-func (entry *LogEntry) String() string {
+func (entry *Entry) String() string {
 	var buffer bytes.Buffer
 	switch entry.Severity {
-	case INFO:
+	case Info:
 		// No prefix
-	case WARNING:
+	case Warning:
 		buffer.WriteString("Warning: ")
-	case ERROR:
+	case Error:
 		buffer.WriteString("Error: ")
-	case FATAL_ERROR:
-		buffer.WriteString("ERROR: ")
 	}
 	if entry.Filename != "" {
 		buffer.WriteString(entry.Filename)
@@ -74,36 +82,81 @@ func (entry *LogEntry) String() string {
 	return buffer.String()
 }
 
-// NewLog returns a new, empty Log.
+// NewLog returns a new Log with no entries.
 func NewLog() *Log {
 	log := new(Log)
-	log.Entries = []LogEntry{}
+	log.Entries = []*Entry{}
 	return log
 }
 
 // Clear removes all Entries from the error log.
 func (log *Log) Clear() {
-	log.Entries = []LogEntry{}
+	log.Entries = []*Entry{}
 }
 
-// Size returns the number of Entries in the error log.
-func (log *Log) Size() int {
-	return len(log.Entries)
+// Infof adds an informational message (an entry with Info severity) to a log.
+func (log *Log) Infof(format string, v ...interface{}) {
+	log.log(Info, format, v...)
 }
 
-// LogInitial adds a message to the given log with the given severity, and
-// marks the entry as an initial error.  Initial errors are semantic errors
-// that are present in the file before refactoring starts; some refactorings
-// work in the presence of errors, and others may not.  The message is not
-// associated with any particular file.
-func (log *Log) LogInitial(severity Severity, message string,
-	filename string, offset int, length int) {
-	log.Entries = append(log.Entries, LogEntry{
-		isInitial: true,
+// Info adds an informational message (an entry with Info severity) to a log.
+func (log *Log) Info(entry interface{}) {
+	log.log(Info, "%v", entry)
+}
+
+// Warnf adds an entry with Warning severity to a log.
+func (log *Log) Warnf(format string, v ...interface{}) {
+	log.log(Warning, format, v...)
+}
+
+// Warn adds an entry with Warning severity to a log.
+func (log *Log) Warn(entry interface{}) {
+	log.log(Warning, "%v", entry)
+}
+
+// Errorf adds an entry with Error severity to a log.
+func (log *Log) Errorf(format string, v ...interface{}) {
+	log.log(Error, format, v...)
+}
+
+// Error adds an entry with Error severity to a log.
+func (log *Log) Error(entry interface{}) {
+	log.log(Error, "%v", entry)
+}
+
+func (log *Log) log(severity Severity, format string, v ...interface{}) {
+	log.Entries = append(log.Entries, &Entry{
+		isInitial: false,
 		Severity:  severity,
-		Message:   message,
-		Filename:  displayablePath(filename),
-		Position:  text.Extent{offset, length}})
+		Message:   fmt.Sprintf(format, v...),
+		Filename:  "",
+		Position:  &text.Extent{0, 0}})
+}
+
+// Associate associates the most recently-logged entry with the given filename.
+func (log *Log) Associate(filename string) {
+	if len(log.Entries) == 0 {
+		return
+	}
+	entry := log.Entries[len(log.Entries)-1]
+	entry.Filename = displayablePath(filename)
+}
+
+// AssociatePos associates the most recently-logged entry with the file and
+// offset denoted by the given Pos.
+func (log *Log) AssociatePos(fset *token.FileSet, start, end token.Pos) {
+	if len(log.Entries) == 0 {
+		return
+	}
+	entry := log.Entries[len(log.Entries)-1]
+	entry.Filename = displayablePath(fset.Position(start).Filename)
+	entry.Position = &text.Extent{fset.Position(start).Offset, int(end - start)}
+}
+
+// AssociateNode associates the most recently-logged entry with the region of
+// source code corresponding to the given AST Node.
+func (log *Log) AssociateNode(p *loader.Program, node ast.Node) {
+	log.AssociatePos(p.Fset, node.Pos(), node.End())
 }
 
 // displayablePath returns a path for the given file relative to the current
@@ -128,15 +181,13 @@ func displayablePath(file string) string {
 	return relativePath
 }
 
-// Log adds a message to the given log with the given severity.  The message
-// is not associated with any particular file.
-func (log *Log) Log(severity Severity, message string) {
-	log.Entries = append(log.Entries, LogEntry{
-		isInitial: false,
-		Severity:  severity,
-		Message:   message,
-		Filename:  "",
-		Position:  text.Extent{0, 0}})
+// MarkInitial marks all entries that have been logged so far as initial
+// entries.  Subsequent entries will not be marked as initial unless this
+// method is called again at a later point in time.
+func (log *Log) MarkInitial() {
+	for _, entry := range log.Entries {
+		entry.isInitial = true
+	}
 }
 
 func (log *Log) String() string {
@@ -148,31 +199,31 @@ func (log *Log) String() string {
 	return buffer.String()
 }
 
-// ContainsNonInitialErrors returns true if the log contains at least one
-// non-initial error or fatal error.
+// ContainsNonInitialErrors returns true if the log contains at least one error
+// that is not an initial entry.
 func (log *Log) ContainsNonInitialErrors() bool {
-	return log.contains(func(entry LogEntry) bool {
-		return entry.Severity >= ERROR && !entry.isInitial
+	return log.contains(func(entry *Entry) bool {
+		return entry.Severity >= Error && !entry.isInitial
 	})
 }
 
-// ContainsNonInitialErrors returns true if the log contains at least one
-// initial error or fatal error.
+// ContainsInitialErrors returns true if the log contains at least one error
+// that is also an initial entry.
 func (log *Log) ContainsInitialErrors() bool {
-	return log.contains(func(entry LogEntry) bool {
-		return entry.Severity >= ERROR && entry.isInitial
+	return log.contains(func(entry *Entry) bool {
+		return entry.Severity >= Error && entry.isInitial
 	})
 }
 
-// ContainsNonInitialErrors returns true if the log contains at least one
-// error or fatal error.  The error may be an initial error, or it may not.
+// ContainsErrors returns true if the log contains at least one error.  The
+// error may be an initial entry, or it may not.
 func (log *Log) ContainsErrors() bool {
-	return log.contains(func(entry LogEntry) bool {
-		return entry.Severity >= ERROR
+	return log.contains(func(entry *Entry) bool {
+		return entry.Severity >= Error
 	})
 }
 
-func (log *Log) contains(predicate func(LogEntry) bool) bool {
+func (log *Log) contains(predicate func(*Entry) bool) bool {
 	for _, entry := range log.Entries {
 		if predicate(entry) {
 			return true
@@ -181,10 +232,10 @@ func (log *Log) contains(predicate func(LogEntry) bool) bool {
 	return false
 }
 
-// RemoveInitialEntries removes any initial entries from the log.  Entries that
+// RemoveInitialEntries removes all initial entries from the log.  Entries that
 // are not marked as initial are retained.
 func (log *Log) RemoveInitialEntries() {
-	newEntries := []LogEntry{}
+	newEntries := []*Entry{}
 	for _, entry := range log.Entries {
 		if !entry.isInitial {
 			newEntries = append(newEntries, entry)
@@ -193,13 +244,13 @@ func (log *Log) RemoveInitialEntries() {
 	log.Entries = newEntries
 }
 
-// ChangeInitialErrorsToWarnings changes the severity of any initial errors and
-// fatal errors in the log to WARNING severity.
+// ChangeInitialErrorsToWarnings changes the severity of any initial errors to
+// Warning severity.
 func (log *Log) ChangeInitialErrorsToWarnings() {
-	newEntries := []LogEntry{}
+	newEntries := []*Entry{}
 	for _, entry := range log.Entries {
 		if entry.isInitial {
-			entry.Severity = WARNING
+			entry.Severity = Warning
 			newEntries = append(newEntries, entry)
 		} else {
 			newEntries = append(newEntries, entry)

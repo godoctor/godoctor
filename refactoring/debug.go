@@ -52,7 +52,7 @@ func (r *debugRefactoring) Run(config *Config) *Result {
 	}
 
 	if len(config.Args) == 0 {
-		r.Log.Log(FATAL_ERROR, usage)
+		r.Log.Error(usage)
 		return &r.Result
 	}
 	if !validateArgs(config, r.Description(), r.Log) {
@@ -75,11 +75,12 @@ func (r *debugRefactoring) Run(config *Config) *Result {
 		case "showreferences":
 			r.showReferences(&b)
 		default:
-			r.Log.Log(FATAL_ERROR, "Unknown option "+arg.(string))
+			r.Log.Errorf("Unknown option %s", arg.(string))
 			return &r.Result
 		}
 		if !r.Log.ContainsErrors() {
-			r.Edits[r.filename(r.file)].Add(text.Extent{0, 0}, b.String())
+			r.Edits[r.filename(r.file)].Add(text.Extent{0, 0},
+				b.String())
 		}
 	}
 
@@ -90,7 +91,8 @@ func (r *debugRefactoring) showAffected(out io.Writer) {
 	errorMsg := "Please select an identifier for showaffected"
 
 	if r.selectedNode == nil {
-		r.Log.Log(FATAL_ERROR, errorMsg)
+		r.Log.Error(errorMsg)
+		r.Log.AssociatePos(r.program.Fset, r.selectionStart, r.selectionEnd)
 		return
 	}
 	switch id := r.selectedNode.(type) {
@@ -99,7 +101,7 @@ func (r *debugRefactoring) showAffected(out io.Writer) {
 		search := names.NewSearchEngine(r.program)
 		searchResult, err := search.FindDeclarationsAcrossInterfaces(id)
 		if err != nil {
-			r.Log.Log(FATAL_ERROR, err.Error())
+			r.Log.Error(err)
 			return
 		}
 		result := []string{}
@@ -114,7 +116,8 @@ func (r *debugRefactoring) showAffected(out io.Writer) {
 			fmt.Fprintf(out, line)
 		}
 	default:
-		r.Log.Log(FATAL_ERROR, errorMsg)
+		r.Log.Error(errorMsg)
+		r.Log.AssociatePos(r.program.Fset, r.selectionStart, r.selectionEnd)
 		return
 	}
 }
@@ -204,7 +207,8 @@ func (r *debugRefactoring) showReferences(out io.Writer) {
 	errorMsg := "Please select an identifier for showreferences"
 
 	if r.selectedNode == nil {
-		r.Log.Log(FATAL_ERROR, errorMsg)
+		r.Log.Error(errorMsg)
+		r.Log.AssociatePos(r.program.Fset, r.selectionStart, r.selectionEnd)
 		return
 	}
 	switch id := r.selectedNode.(type) {
@@ -213,7 +217,7 @@ func (r *debugRefactoring) showReferences(out io.Writer) {
 		search := names.NewSearchEngine(r.program)
 		searchResult, err := search.FindOccurrences(id)
 		if err != nil {
-			r.Log.Log(FATAL_ERROR, err.Error())
+			r.Log.Error(err)
 			return
 		}
 		for filename, occs := range searchResult {
@@ -229,7 +233,8 @@ func (r *debugRefactoring) showReferences(out io.Writer) {
 			}
 		}
 	default:
-		r.Log.Log(FATAL_ERROR, errorMsg)
+		r.Log.Error(errorMsg)
+		r.Log.AssociatePos(r.program.Fset, r.selectionStart, r.selectionEnd)
 		return
 	}
 }

@@ -333,26 +333,22 @@ func parseLineCol(linecol string) (int, int) {
 }
 
 // e.g. pos=3,6:3,9
-func parsePositionToTextSelection(pos string) (t text.Selection, err error) {
+func parsePositionToTextSelection(pos string) (*text.Selection, error) {
 	args := strings.Split(pos, ":")
 
 	if len(args) < 2 {
-		err = fmt.Errorf("invalid -pos")
-		return
+		return nil, fmt.Errorf("invalid -pos")
 	}
 
 	sl, sc := parseLineCol(args[0])
 	el, ec := parseLineCol(args[1])
 
 	if sl < 0 || sc < 0 || el < 0 || ec < 0 {
-		err = fmt.Errorf("invalid -pos line, col")
-		return
+		return nil, fmt.Errorf("invalid -pos line, col")
 	}
 
-	t = text.Selection{StartLine: sl, StartCol: sc,
-		EndLine: el, EndCol: ec}
-
-	return
+	return &text.Selection{StartLine: sl, StartCol: sc,
+		EndLine: el, EndCol: ec}, nil
 }
 
 func parseScopes(scope string) []string {

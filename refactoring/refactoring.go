@@ -37,8 +37,7 @@ func init() {
 		"reverseassign": new(reverseAssignRefactoring),
 		"shortassign":   new(shortAssignRefactoring),
 		"debug":         new(debugRefactoring),
-		//"extract":	 new(extractRefactoring),
-		"null": new(nullRefactoring),
+		"null":          new(nullRefactoring),
 	}
 }
 
@@ -131,7 +130,7 @@ type Config struct {
 	// file containing the text selection.
 	Scope []string
 	// The range of text on which to invoke the refactoring.
-	Selection text.Selection
+	Selection *text.Selection
 	// Refactoring-specific arguments.  To determine what arguments are
 	// required for each refactoring, see Refactoring.Description().Params.
 	// For example, for the Rename refactoring, you must specify a new name
@@ -175,7 +174,7 @@ type Result struct {
 	// applied in order, since changes later in the list may depend on the
 	// successful completion of changes earlier in the list (e.g., a path
 	// to a file may be invalid after its containing directory is renamed).
-	FSChanges []filesystem.FileSystemChange
+	FSChanges []filesystem.Change
 }
 
 const CGO_ERROR1 = "could not import C (cannot"
@@ -199,7 +198,7 @@ func (r *refactoringBase) Run(config *Config) *Result {
 	r.Log = NewLog()
 
 	if config.FileSystem == nil {
-		r.Log.Log(FATAL_ERROR, "Internal Error: null Config.FileSystem")
+		r.Log.Error("INTERNAL ERROR: null Config.FileSystem")
 		return &r.Result
 	}
 
@@ -223,47 +222,46 @@ func (r *refactoringBase) Run(config *Config) *Result {
 	lconfig.AllowErrors = true
 	lconfig.SourceImports = true
 	lconfig.TypeChecker.Error = func(err error) {
+		message := err.Error()
 		// FIXME: Needs to be thread-safe
-		var message string = err.Error()
-		var pos token.Pos = err.(types.Error).Pos
-		var offset int = err.(types.Error).Fset.Position(pos).Offset
-		var filename string = err.(types.Error).Fset.File(pos).Name()
-		var length int = 0
 		// TODO: This is temporary until go/loader handles cgo
 		if !strings.Contains(message, CGO_ERROR1) &&
 			!strings.HasSuffix(message, CGO_ERROR2) &&
-			r.Log.Size() < maxInitialErrors {
-			r.Log.LogInitial(ERROR, message, filename, offset, length)
+			len(r.Log.Entries) < maxInitialErrors {
+			r.Log.Error(message)
+			r.Log.AssociatePos(err.(types.Error).Fset,
+				err.(types.Error).Pos,
+				err.(types.Error).Pos)
 		}
 	}
-	// FIXME: Jeff: handle error
 
 	if config.Scope == nil {
 		config.Scope = r.guessScope(config)
-		r.Log.Log(WARNING, "No scope provided; guessing "+strings.Join(config.Scope, " "))
+		r.Log.Warnf("No scope provided; guessing %s",
+			strings.Join(config.Scope, " "))
 	} else {
-		r.Log.Log(INFO, "Scope is "+strings.Join(config.Scope, " "))
+		r.Log.Infof("Scope is %s", strings.Join(config.Scope, " "))
 	}
 	lconfig.FromArgs(config.Scope, true)
 
 	var err error
 	r.program, err = lconfig.Load()
+	r.Log.MarkInitial()
 	if err != nil {
-		r.Log.Log(FATAL_ERROR, err.Error())
+		r.Log.Error(err)
 		return &r.Result
 	} else if r.program == nil {
-		r.Log.Log(FATAL_ERROR, "Internal Error: Loader failed")
+		r.Log.Error("INTERNAL ERROR: Loader failed")
 		return &r.Result
 	}
 
 	var pkgInfo *loader.PackageInfo
 	pkgInfo, r.file = r.fileNamed(config.Selection.Filename)
 	if pkgInfo == nil || r.file == nil {
-		r.Log.Log(FATAL_ERROR,
-			fmt.Sprintf("The selected file, %s, was not "+
-				"found in the provided scope: %s",
-				config.Selection.Filename,
-				config.Scope))
+		r.Log.Errorf("The selected file, %s, was not found in the "+
+			"provided scope: %s",
+			config.Selection.Filename,
+			config.Scope)
 		// This can happen on files containing +build
 		return &r.Result
 	}
@@ -277,17 +275,17 @@ func (r *refactoringBase) Run(config *Config) *Result {
 
 	reader, err := config.FileSystem.OpenFile(r.filename(r.file))
 	if err != nil {
-		r.Log.Log(FATAL_ERROR, "Unable to open "+r.filename(r.file))
+		r.Log.Errorf("Unable to open %s", r.filename(r.file))
 		return &r.Result
 	}
 	r.fileContents, err = ioutil.ReadAll(reader)
 	if err != nil {
-		r.Log.Log(FATAL_ERROR, "Unable to read "+r.filename(r.file))
+		r.Log.Errorf("Unable to read %s", r.filename(r.file))
 		return &r.Result
 	}
 
 	r.Edits = map[string]*text.EditSet{r.filename(r.file): text.NewEditSet()}
-	r.FSChanges = []filesystem.FileSystemChange{}
+	r.FSChanges = []filesystem.Change{}
 
 	return &r.Result
 }
@@ -302,7 +300,7 @@ func (r *refactoringBase) guessScope(config *Config) []string {
 
 	absFilename, err := filepath.Abs(config.Selection.Filename)
 	if err != nil {
-		r.Log.Log(FATAL_ERROR, err.Error())
+		r.Log.Error(err.Error())
 		return fnameScope
 	}
 
@@ -311,12 +309,12 @@ func (r *refactoringBase) guessScope(config *Config) []string {
 		gopath = os.Getenv("GOPATH")
 	}
 	if gopath == "" {
-		r.Log.Log(WARNING, "GOPATH not set")
+		r.Log.Warn("GOPATH not set")
 		return fnameScope
 	}
 	gopath, err = filepath.Abs(gopath)
 	if err != nil {
-		r.Log.Log(FATAL_ERROR, err.Error())
+		r.Log.Error(err)
 		return fnameScope
 	}
 
@@ -324,7 +322,7 @@ func (r *refactoringBase) guessScope(config *Config) []string {
 
 	relFilename, err := filepath.Rel(gopathSrc, absFilename)
 	if err != nil {
-		r.Log.Log(FATAL_ERROR, err.Error())
+		r.Log.Error(err)
 		return fnameScope
 	}
 
@@ -344,18 +342,16 @@ func validateArgs(config *Config, desc *Description, log *Log) bool {
 	numArgsExpected := len(desc.Params)
 	numArgsSupplied := len(config.Args)
 	if numArgsSupplied != numArgsExpected {
-		log.Log(FATAL_ERROR,
-			fmt.Sprintf("This refactoring requires %d arguments, "+
-				"but %d were supplied.", numArgsExpected,
-				numArgsSupplied))
+		log.Errorf("This refactoring requires %d arguments, "+
+			"but %d were supplied.", numArgsExpected,
+			numArgsSupplied)
 		return false
 	}
 	for i, arg := range config.Args {
 		expected := reflect.TypeOf(desc.Params[i].DefaultValue)
 		if reflect.TypeOf(arg) != expected {
 			paramName := desc.Params[i].Label
-			log.Log(FATAL_ERROR, fmt.Sprintf("%s must be a %s",
-				paramName, expected))
+			log.Errorf("%s must be a %s", paramName, expected)
 			return false
 		}
 	}
@@ -390,14 +386,14 @@ func (r *refactoringBase) lineColToPos(file *ast.File, line int, column int) tok
 func (r *refactoringBase) checkForErrors() {
 	contents, err := ioutil.ReadFile(r.filename(r.file))
 	if err != nil {
-		r.Log.Log(ERROR, "Unable to read source file: "+err.Error())
+		r.Log.Errorf("Unable to read source file: %v", err)
 		return
 	}
 	sourceFromFile := string(contents)
 
 	string, err := text.ApplyToString(r.Edits[r.filename(r.file)], sourceFromFile)
 	if err != nil {
-		r.Log.Log(ERROR, "Transformation produced invalid EditSet: "+
+		r.Log.Errorf("Transformation produced invalid EditSet: %v",
 			err.Error())
 		return
 	}
@@ -407,8 +403,8 @@ func (r *refactoringBase) checkForErrors() {
 		fmt.Println("vvvvv")
 		fmt.Println(string)
 		fmt.Println("^^^^^")
-		r.Log.Log(ERROR, "Transformation will introduce "+
-			"syntax errors: "+err.Error())
+		r.Log.Errorf("Transformation will introduce syntax errors: %v", err)
+		r.Log.Associate(r.filename(r.file))
 		return
 	}
 

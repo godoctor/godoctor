@@ -12,9 +12,9 @@ import (
 	"path/filepath"
 )
 
-// A FileSystemChange describes a change to be made to the file system:
+// A Change describes a change to be made to the file system:
 // renaming, creating, or deleting a file/directory.
-type FileSystemChange interface {
+type Change interface {
 	ExecuteUsing(FileSystem) error
 	String(relativeTo string) string
 }
@@ -55,7 +55,7 @@ func (chg *Rename) String(relativeTo string) string {
 	return fmt.Sprintf("rename %s %s", filepath.ToSlash(relative(chg.Path, relativeTo)), chg.NewName)
 }
 
-func Execute(fs FileSystem, changes []FileSystemChange) error {
+func Execute(fs FileSystem, changes []Change) error {
 	// TODO: the changes should be executed atomically (all-or-nothing),
 	// but currently it can fail in the middle of execution
 	for _, chg := range changes {

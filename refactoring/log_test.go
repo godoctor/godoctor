@@ -10,29 +10,24 @@ import (
 	"golang-refactoring.org/go-doctor/text"
 )
 
-func TestLogEntry(t *testing.T) {
-	e := LogEntry{false, INFO, "Message", "", text.Extent{}}
+func TestEntry(t *testing.T) {
+	e := Entry{false, Info, "Message", "", &text.Extent{}}
 	assertEquals("Message", e.String(), t)
-	e = LogEntry{false, WARNING, "Message", "", text.Extent{}}
+	e = Entry{false, Warning, "Message", "", &text.Extent{}}
 	assertEquals("Warning: Message", e.String(), t)
-	e = LogEntry{false, ERROR, "Message", "", text.Extent{}}
+	e = Entry{false, Error, "Message", "", &text.Extent{}}
 	assertEquals("Error: Message", e.String(), t)
-	e = LogEntry{false, FATAL_ERROR, "Message", "", text.Extent{}}
-	assertEquals("ERROR: Message", e.String(), t)
 
-	e = LogEntry{false, WARNING, "Msg", "fn", text.Extent{1, 2}}
+	e = Entry{false, Warning, "Msg", "fn", &text.Extent{1, 2}}
 	assertEquals("Warning: fn, offset 1, length 2: Msg", e.String(), t)
 }
 
 func TestLog(t *testing.T) {
 	var log *Log = NewLog()
-	log.Log(WARNING, "A warning")
-	log.Log(ERROR, "An error")
-	var expected string = "Warning: A warning\nError: An error\n"
-	assertEquals(expected, log.String(), t)
-	log.Log(INFO, "Information")
-	log.Log(FATAL_ERROR, "A fatal error")
-	expected += "Information\nERROR: A fatal error\n"
+	log.Info("Info")
+	log.Warn("A warning")
+	log.Error("An error")
+	var expected string = "Info\nWarning: A warning\nError: An error\n"
 	assertEquals(expected, log.String(), t)
 }
 

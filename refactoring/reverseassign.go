@@ -37,14 +37,16 @@ func (r *reverseAssignRefactoring) Run(config *Config) *Result {
 	}
 
 	if r.selectedNode == nil {
-		r.Log.Log(FATAL_ERROR, "selection cannot be null")
+		r.Log.Error("selection cannot be null")
+		r.Log.AssociatePos(r.program.Fset, r.selectionStart, r.selectionEnd)
 		return &r.Result
 	}
 	switch selectedNode := r.selectedNode.(type) {
 	case *ast.GenDecl:
 		r.callEditset(selectedNode)
 	default:
-		r.Log.Log(FATAL_ERROR, fmt.Sprintf("Select a short assignment (:=) statement! Selected node is %s", reflect.TypeOf(r.selectedNode)))
+		r.Log.Errorf("Select a short assignment (:=) statement! Selected node is %s", reflect.TypeOf(r.selectedNode))
+		r.Log.AssociatePos(r.program.Fset, r.selectionStart, r.selectionEnd)
 	}
 	r.checkForErrors()
 	return &r.Result
