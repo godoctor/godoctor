@@ -4,10 +4,12 @@
 // This file uses the Null refactoring as a template, and
 // adds comments to a program.
 // It will be for any program that needs checking for documentation.
-package doctor
+package refactoring
 
 import (
 	"go/ast"
+
+	"golang-refactoring.org/go-doctor/text"
 )
 
 type addGodocRefactoring struct {
@@ -51,10 +53,11 @@ func (r *addGodocRefactoring) removeSemicolonsBetweenDecls() {
 		if r.program.Fset.Position(r.file.Decls[i].Pos()).Line == r.program.Fset.Position(r.file.Decls[i+1].Pos()).Line {
 			// inserts 2 new lines to separate funcs, structs,
 			// and interfaces and get rid of the semicolon
-			r.Edits[r.filename(r.file)].Add(OffsetLength{r.program.Fset.Position(r.file.Decls[i].End()).Offset, r.program.Fset.Position(r.file.Decls[i+1].Pos()).Offset - r.program.Fset.Position(r.file.Decls[i].End()).Offset}, "\n\n")
+			r.Edits[r.filename(r.file)].Add(text.OffsetLength{r.program.Fset.Position(r.file.Decls[i].End()).Offset, r.program.Fset.Position(r.file.Decls[i+1].Pos()).Offset - r.program.Fset.Position(r.file.Decls[i].End()).Offset}, "\n\n")
 		}
 	}
 }
+
 // loop through the ast Decls and check their Doc section to see if they have comments
 func (r *addGodocRefactoring) addComments() {
 	for _, n := range r.file.Decls {
@@ -66,7 +69,7 @@ func (r *addGodocRefactoring) addComments() {
 			startOfLine := r.program.Fset.Position(x.Pos()).Offset
 			if ast.IsExported(x.Name.Name) {
 				if x.Doc == nil {
-					r.Edits[r.filename(r.file)].Add(OffsetLength{startOfLine, 0}, fcomment)
+					r.Edits[r.filename(r.file)].Add(text.OffsetLength{startOfLine, 0}, fcomment)
 				}
 			}
 		// check the structs/interfaces for the comments
@@ -84,7 +87,7 @@ func (r *addGodocRefactoring) addComments() {
 						// check if the comment section of the
 						// struct or interface is missing comments
 						if x.Doc == nil {
-							r.Edits[r.filename(r.file)].Add(OffsetLength{startOfLine, 0}, sIcomment)
+							r.Edits[r.filename(r.file)].Add(text.OffsetLength{startOfLine, 0}, sIcomment)
 						}
 					}
 				}
