@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// A ReverseAssignmentRefactoring changes explicitly-typed variable declarations (var n int = 5)
-//into short assignment statements (n := 5)
+// This file defines a refactoring that converts explicitly-typed variable
+// declarations (var n int = 5) into short assignment statements (n := 5).
 
 package refactoring
 
@@ -15,6 +15,8 @@ import (
 	"golang-refactoring.org/go-doctor/text"
 )
 
+// A reverseAssignmentRefactoring changes explicitly-typed variable
+// declarations (var n int = 5) into short assignment statements (n := 5).
 type reverseAssignRefactoring struct {
 	refactoringBase
 }

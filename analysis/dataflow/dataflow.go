@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package dataflow contains data flow analyses that can be performed on a
-// previously constructed control flow graph (cfg) within the
-// context of a loader.Program.
+// Package dataflow provides data flow analyses that can be performed on a
+// previously constructed control flow graph, including a reaching definitions
+// analysis and a live variables analysis for local variables.
 package dataflow
 
 // This file contains functions common to all data flow analyses, as well as

@@ -6,6 +6,8 @@
 // FileSystem is supplied to the go/loader to read files, and it is also used
 // by the refactoring driver to commit refactorings' changes to disk.
 
+// Package filesystem provides a file system abstraction and types describing
+// potential changes to a file system.
 package filesystem
 
 import (

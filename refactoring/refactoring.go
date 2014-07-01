@@ -6,6 +6,9 @@
 // several methods common to refactorings based on refactoringBase, including
 // a base implementation of the Run method.
 
+// Package refactoring contains all of the refactorings supported by the Go
+// Doctor, as well as types (such as refactoring.Log) used to interface with
+// those refactorings.
 package refactoring
 
 import (

@@ -2,9 +2,6 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package protocol
-
-type Command interface {
-	Run(*State, map[string]interface{}) (Reply, error)
-	Validate(*State, map[string]interface{}) (bool, error)
-}
+// Package examples provides source code demonstrating how to use portions of
+// the Go Doctor API.
+package examples

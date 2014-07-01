@@ -2,7 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Tests for all refactorings.  The testdata directory is structured as such:
+// This file provides tests for all refactorings.  The testdata directory is
+// structured as such:
 //
 //     testdata/
 //         refactoring-name/

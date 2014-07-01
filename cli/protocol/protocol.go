@@ -1,3 +1,10 @@
+// Copyright 2014 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// Package protocol provides an implementation of the OpenRefactory protocol
+// (server-side), which provides a standard mechanism for text editors to
+// communicate with refactoring engines.
 package protocol
 
 import (

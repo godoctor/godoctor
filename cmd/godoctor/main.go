@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// This file contains the command line interface for Go refactoring.
+// The godoctor command refactors Go code.
 package main
 
 // example query: go-doctor -pos=11,8:11,8 someFile.go rename newName
