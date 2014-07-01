@@ -12,14 +12,14 @@ import (
 	"golang-refactoring.org/go-doctor/text"
 )
 
-type addGodocRefactoring struct {
+type AddGoDoc struct {
 	refactoringBase
 }
 
 // creates a description of the program
-func (r *addGodocRefactoring) Description() *Description {
+func (r *AddGoDoc) Description() *Description {
 	return &Description{
-		Name:    "Add Godocs",
+		Name:    "Add GoDoc",
 		Params:  nil,
 		Quality: Development,
 	}
@@ -27,7 +27,7 @@ func (r *addGodocRefactoring) Description() *Description {
 
 // the base run function needed by most if not all refactorings, checks
 // for errors before running this programs coding
-func (r *addGodocRefactoring) Run(config *Config) *Result {
+func (r *AddGoDoc) Run(config *Config) *Result {
 	r.refactoringBase.Run(config)
 	r.Log.ChangeInitialErrorsToWarnings()
 	if r.Log.ContainsErrors() {
@@ -39,14 +39,14 @@ func (r *addGodocRefactoring) Run(config *Config) *Result {
 	r.searchAST()
 	return &r.Result
 }
-func (r *addGodocRefactoring) searchAST() {
+func (r *AddGoDoc) searchAST() {
 	r.removeSemicolonsBetweenDecls()
 	r.addComments()
 }
 
 // loop through the decls slice to look at all the
 // functions, structs, and interfaces
-func (r *addGodocRefactoring) removeSemicolonsBetweenDecls() {
+func (r *AddGoDoc) removeSemicolonsBetweenDecls() {
 	for i := 0; i < len(r.file.Decls)-1; i++ {
 		// see if the 2 nodes are on the same line,
 		// and if so, run the add in the if statement
@@ -59,7 +59,7 @@ func (r *addGodocRefactoring) removeSemicolonsBetweenDecls() {
 }
 
 // loop through the ast Decls and check their Doc section to see if they have comments
-func (r *addGodocRefactoring) addComments() {
+func (r *AddGoDoc) addComments() {
 	for _, n := range r.file.Decls {
 		switch x := n.(type) {
 		// check the funcs for the comments

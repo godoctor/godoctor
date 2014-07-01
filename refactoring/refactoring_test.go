@@ -51,7 +51,7 @@
 // a file named filename.go.stripPaths, and the refactoring's output will be
 // stripped of all occurrences of the absolute path to the .go file.
 
-package refactoring
+package refactoring_test
 
 import (
 	"flag"
@@ -65,7 +65,9 @@ import (
 	"strings"
 	"testing"
 
+	"golang-refactoring.org/go-doctor/engine"
 	"golang-refactoring.org/go-doctor/filesystem"
+	"golang-refactoring.org/go-doctor/refactoring"
 	"golang-refactoring.org/go-doctor/text"
 )
 
@@ -179,7 +181,7 @@ func runTestsInFiles(directory string, files []string, t *testing.T) {
 func runRefactoring(directory string, filename string, marker string, t *testing.T) {
 	refac, selection, remainder, passFail := splitMarker(filename, marker, t)
 
-	r := GetRefactoring(refac)
+	r := engine.GetRefactoring(refac)
 	if r == nil {
 		t.Fatalf("There is no refactoring named %s (from marker %s)", refac, marker)
 	}
@@ -205,10 +207,10 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 		t.Fatal(err)
 	}
 
-	args := InterpretArgs(remainder, r.Description().Params)
+	args := refactoring.InterpretArgs(remainder, r.Description().Params)
 
 	fileSystem := &filesystem.LocalFileSystem{}
-	config := &Config{
+	config := &refactoring.Config{
 		FileSystem: fileSystem,
 		Scope:      []string{mainFile},
 		Selection:  selection,

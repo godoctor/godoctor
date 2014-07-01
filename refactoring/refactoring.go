@@ -31,35 +31,8 @@ import (
 	"golang-refactoring.org/go-doctor/text"
 )
 
-// All available refactorings, keyed by a unique, one-short, all-lowercase name
-var refactorings map[string]Refactoring
-
-func init() {
-	refactorings = map[string]Refactoring{
-		"rename":        new(renameRefactoring),
-		"reverseassign": new(reverseAssignRefactoring),
-		"shortassign":   new(shortAssignRefactoring),
-		"godoc":         new(addGodocRefactoring),
-		"debug":         new(debugRefactoring),
-		"null":          new(nullRefactoring),
-	}
-}
-
 // The maximum number of errors from the go/loader that will be reported
 const maxInitialErrors = 10
-
-// AllRefactorings returns all of the transformations that can be performed.
-// The keys of the returned map are short, single-word, all-lowercase names
-// (rename, fiximports, etc.); the values implement the Refactoring interface.
-func AllRefactorings() map[string]Refactoring {
-	return refactorings
-}
-
-// GetRefactoring returns a Refactoring keyed by the given short name.  The
-// short name must be one of the keys in the map returned by AllRefactorings.
-func GetRefactoring(shortName string) Refactoring {
-	return refactorings[shortName]
-}
 
 // Description of a parameter for a refactoring.
 //

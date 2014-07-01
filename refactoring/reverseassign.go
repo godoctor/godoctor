@@ -17,11 +17,11 @@ import (
 
 // A reverseAssignmentRefactoring changes explicitly-typed variable
 // declarations (var n int = 5) into short assignment statements (n := 5).
-type reverseAssignRefactoring struct {
+type ReverseAssign struct {
 	refactoringBase
 }
 
-func (r *reverseAssignRefactoring) Description() *Description {
+func (r *ReverseAssign) Description() *Description {
 	return &Description{
 		Name:    "Reverse Assignment Refactoring",
 		Params:  nil,
@@ -29,7 +29,7 @@ func (r *reverseAssignRefactoring) Description() *Description {
 	}
 }
 
-func (r *reverseAssignRefactoring) Run(config *Config) *Result {
+func (r *ReverseAssign) Run(config *Config) *Result {
 	if r.refactoringBase.Run(config); r.Log.ContainsErrors() {
 		return &r.Result
 	}
@@ -54,19 +54,19 @@ func (r *reverseAssignRefactoring) Run(config *Config) *Result {
 	return &r.Result
 }
 
-func (r *reverseAssignRefactoring) lhsNames(decl *ast.GenDecl) string {
+func (r *ReverseAssign) lhsNames(decl *ast.GenDecl) string {
 	offset, _ := r.offsetLength(decl.Specs[0].(*ast.ValueSpec))
 	endOffset := r.program.Fset.Position(decl.Specs[0].(*ast.ValueSpec).Names[len(decl.Specs[0].(*ast.ValueSpec).Names)-1].End()).Offset
 	return string(r.fileContents[offset:endOffset])
 }
 
 // returns the replacement string
-func (r *reverseAssignRefactoring) replacement(decl *ast.GenDecl) string {
+func (r *ReverseAssign) replacement(decl *ast.GenDecl) string {
 	return (fmt.Sprintf("%s := ", r.lhsNames(decl)))
 }
 
 //calls the edit set
-func (r *reverseAssignRefactoring) callEditset(decl *ast.GenDecl) {
+func (r *ReverseAssign) callEditset(decl *ast.GenDecl) {
 	start, _ := r.offsetLength(decl)
 	repstrlen := r.program.Fset.Position(decl.Specs[0].(*ast.ValueSpec).Values[0].Pos()).Offset - r.program.Fset.Position(decl.Pos()).Offset
 	r.Edits[r.filename(r.file)].Add(text.Extent{start, repstrlen}, r.replacement(decl))

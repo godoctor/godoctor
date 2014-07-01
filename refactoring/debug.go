@@ -37,11 +37,11 @@ where <options> can be any or all of:
     showpackages      List all packages loaded (due to --scope)
     showreferences    Show all direct references to the selected identifier`
 
-type debugRefactoring struct {
+type Debug struct {
 	refactoringBase
 }
 
-func (r *debugRefactoring) Description() *Description {
+func (r *Debug) Description() *Description {
 	return &Description{
 		Name: "Debug Refactoring",
 		Params: []Parameter{Parameter{
@@ -53,7 +53,7 @@ func (r *debugRefactoring) Description() *Description {
 	}
 }
 
-func (r *debugRefactoring) Run(config *Config) *Result {
+func (r *Debug) Run(config *Config) *Result {
 	r.refactoringBase.Run(config)
 
 	r.Log.ChangeInitialErrorsToWarnings()
@@ -97,7 +97,7 @@ func (r *debugRefactoring) Run(config *Config) *Result {
 	return &r.Result
 }
 
-func (r *debugRefactoring) showAffected(out io.Writer) {
+func (r *Debug) showAffected(out io.Writer) {
 	errorMsg := "Please select an identifier for showaffected"
 
 	if r.selectedNode == nil {
@@ -132,11 +132,11 @@ func (r *debugRefactoring) showAffected(out io.Writer) {
 	}
 }
 
-func (r *debugRefactoring) showAST(out io.Writer) {
+func (r *Debug) showAST(out io.Writer) {
 	ast.Fprint(out, r.program.Fset, r.file, nil)
 }
 
-func (r *debugRefactoring) showCFG(out io.Writer) {
+func (r *Debug) showCFG(out io.Writer) {
 	ast.Inspect(r.file, func(n ast.Node) bool {
 		switch x := n.(type) {
 		case *ast.FuncDecl:
@@ -152,7 +152,7 @@ func (r *debugRefactoring) showCFG(out io.Writer) {
 	})
 }
 
-func (r *debugRefactoring) describeDefsUses(stmt ast.Stmt) string {
+func (r *Debug) describeDefsUses(stmt ast.Stmt) string {
 	var buf bytes.Buffer
 	defs, uses := dataflow.ReferencedVars([]ast.Stmt{stmt}, r.pkgInfo(r.file))
 	if len(defs) > 0 {
@@ -178,7 +178,7 @@ func listNames(vars map[*types.Var]struct{}) string {
 	return strings.TrimPrefix(buf.String(), ", ")
 }
 
-func (r *debugRefactoring) showIdentifiers(out io.Writer) {
+func (r *Debug) showIdentifiers(out io.Writer) {
 	r.forEachInitialFile(func(file *ast.File) {
 		fmt.Fprintf(out, "=====%s=====\n", r.filename(file))
 		ast.Inspect(file, func(n ast.Node) bool {
@@ -198,7 +198,7 @@ func (r *debugRefactoring) showIdentifiers(out io.Writer) {
 	})
 }
 
-func (r *debugRefactoring) showLoadedPackagesAndFiles(out io.Writer) {
+func (r *Debug) showLoadedPackagesAndFiles(out io.Writer) {
 	fmt.Fprintf(out, "GOPATH is %s\n", os.Getenv("GOPATH"))
 	cwd, _ := os.Getwd()
 
@@ -213,7 +213,7 @@ func (r *debugRefactoring) showLoadedPackagesAndFiles(out io.Writer) {
 	}
 }
 
-func (r *debugRefactoring) showReferences(out io.Writer) {
+func (r *Debug) showReferences(out io.Writer) {
 	errorMsg := "Please select an identifier for showreferences"
 
 	if r.selectedNode == nil {

@@ -19,11 +19,11 @@ import (
 
 // A ShortAssignmentRefactoring changes short assignment statements (n := 5)
 // into explicitly-typed variable declarations (var n int = 5).
-type shortAssignRefactoring struct {
+type ShortAssign struct {
 	refactoringBase
 }
 
-func (r *shortAssignRefactoring) Description() *Description {
+func (r *ShortAssign) Description() *Description {
 	return &Description{
 		Name:    "Short Assignment Refactoring",
 		Params:  nil,
@@ -31,7 +31,7 @@ func (r *shortAssignRefactoring) Description() *Description {
 	}
 }
 
-func (r *shortAssignRefactoring) Run(config *Config) *Result {
+func (r *ShortAssign) Run(config *Config) *Result {
 	if r.refactoringBase.Run(config); r.Log.ContainsErrors() {
 		return &r.Result
 	}
@@ -57,12 +57,12 @@ func (r *shortAssignRefactoring) Run(config *Config) *Result {
 	return &r.Result
 }
 
-func (r *shortAssignRefactoring) createEditSet(assign *ast.AssignStmt) {
+func (r *ShortAssign) createEditSet(assign *ast.AssignStmt) {
 	start, length := r.offsetLength(assign)
 	r.Edits[r.filename(r.file)].Add(text.Extent{start, length}, r.createReplacementString(assign))
 }
 
-func (r *shortAssignRefactoring) rhsExprs(assign *ast.AssignStmt) []string {
+func (r *ShortAssign) rhsExprs(assign *ast.AssignStmt) []string {
 	rhsValue := make([]string, len(assign.Rhs))
 	for j, rhs := range assign.Rhs {
 		offset, length := r.offsetLength(rhs)
@@ -71,7 +71,7 @@ func (r *shortAssignRefactoring) rhsExprs(assign *ast.AssignStmt) []string {
 	return rhsValue
 }
 
-func (r *shortAssignRefactoring) createReplacementString(assign *ast.AssignStmt) string {
+func (r *ShortAssign) createReplacementString(assign *ast.AssignStmt) string {
 	var buf bytes.Buffer
 	replacement := make([]string, len(assign.Rhs))
 	path, _ := astutil.PathEnclosingInterval(r.file, assign.Pos(), assign.End())

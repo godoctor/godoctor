@@ -9,11 +9,11 @@
 package refactoring
 
 // A nullRefactoring makes no changes to a program.
-type nullRefactoring struct {
+type Null struct {
 	refactoringBase
 }
 
-func (r *nullRefactoring) Description() *Description {
+func (r *Null) Description() *Description {
 	return &Description{
 		Name: "Null Refactoring",
 		Params: []Parameter{Parameter{
@@ -25,7 +25,7 @@ func (r *nullRefactoring) Description() *Description {
 	}
 }
 
-func (r *nullRefactoring) Run(config *Config) *Result {
+func (r *Null) Run(config *Config) *Result {
 	r.refactoringBase.Run(config)
 
 	if !validateArgs(config, r.Description(), r.Log) {
