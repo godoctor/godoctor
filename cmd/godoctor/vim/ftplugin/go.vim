@@ -3,7 +3,7 @@
 " license that can be found in the LICENSE file.
 "
 " To add to yours (in shell):
-" echo "set rtp+=$GOPATH/src/golang-refactoring.org/go-doctor/extras/vim" >> ~/.vimrc
+" echo "set rtp+=$GOPATH/src/golang-refactoring.org/go-doctor/cmd/godoctor/vim" >> ~/.vimrc
 "
 " TODO(reed): add other refactorings support (I know, I know, will integrate
 " into openrefactory... this is useful for now.)
@@ -48,7 +48,7 @@ fun! s:Rename(name)
     let cursor = line(".").",".col(".")
     let cursor = cursor.":".cursor
 
-    let out = system("go-doctor -format json ".s:scope." -pos ".cursor." ".expand("%:t")." rename ".a:name)
+    let out = system("godoctor -format json ".s:scope." -pos ".cursor." ".expand("%:t")." rename ".a:name)
     let js = parsejson#ParseJSON(out)
 
     if v:shell_error
@@ -63,7 +63,7 @@ fun! s:Rename(name)
     let qflist = []
     let og = bufnr("%")
     for f in keys(ch)
-        " get/make buffer, fill with contents from go-doctor
+        " get/make buffer, fill with contents from godoctor
         exec "badd ".fnameescape(f)
         let nr = bufnr(fnameescape(f))
         let contents = shellescape(ch[f], 1)
