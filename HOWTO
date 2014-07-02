@@ -60,3 +60,52 @@ Wait a minute for it to load (if your workspace is huge)
 Browse to http://localhost:8080/pkg/golang-refactoring.org/
 When you don't need it anymore, shut down the godoc server:
     killall godoc
+
+
+GIT STUFF----------------------------------------------------------------------
+
+Update information about what branches, commits, etc. are on the server, but
+don't change anything locally:
+    git fetch
+
+List branches that you have locally:
+    git branch
+
+List branches available on the server:
+    git branch -r
+
+Check out a development branch on the server that you do not yet have locally:
+    git checkout --track origin/devel-whatever
+
+Switch to a development branch you already checked out:
+    git checkout devel-whatever
+
+Update your development branch with changes from the server's master branch
+(assuming you have your development branch checked out):
+    git fetch
+    git merge origin/master
+
+Switch back to your local copy of the master branch
+(assuming you have your development branch checked out):
+    git checkout master
+    (Note: You must stash or commit local changes before doing this)
+
+Create a development branch for a new feature
+(assuming the master branch is currently checked out):
+    git checkout -b devel-something
+
+Create a development branch on the server from your local development branch
+(assuming your development branch is currently checked out):
+    git push origin devel-something
+
+Merge a local development branch into master, when a new feature is done:
+    git checkout master
+    git pull . devel-something
+
+Delete a local development branch when you don't need it anymore
+(assuming master or some other branch is currently checked out):
+    git branch -d devel-something
+
+Delete a development branch from the server
+(e.g., when the feature has been integrated into the master branch):
+    git push origin :devel-something
