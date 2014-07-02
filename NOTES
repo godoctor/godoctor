@@ -47,3 +47,16 @@ To display just the percentage of code covered:
 
 To open a Web browser showing individual lines covered/not covered:
     go test -coverprofile=coverage.out && go tool cover -html=coverage.out
+
+
+VIEW GODOC IN YOUR BROWSER-----------------------------------------------------
+
+Viewing the Go Doctor's GoDoc is a good way to check that a package's API is
+sane, since it lets you see each package as a third-party developer would.
+
+In a shell, start the godoc server in the background:
+    godoc -http :8080 &
+Wait a minute for it to load (if your workspace is huge)
+Browse to http://localhost:8080/pkg/golang-refactoring.org/
+When you don't need it anymore, shut down the godoc server:
+    killall godoc
