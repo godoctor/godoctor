@@ -126,6 +126,7 @@ func uses(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 		case *ast.BlockStmt: // no uses, skip
 		case *ast.BranchStmt: // no uses, skip
 		case *ast.CaseClause: // no uses, skip
+		case *ast.CommClause: // no uses, skip
 		case *ast.DeclStmt: // no uses, skip
 		case *ast.DeferStmt:
 			idnts = idents(stmt.Call)
