@@ -123,7 +123,7 @@ func uses(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 			for _, s := range stmt.Rhs {
 				idnts = union(idnts, idents(s))
 			}
-		case *ast.BlockStmt: // no uses, skip
+		case *ast.BlockStmt: // no uses, skip - should not appear in cfg
 		case *ast.BranchStmt: // no uses, skip
 		case *ast.CaseClause: // no uses, skip
 		case *ast.CommClause: // no uses, skip
