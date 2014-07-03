@@ -4,9 +4,7 @@
 
 package text
 
-import (
-	"testing"
-)
+import "testing"
 
 func applyToString(e *EditSet, s string) string {
 	result, err := ApplyToString(e, s)
@@ -14,6 +12,23 @@ func applyToString(e *EditSet, s string) string {
 		return "ERROR: " + err.Error()
 	} else {
 		return result
+	}
+}
+
+func TestSizeChange(t *testing.T) {
+	es := NewEditSet()
+	es.Add(Extent{2, 5}, "x") // replace 5 bytes with 1 (-4)
+	es.Add(Extent{7, 0}, "6") // add 1 byte
+	if es.SizeChange() != -3 {
+		t.Fatalf("SizeChange: expected -3, got %d", es.SizeChange())
+	}
+
+	es = NewEditSet()
+	hello := "こんにちは"
+	es.Add(Extent{6, 5}, hello)
+	chg := len(hello) - 5
+	if es.SizeChange() != int64(chg) {
+		t.Fatalf("SizeChange: chged %d, got %d", chg, es.SizeChange())
 	}
 }
 

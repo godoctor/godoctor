@@ -71,12 +71,11 @@ type Selection struct {
 	EndCol    int
 }
 
-func (s *Selection) String() string {
-	return fmt.Sprintf("%s:%d,%d:%d,%d",
-		s.Filename, s.StartLine, s.StartCol, s.EndLine, s.EndCol)
-}
-
-func (s *Selection) ShortString() string {
+func (s *Selection) PosString() string {
 	return fmt.Sprintf("%d,%d:%d,%d",
 		s.StartLine, s.StartCol, s.EndLine, s.EndCol)
+}
+
+func (s *Selection) String() string {
+	return fmt.Sprintf("%s: %s", s.Filename, s.PosString())
 }

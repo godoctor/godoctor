@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"strings"
 	"syscall"
@@ -177,7 +176,7 @@ func (e *EditSet) CreatePatch(in io.Reader) (result *Patch, err error) {
 func CreatePatchForFile(es *EditSet, filename string) (*Patch, error) {
 	file, err := os.OpenFile(filename, syscall.O_RDWR, 0666)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	defer file.Close()
@@ -190,7 +189,7 @@ func CreatePatchForFile(es *EditSet, filename string) (*Patch, error) {
 func ApplyToFile(es *EditSet, filename string) ([]byte, error) {
 	file, err := os.OpenFile(filename, syscall.O_RDWR, 0666)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	defer file.Close()

@@ -186,3 +186,62 @@ func testUnifiedDiff(a, b, expected, name string, t *testing.T) {
 			name, expected, diff)
 	}
 }
+
+func TestPatchOnFile(t *testing.T) {
+	// Insert "Before line 1" at the top of testdata/diff/lines.txt
+	testfile := "testdata/diff/lines.txt"
+
+	es := NewEditSet()
+	es.Add(Extent{0, 0}, "Before line 1\n")
+	patch, err := CreatePatchForFile(es, testfile)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := ApplyToFile(es, testfile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := strings.Replace(`Before line 1
+Line 1
+Line 2
+Line 3
+`, "\r\n", "\n", -1)
+	actual := strings.Replace(string(result), "\r\n", "\n", -1)
+	if expected != actual {
+		t.Fatalf("ApplyToFile failed:\n%s", actual)
+	}
+
+	var b bytes.Buffer
+	err = patch.Write("from", "to", &b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected = strings.Replace(`--- from
++++ to
+@@ -1,3 +1,4 @@
++Before line 1
+ Line 1
+ Line 2
+ Line 3
+`, "\r\n", "\n", -1)
+	actual = strings.Replace(b.String(), "\r\n", "\n", -1)
+	if expected != actual {
+		t.Fatalf("patch.Write failed:\n%s", b.String())
+	}
+}
+
+func TestPatchOnMissingFile(t *testing.T) {
+	fileDNE := "this_file_does_not_exist_ZzZzZz.txt"
+
+	es := NewEditSet()
+	_, err := CreatePatchForFile(es, fileDNE)
+	if err == nil {
+		t.Fatalf("Should have failed attempting to patch %s", fileDNE)
+	}
+
+	_, err = ApplyToFile(es, fileDNE)
+	if err == nil {
+		t.Fatalf("Should have failed attempting to patch %s", fileDNE)
+	}
+}
