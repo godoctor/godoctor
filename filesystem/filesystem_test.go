@@ -10,6 +10,11 @@ import (
 	"os"
 	"testing"
 
+	"code.google.com/p/go.tools/go/loader"
+
+	"go/build"
+	"go/parser"
+
 	"golang-refactoring.org/go-doctor/text"
 )
 
@@ -117,6 +122,29 @@ func TestEditedFileSystem(t *testing.T) {
 		t.Fatal("Incorrect file contents:\n", string(bytes))
 	}
 	if err := os.Remove(testFile); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLoader(t *testing.T) {
+	local := NewLocalFileSystem()
+	var lconfig loader.Config
+	build := build.Default
+	build.GOPATH = "testdata"
+	build.OpenFile = local.OpenFile
+	build.ReadDir = local.ReadDir
+	build.IsDir = nil // FIXME
+	build.HasSubdir = nil // FIXME
+	lconfig.Build = &build
+	lconfig.ParserMode = parser.ParseComments | parser.DeclarationErrors
+	lconfig.AllowErrors = false
+	lconfig.SourceImports = true
+	lconfig.TypeChecker.Error = func(err error) {
+		t.Fatal(err)
+	}
+	lconfig.FromArgs([]string{"testdata/src/main.go"}, true)
+	_, err := lconfig.Load()
+	if err != nil {
 		t.Fatal(err)
 	}
 }
