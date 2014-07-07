@@ -74,7 +74,7 @@ func TestExtentIntersect(t *testing.T) {
 }
 
 func TestSelectionString(t *testing.T) {
-	e := Selection{"filename", 1, 2, 3, 4}
+	e := LineColSelection{"filename", 1, 2, 3, 4}
 	assertEquals("1,2:3,4", e.PosString(), t)
 	assertEquals("filename: 1,2:3,4", e.String(), t)
 }

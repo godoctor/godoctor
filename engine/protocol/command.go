@@ -229,13 +229,14 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 	}
 	// setup TextSelection
 	textselection := input["textselection"].(map[string]interface{})
-	ts := &text.Selection{
+	ts := &text.LineColSelection{
 		Filename:  filepath.Join(state.Dir, textselection["filename"].(string)),
 		StartLine: int(textselection["startline"].(float64)),
 		StartCol:  int(textselection["startcol"].(float64)),
 		EndLine:   int(textselection["endline"].(float64)),
 		EndCol:    int(textselection["endcol"].(float64)),
 	}
+
 
 	// get refactoring
 	refac := engine.GetRefactoring(input["transformation"].(string))

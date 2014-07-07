@@ -107,7 +107,7 @@ type Config struct {
 	// file containing the text selection.
 	Scope []string
 	// The range of text on which to invoke the refactoring.
-	Selection *text.Selection
+	Selection text.Selection
 	// Refactoring-specific arguments.  To determine what arguments are
 	// required for each refactoring, see Refactoring.Description().Params.
 	// For example, for the Rename refactoring, you must specify a new name
@@ -233,18 +233,17 @@ func (r *refactoringBase) Run(config *Config) *Result {
 	}
 
 	var pkgInfo *loader.PackageInfo
-	pkgInfo, r.file = r.fileNamed(config.Selection.Filename)
+	pkgInfo, r.file = r.fileNamed(config.Selection.AbsFilename())
 	if pkgInfo == nil || r.file == nil {
 		r.Log.Errorf("The selected file, %s, was not found in the "+
 			"provided scope: %s",
-			config.Selection.Filename,
+			config.Selection.AbsFilename(),
 			config.Scope)
 		// This can happen on files containing +build
 		return &r.Result
 	}
 
-	r.selectionStart = r.lineColToPos(r.file, config.Selection.StartLine, config.Selection.StartCol)
-	r.selectionEnd = r.lineColToPos(r.file, config.Selection.EndLine, config.Selection.EndCol)
+	_, r.selectionStart, r.selectionEnd = config.Selection.Convert(r.program)
 
 	nodes, _ := astutil.PathEnclosingInterval(r.file,
 		r.selectionStart, r.selectionEnd)
@@ -273,9 +272,9 @@ func (r *refactoringBase) Run(config *Config) *Result {
 //     2. If filename is in $GOPATH/src, a package name is guessed by stripping
 //        $GOPATH/src/ from the filename, and that package is used as the scope.
 func (r *refactoringBase) guessScope(config *Config) []string {
-	fnameScope := []string{config.Selection.Filename}
+	fnameScope := []string{config.Selection.AbsFilename()}
 
-	absFilename, err := filepath.Abs(config.Selection.Filename)
+	absFilename, err := filepath.Abs(config.Selection.AbsFilename())
 	if err != nil {
 		r.Log.Error(err.Error())
 		return fnameScope

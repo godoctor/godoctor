@@ -359,7 +359,7 @@ func describe(s string) string {
 	return s
 }
 
-func splitMarker(filename string, marker string, t *testing.T) (refac string, selection *text.Selection, remainder []string, result string) {
+func splitMarker(filename string, marker string, t *testing.T) (refac string, selection text.Selection, remainder []string, result string) {
 	filename, err := filepath.Abs(filename)
 	if err != nil {
 		t.Fatal(err)
@@ -373,7 +373,7 @@ func splitMarker(filename string, marker string, t *testing.T) (refac string, se
 	startCol := parseInt(fields[2], t)
 	endLine := parseInt(fields[3], t)
 	endCol := parseInt(fields[4], t)
-	selection = &text.Selection{filename,
+	selection = &text.LineColSelection{filename,
 		startLine, startCol, endLine, endCol}
 	remainder = fields[5 : len(fields)-1]
 	result = fields[len(fields)-1]
