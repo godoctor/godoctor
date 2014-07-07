@@ -192,7 +192,7 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 	cwd, _ := os.Getwd()
 	absPath, _ := filepath.Abs(filename)
 	relativePath, _ := filepath.Rel(cwd, absPath)
-	fmt.Println(name, relativePath, selection.PosString())
+	fmt.Println(name, relativePath)
 
 	mainFile := filepath.Join(directory, MAIN_DOT_GO)
 	if !exists(mainFile, t) {

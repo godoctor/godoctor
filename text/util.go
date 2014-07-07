@@ -9,13 +9,11 @@ package text
 
 import (
 	"fmt"
-	"go/ast"
 	"go/token"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-
-	"code.google.com/p/go.tools/go/loader"
 )
 
 // An Extent consists of two integers: a 0-based byte offset and a
@@ -65,18 +63,26 @@ func (o *Extent) String() string {
 	return fmt.Sprintf("offset %d, length %d", o.Offset, o.Length)
 }
 
-// A Selection represents a selection in a text editor.  It consists of a
-// filename, the line/column where the selected text begins, and the
-// line/column where the text selection ends.  The end line and column must be
-// greater than or equal to the start line and column, respectively.  Line and
-// column numbers are 1-based.
+// A Selection represents a range of text within a particular file.  It is
+// used to represent a selection in a text editor.
 type Selection interface {
-	Convert(*loader.Program) (*ast.File, token.Pos, token.Pos)
-	AbsFilename() string
-	PosString() string
+	// Convert returns start and end positions corresponding to this
+	// selection.  It returns an error if this selection corresponds to a
+	// file that is not in the given FileSet, or if the selected region is
+	// not in range.
+	Convert(*token.FileSet) (token.Pos, token.Pos, error)
+	// GetFilename returns the file containing this selection.  The
+	// returned filename may be an absolute or relative path and does is
+	// not guaranteed to correspond to a valid file.
+	GetFilename() string
+	// String returns a human-readable representation of this Selection.
 	String() string
 }
 
+// A LineColSelection is a Selection consisting of a filename, the line/column
+// where the selected text begins, and the line/column where the text selection
+// ends.  The end line and column must be greater than or equal to the start
+// line and column, respectively.  Line and column numbers are 1-based.
 type LineColSelection struct {
 	Filename  string
 	StartLine int
@@ -85,23 +91,87 @@ type LineColSelection struct {
 	EndCol    int
 }
 
-func (lc *LineColSelection) Convert(program *loader.Program) (*ast.File, token.Pos, token.Pos) {
-	absFilename, _ := filepath.Abs(lc.Filename)
-	var file *ast.File
-	for _, pkgInfo := range program.AllPackages {
-		for _, f := range pkgInfo.Files {
-			thisFile := program.Fset.Position(f.Pos()).Filename
-			if thisFile == lc.Filename || thisFile == absFilename {
-				file = f
+func (lc *LineColSelection) Convert(fset *token.FileSet) (token.Pos, token.Pos, error) {
+	file := findFile(fset, lc.Filename)
+	if file == nil {
+		// error message from findQueryPos in go.tools/oracle/pos.go
+		return 0, 0, fmt.Errorf("couldn't find file containing position")
+	}
+
+	startPos, err := lineColToPos(file, lc.StartLine, lc.StartCol)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	endPos, err := lineColToPos(file, lc.EndLine, lc.EndCol)
+	if err != nil {
+		return 0, 0, err
+	}
+	return startPos, endPos, nil
+}
+
+// findFile returns the file corresponding to the given filename, or nil if no
+// file can be found with that filename.  The absolute path of the returned
+// file can be found via f.Name().
+func findFile(fset *token.FileSet, filename string) *token.File {
+	// from findQueryPos in go.tools/oracle/pos.go
+	var file *token.File
+	fset.Iterate(func(f *token.File) bool {
+		if sameFile(filename, f.Name()) {
+			file = f
+			return false // done
+		}
+		return true // continue
+	})
+	return file
+}
+
+// sameFile returns true if x and y have the same basename and denote
+// the same file.
+func sameFile(x, y string) bool { // from go.tools/oracle/pos.go
+	if filepath.Base(x) == filepath.Base(y) { // (optimisation)
+		if xi, err := os.Stat(x); err == nil {
+			if yi, err := os.Stat(y); err == nil {
+				return os.SameFile(xi, yi)
 			}
 		}
 	}
-	startPos := lineColToPos(program, file, lc.StartLine, lc.StartCol)
-	endPos := lineColToPos(program, file, lc.EndLine, lc.EndCol)
-	return file, startPos, endPos
+	return false
 }
 
-func (lc *LineColSelection) AbsFilename() string {
+// lineColToPos converts a line/column position to a token.Pos.  The first
+// character in a file is considered to be at line 1, column 1.
+func lineColToPos(file *token.File, line int, column int) (token.Pos, error) {
+	// Binary search to find a position on the given line
+	lastOffset := file.Size() - 1
+	start := 0
+	end := lastOffset
+	mid := (start + end) / 2
+	for start <= end {
+		midLine := file.Line(file.Pos(mid))
+		if line == midLine {
+			break
+		} else if line < midLine {
+			end = mid - 1
+		} else /* line > midLine */ {
+			start = mid + 1
+		}
+		mid = (start + end) / 2
+	}
+
+	// Now mid is some position on the correct line; add/subtract to find
+	// the position at the correct column
+	difference := file.Position(file.Pos(mid)).Column - column
+	pos := file.Pos(mid - difference)
+	p := file.Position(pos)
+	if p.Line != line || p.Column != column {
+		return pos, fmt.Errorf("Invalid position: line %d, column %d",
+			line, column)
+	}
+	return pos, nil
+}
+
+func (lc *LineColSelection) GetFilename() string {
 	return lc.Filename
 }
 
@@ -131,38 +201,9 @@ func NewSelection(filename string, pos string) (Selection, error) {
 		EndLine: el, EndCol: ec}, nil
 }
 
-func (lc *LineColSelection) PosString() string {
-	return fmt.Sprintf("%d,%d:%d,%d",
-		lc.StartLine, lc.StartCol, lc.EndLine, lc.EndCol)
-}
-
 func (lc *LineColSelection) String() string {
-	return fmt.Sprintf("%s: %s", lc.Filename, lc.PosString())
-}
-
-// lineColToPos converts a line/column position (where the first character in a
-// file is at // line 1, column 1) into a token.Pos
-func lineColToPos(program *loader.Program, file *ast.File, line int, column int) token.Pos {
-	if file == nil {
-		panic("file is nil")
-	}
-	lastLine := -1
-	thisColumn := 1
-	tfile := program.Fset.File(file.Package)
-	for i, size := 0, tfile.Size(); i < size; i++ {
-		pos := tfile.Pos(i)
-		thisLine := tfile.Line(pos)
-		if thisLine != lastLine {
-			thisColumn = 1
-		} else {
-			thisColumn++
-		}
-		if thisLine == line && thisColumn == column {
-			return pos
-		}
-		lastLine = thisLine
-	}
-	return file.Pos()
+	return fmt.Sprintf("%s: %d,%d:%d,%d", lc.Filename,
+		lc.StartLine, lc.StartCol, lc.EndLine, lc.EndCol)
 }
 
 // e.g. 302,6

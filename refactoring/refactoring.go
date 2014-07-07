@@ -24,7 +24,6 @@ import (
 	"reflect"
 	"strings"
 
-	"code.google.com/p/go.tools/astutil"
 	"code.google.com/p/go.tools/go/loader"
 	"code.google.com/p/go.tools/go/types"
 	"golang-refactoring.org/go-doctor/filesystem"
@@ -232,22 +231,23 @@ func (r *refactoringBase) Run(config *Config) *Result {
 		return &r.Result
 	}
 
-	var pkgInfo *loader.PackageInfo
-	pkgInfo, r.file = r.fileNamed(config.Selection.AbsFilename())
-	if pkgInfo == nil || r.file == nil {
+	r.selectionStart, r.selectionEnd, err = config.Selection.Convert(r.program.Fset)
+	if err != nil {
+		r.Log.Error(err)
+		return &r.Result
+	}
+
+	pkgInfo, nodes, _ := r.program.PathEnclosingInterval(r.selectionStart, r.selectionEnd)
+	if pkgInfo == nil || len(nodes) < 1 {
 		r.Log.Errorf("The selected file, %s, was not found in the "+
 			"provided scope: %s",
-			config.Selection.AbsFilename(),
+			config.Selection.GetFilename(),
 			config.Scope)
 		// This can happen on files containing +build
 		return &r.Result
 	}
-
-	_, r.selectionStart, r.selectionEnd = config.Selection.Convert(r.program)
-
-	nodes, _ := astutil.PathEnclosingInterval(r.file,
-		r.selectionStart, r.selectionEnd)
 	r.selectedNode = nodes[0]
+	r.file = nodes[len(nodes)-1].(*ast.File)
 
 	reader, err := config.FileSystem.OpenFile(r.filename(r.file))
 	if err != nil {
@@ -272,9 +272,9 @@ func (r *refactoringBase) Run(config *Config) *Result {
 //     2. If filename is in $GOPATH/src, a package name is guessed by stripping
 //        $GOPATH/src/ from the filename, and that package is used as the scope.
 func (r *refactoringBase) guessScope(config *Config) []string {
-	fnameScope := []string{config.Selection.AbsFilename()}
+	fnameScope := []string{config.Selection.GetFilename()}
 
-	absFilename, err := filepath.Abs(config.Selection.AbsFilename())
+	absFilename, err := filepath.Abs(config.Selection.GetFilename())
 	if err != nil {
 		r.Log.Error(err.Error())
 		return fnameScope
