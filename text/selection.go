@@ -63,6 +63,44 @@ func (lc *LineColSelection) Convert(fset *token.FileSet) (token.Pos, token.Pos, 
 	return startPos, endPos, nil
 }
 
+func (lc *LineColSelection) GetFilename() string {
+	return lc.Filename
+}
+
+func (lc *LineColSelection) String() string {
+	return fmt.Sprintf("%s: %d,%d:%d,%d", lc.Filename,
+		lc.StartLine, lc.StartCol, lc.EndLine, lc.EndCol)
+}
+
+// An OffsetLength selection is a selection that consists
+// of a filename, an offset integer where the text selection
+// begins, and a length integer of how long the selection is.
+type OffsetLengthSelection struct {
+	Filename string
+	Offset   int
+	Length   int
+}
+
+func (ol *OffsetLengthSelection) Convert(fset *token.FileSet) (token.Pos, token.Pos, error) {
+	file := findFile(fset, ol.Filename)
+	if file == nil {
+		// error message from findQueryPos in go.tools/oracle/pos.go
+		return 0, 0, fmt.Errorf("couldn't find file containing position")
+	}
+	offset := file.Pos(ol.Offset)
+	length := file.Pos(ol.Length)
+	return offset, length, nil
+}
+
+func (ol *OffsetLengthSelection) GetFilename() string {
+	return ol.Filename
+}
+
+func (ol *OffsetLengthSelection) String() string {
+	return fmt.Sprintf("%s: %d,%d", ol.Filename,
+		ol.Offset, ol.Length)
+}
+
 // findFile returns the file corresponding to the given filename, or nil if no
 // file can be found with that filename.  The absolute path of the returned
 // file can be found via f.Name().
@@ -124,10 +162,6 @@ func lineColToPos(file *token.File, line int, column int) (token.Pos, error) {
 	return pos, nil
 }
 
-func (lc *LineColSelection) GetFilename() string {
-	return lc.Filename
-}
-
 // TODO add piece that conditionally checks if offset/length or row/col
 // Returns a new Selection type that will either be LineColSelection
 // or OffsetLengthSelection
@@ -152,11 +186,6 @@ func NewSelection(filename string, pos string) (Selection, error) {
 
 	return &LineColSelection{Filename: absFilename, StartLine: sl, StartCol: sc,
 		EndLine: el, EndCol: ec}, nil
-}
-
-func (lc *LineColSelection) String() string {
-	return fmt.Sprintf("%s: %d,%d:%d,%d", lc.Filename,
-		lc.StartLine, lc.StartCol, lc.EndLine, lc.EndCol)
 }
 
 // e.g. 302,6
