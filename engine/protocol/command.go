@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"time"
 
 	"golang-refactoring.org/go-doctor/engine"
 	"golang-refactoring.org/go-doctor/filesystem"
@@ -237,7 +238,6 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 		EndCol:    int(textselection["endcol"].(float64)),
 	}
 
-
 	// get refactoring
 	refac := engine.GetRefactoring(input["transformation"].(string))
 
@@ -279,7 +279,7 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 				return Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}}, err
 			}
 			diffFile, err := os.Create(strings.Join([]string{f, ".diff"}, ""))
-			p.Write(f, f, diffFile)
+			p.Write(f, f, time.Time{}, time.Time{}, diffFile)
 			//fmt.Println(f)
 			//fmt.Println(diffFile.Name())
 			changes = append(changes, map[string]string{"filename": f, "patchFile": diffFile.Name()})

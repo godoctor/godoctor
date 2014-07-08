@@ -17,6 +17,7 @@ import (
 	"log"
 	"os"
 	"syscall"
+	"time"
 
 	"golang-refactoring.org/go-doctor/text"
 )
@@ -41,13 +42,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	file1, err := readLines(args[0])
+	file1, file1time, err := readLines(args[0])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading %s: %s\n", args[0], err)
 		os.Exit(1)
 	}
 
-	file2, err := readLines(args[1])
+	file2, file2time, err := readLines(args[1])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading %s: %s\n", args[1], err)
 		os.Exit(1)
@@ -68,17 +69,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	patch.Write(args[0], args[1], os.Stdout)
+	patch.Write(args[0], args[1], file1time, file2time, os.Stdout)
 
 	os.Exit(0)
 }
 
-func readLines(filename string) ([]string, error) {
+func readLines(filename string) ([]string, time.Time, error) {
 	file, err := os.OpenFile(filename, syscall.O_RDWR, 0666)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer file.Close()
+
+	fi, err := file.Stat()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	var lines []string
 	scanner := bufio.NewScanner(file)
@@ -90,9 +96,9 @@ func readLines(filename string) ([]string, error) {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, err
+		return nil, time.Time{}, err
 	}
-	return lines, nil
+	return lines, fi.ModTime(), nil
 }
 
 // scanLinesWithEOL is similar to bufio.ScanLines, but it retains line

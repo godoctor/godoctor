@@ -35,6 +35,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+	"time"
 
 	"golang-refactoring.org/go-doctor/engine"
 	"golang-refactoring.org/go-doctor/engine/protocol"
@@ -181,7 +182,7 @@ func main() {
 			if !p.IsEmpty() {
 				var b bytes.Buffer
 				fmt.Fprintf(&b, "diff -u %s %s\n", f, f)
-				p.Write(f, f, &b)
+				p.Write(f, f, time.Time{}, time.Time{}, &b)
 				changes[f] = b.Bytes()
 			}
 		}
