@@ -171,21 +171,30 @@ func NewSelection(filename string, pos string) (Selection, error) {
 		return nil, fmt.Errorf("invalid filename")
 	}
 
-	args := strings.Split(pos, ":")
+	if strings.Contains(pos, ":") {
+		args := strings.Split(pos, ":")
 
-	if len(args) < 2 {
-		return nil, fmt.Errorf("invalid -pos")
+		if len(args) < 2 {
+			return nil, fmt.Errorf("invalid -pos")
+		}
+
+		sl, sc := parseLineCol(args[0])
+		el, ec := parseLineCol(args[1])
+
+		if sl < 0 || sc < 0 || el < 0 || ec < 0 {
+			return nil, fmt.Errorf("invalid -pos line, col")
+		}
+
+		return &LineColSelection{Filename: absFilename, StartLine: sl, StartCol: sc,
+			EndLine: el, EndCol: ec}, nil
+	} else {
+		offset, length := parseLineCol(pos)
+		if offset < 0 || length < 0 || length < offset {
+			return nil, fmt.Errorf("invalid -pos offset, length")
+		}
+
+		return &OffsetLengthSelection{Filename: absFilename, Offset: offset, Length: length}, nil
 	}
-
-	sl, sc := parseLineCol(args[0])
-	el, ec := parseLineCol(args[1])
-
-	if sl < 0 || sc < 0 || el < 0 || ec < 0 {
-		return nil, fmt.Errorf("invalid -pos line, col")
-	}
-
-	return &LineColSelection{Filename: absFilename, StartLine: sl, StartCol: sc,
-		EndLine: el, EndCol: ec}, nil
 }
 
 // e.g. 302,6
