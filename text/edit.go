@@ -119,7 +119,7 @@ func (e *EditSet) Add(pos Extent, replacement string) error {
 	}
 
 	// Insert edit into e.edits, keeping e.edits sorted by offset
-	var idx int = len(e.edits)
+	idx := len(e.edits)
 	for i := len(e.edits) - 1; i >= 0; i-- {
 		if e.edits[i].Offset >= pos.Offset {
 			idx = i
@@ -181,10 +181,10 @@ func (e *EditSet) applyTo(in *bufio.Reader, out *bufio.Writer) error {
 	// This uses the same idea as the linear-time merge in Merge Sort to
 	// apply the edits in this EditSet to the bytes from the input reader.
 	defer out.Flush()
-	var offset int = 0
+	offset := 0
 	for _, edit := range e.edits {
 		// Copy bytes preceding this edit
-		var bytesToWrite int64 = int64(edit.Offset - offset)
+		bytesToWrite := int64(edit.Offset - offset)
 		bytesWritten, err := io.CopyN(out, in, bytesToWrite)
 		offset += int(bytesWritten)
 		if bytesWritten < bytesToWrite {
@@ -248,8 +248,8 @@ func ApplyToFile(es *EditSet, filename string) ([]byte, error) {
 	return ApplyToReader(es, file)
 }
 
-// ApplyToFile reads bytes from a string, applying the edits in an EditSet and
-// returning the result as a string.
+// ApplyToString reads bytes from a string, applying the edits in an EditSet
+// and returning the result as a string.
 func ApplyToString(es *EditSet, s string) (string, error) {
 	bs, err := ApplyToReader(es, strings.NewReader(s))
 	return string(bs), err

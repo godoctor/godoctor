@@ -75,9 +75,8 @@ func applyToString(e *EditSet, s string) string {
 	result, err := ApplyToString(e, s)
 	if err != nil {
 		return "ERROR: " + err.Error()
-	} else {
-		return result
 	}
+	return result
 }
 
 func TestSizeChange(t *testing.T) {
@@ -141,7 +140,7 @@ func TestOverlap(t *testing.T) {
 		edit := Extent{tst.offset, tst.length}
 		err := es.Add(edit, "z")
 		if tst.overlapExpected != (err != nil) {
-			t.Fatalf("Overlapping edit %s undetected", edit)
+			t.Fatalf("Overlapping edit %v undetected", edit)
 		}
 	}
 }

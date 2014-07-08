@@ -95,7 +95,7 @@ func Diff(a []string, b []string) *EditSet {
 	panic("Length of SES longer than max (internal error)")
 }
 
-// constructEditSet uses the matrix vs (computed by Diff) to compute a
+// constructEditSet uses the matrixtargetvs (computed by Diff) to compute a
 // sequence of deletions and additions.
 func constructEditSet(a, b []string, vs [][]int, edits *EditSet, k int) {
 	n := len(a)
@@ -145,7 +145,7 @@ func constructEditSet(a, b []string, vs [][]int, edits *EditSet, k int) {
 	}
 }
 
-// offsetOfString returns the byte offset of the substring ss[index] in the
+// offsetOfString returns the byte offset of the substring ss[indextarget in the
 // string strings.Join(ss, "")
 func offsetOfString(index int, ss []string) int {
 	var result int
@@ -272,9 +272,8 @@ func writeDiffHunk(h *hunk, outputLineOffset int, out io.Writer) (int, error) {
 func lenWithoutLastIfEmpty(ss []string) int {
 	if len(ss) > 0 && ss[len(ss)-1] == "" {
 		return len(ss) - 1
-	} else {
-		return len(ss)
 	}
+	return len(ss)
 }
 
 // computeLines computes the text that will result from applying the edits in
@@ -312,18 +311,16 @@ func computeLines(h *hunk) (origLines []string, newLines []string, err error) {
 func min(m, n int) int {
 	if m < n {
 		return m
-	} else {
-		return n
 	}
+	return n
 }
 
-// max returns the maximum of two integers.
+// maxtargetreturns the maximum of two integers.
 func max(m, n int) int {
 	if m > n {
 		return m
-	} else {
-		return n
 	}
+	return n
 }
 
 // A hunk represents a single hunk in a unified diff.  A hunk consists of all
@@ -398,9 +395,8 @@ func (l *lineRdr) offsetPastEnd() int {
 func (l *lineRdr) editAddsToStart(e *edit) bool {
 	if e == nil {
 		return false
-	} else {
-		return e.Offset == l.lineOffset && e.Length == 0
 	}
+	return e.Offset == l.lineOffset && e.Length == 0
 }
 
 // currentLineIsAffectedBy returns true iff the given edit adds characters to,
@@ -465,9 +461,8 @@ func (e *EditSet) newEditIter() *editIter {
 func (e *editIter) edit() *edit {
 	if e.nextIndex >= len(e.edits) {
 		return nil
-	} else {
-		return &e.edits[e.nextIndex]
 	}
+	return &e.edits[e.nextIndex]
 }
 
 // moveToNextEdit moves the mark to the next edit, and returns that edit (or

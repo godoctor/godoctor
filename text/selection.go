@@ -12,9 +12,12 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 )
+
+const fileNotFoundFmt = "The file %s was not found or was not loaded"
 
 // A Selection represents a range of text within a particular file.  It is
 // used to represent a selection in a text editor.
@@ -35,7 +38,9 @@ type Selection interface {
 // A LineColSelection is a Selection consisting of a filename, the line/column
 // where the selected text begins, and the line/column where the text selection
 // ends.  The end line and column must be greater than or equal to the start
-// line and column, respectively.  Line and column numbers are 1-based.
+// line and column, respectively.  Line and column numbers are 1-based.  The
+// end position is inclusive, so a LineColSelection always represents a
+// selection of at least one character.
 type LineColSelection struct {
 	Filename  string
 	StartLine int
@@ -44,11 +49,13 @@ type LineColSelection struct {
 	EndCol    int
 }
 
+// Convert returns start and end positions corresponding to this selection.  It
+// returns an error if this selection corresponds to a file that is not in the
+// given FileSet, or if the selected region is not in range.
 func (lc *LineColSelection) Convert(fset *token.FileSet) (token.Pos, token.Pos, error) {
 	file := findFile(fset, lc.Filename)
 	if file == nil {
-		// error message from findQueryPos in go.tools/oracle/pos.go
-		return 0, 0, fmt.Errorf("couldn't find file containing position")
+		return 0, 0, fmt.Errorf(fileNotFoundFmt, lc.Filename)
 	}
 
 	startPos, err := lineColToPos(file, lc.StartLine, lc.StartCol)
@@ -56,13 +63,25 @@ func (lc *LineColSelection) Convert(fset *token.FileSet) (token.Pos, token.Pos, 
 		return 0, 0, err
 	}
 
-	endPos, err := lineColToPos(file, lc.EndLine, lc.EndCol)
+	lastPos, err := lineColToPos(file, lc.EndLine, lc.EndCol)
 	if err != nil {
 		return 0, 0, err
+	}
+
+	endPos := lastPos + 1
+	if endPos < startPos {
+		return 0, 0, fmt.Errorf("Invalid selection (end < start)")
+	}
+
+	if !startPos.IsValid() || !endPos.IsValid() {
+		return 0, 0, fmt.Errorf("Invalid selection %v", lc)
 	}
 	return startPos, endPos, nil
 }
 
+// GetFilename returns the file containing this selection.  The returned
+// filename may be an absolute or relative path and does is not guaranteed to
+// correspond to a valid file.
 func (lc *LineColSelection) GetFilename() string {
 	return lc.Filename
 }
@@ -72,26 +91,42 @@ func (lc *LineColSelection) String() string {
 		lc.StartLine, lc.StartCol, lc.EndLine, lc.EndCol)
 }
 
-// An OffsetLength selection is a selection that consists
-// of a filename, an offset integer where the text selection
-// begins, and a length integer of how long the selection is.
+// An OffsetLengthSelection is a Selection consisting of a filename, an offset
+// (a nonnegative byte offset where the text selection begins), and a length (a
+// nonnegative integer describing the number of bytes in the selection).  The
+// first byte in a file is considered to be at offset 0.  A selection of length
+// 0 is permissible.
 type OffsetLengthSelection struct {
 	Filename string
 	Offset   int
 	Length   int
 }
 
+// Convert returns start and end positions corresponding to this selection.  It
+// returns an error if this selection corresponds to a file that is not in the
+// given FileSet, or if the selected region is not in range.
 func (ol *OffsetLengthSelection) Convert(fset *token.FileSet) (token.Pos, token.Pos, error) {
 	file := findFile(fset, ol.Filename)
 	if file == nil {
-		// error message from findQueryPos in go.tools/oracle/pos.go
-		return 0, 0, fmt.Errorf("couldn't find file containing position")
+		return 0, 0, fmt.Errorf(fileNotFoundFmt, ol.Filename)
 	}
-	offset := file.Pos(ol.Offset)
-	length := file.Pos(ol.Length)
-	return offset, length, nil
+	if ol.Offset < 0 || ol.Offset >= file.Size() {
+		return 0, 0, fmt.Errorf("Invalid offset %d", ol.Offset)
+	}
+	if ol.Length < 0 || ol.Offset+ol.Length > file.Size() {
+		return 0, 0, fmt.Errorf("Invalid length %d", ol.Length)
+	}
+	start := file.Pos(ol.Offset)
+	end := file.Pos(ol.Offset + ol.Length)
+	if !start.IsValid() || !end.IsValid() {
+		return 0, 0, fmt.Errorf("Invalid selection %v", ol)
+	}
+	return start, end, nil
 }
 
+// GetFilename returns the file containing this selection.  The returned
+// filename may be an absolute or relative path and does is not guaranteed to
+// correspond to a valid file.
 func (ol *OffsetLengthSelection) GetFilename() string {
 	return ol.Filename
 }
@@ -117,14 +152,21 @@ func findFile(fset *token.FileSet, filename string) *token.File {
 	return file
 }
 
-// sameFile returns true if x and y have the same basename and denote
+// sameFile returns true if target and check have the same basename and denote
 // the same file.
-func sameFile(x, y string) bool { // from go.tools/oracle/pos.go
-	if filepath.Base(x) == filepath.Base(y) { // (optimisation)
-		if xi, err := os.Stat(x); err == nil {
-			if yi, err := os.Stat(y); err == nil {
-				return os.SameFile(xi, yi)
+// FIXME(jeff): Need to use filesystem here?
+func sameFile(target, check string) bool { // from go.tools/oracle/pos.go
+	if filepath.Base(target) == filepath.Base(check) { // (optimisation)
+		if targetf, err := os.Stat(target); err == nil {
+			if checkf, err := os.Stat(check); err == nil {
+				return os.SameFile(targetf, checkf)
 			}
+		} else {
+			// If the target filename does not exist (e.g., if it's
+			// the "bogus" standard input file -.go or comes from
+			// a FileSet populated with test data), fall back to
+			// string comparison
+			return target == check
 		}
 	}
 	return false
@@ -162,42 +204,39 @@ func lineColToPos(file *token.File, line int, column int) (token.Pos, error) {
 	return pos, nil
 }
 
-// TODO add piece that conditionally checks if offset/length or row/col
-// Returns a new Selection type that will either be LineColSelection
-// or OffsetLengthSelection
+// NewSelection takes an input string of the form "line,col:line,col" or
+// "offset,length" and returns a Selection (either LineColSelection or
+// OffsetLengthSelection) corresponding to that selection in the given file.
 func NewSelection(filename string, pos string) (Selection, error) {
-	absFilename, err := filepath.Abs(filename)
-	if err != nil {
-		return nil, fmt.Errorf("invalid filename")
-	}
-
-	if strings.Contains(pos, ":") {
+	if ok, _ := regexp.MatchString("^\\d+,\\d+:\\d+,\\d+$", pos); ok {
 		args := strings.Split(pos, ":")
-
-		if len(args) < 2 {
-			return nil, fmt.Errorf("invalid -pos")
-		}
-
 		sl, sc := parseLineCol(args[0])
 		el, ec := parseLineCol(args[1])
-
-		if sl < 0 || sc < 0 || el < 0 || ec < 0 {
-			return nil, fmt.Errorf("invalid -pos line, col")
+		if sl < 1 || sc < 1 || el < 1 || ec < 1 {
+			return nil, fmt.Errorf("Line/column cannot be 0")
 		}
-
-		return &LineColSelection{Filename: absFilename, StartLine: sl, StartCol: sc,
-			EndLine: el, EndCol: ec}, nil
-	} else {
+		return &LineColSelection{
+			Filename:  filename,
+			StartLine: sl,
+			StartCol:  sc,
+			EndLine:   el,
+			EndCol:    ec}, nil
+	} else if ok, _ := regexp.MatchString("^\\d+,\\d+$", pos); ok {
 		offset, length := parseLineCol(pos)
-		if offset < 0 || length < 0 || length < offset {
-			return nil, fmt.Errorf("invalid -pos offset, length")
+		if offset < 0 || length < 0 {
+			return nil, fmt.Errorf("Invalid offset/length")
 		}
-
-		return &OffsetLengthSelection{Filename: absFilename, Offset: offset, Length: length}, nil
+		return &OffsetLengthSelection{
+			Filename: filename,
+			Offset:   offset,
+			Length:   length}, nil
 	}
+	return nil, fmt.Errorf("invalid -pos %s", pos)
 }
 
-// e.g. 302,6
+// parseLineCol parses a string consisting of two nonnegative integers (e.g.,
+// "302,6") and returns the two integer values, or returns (-1,-1) if the
+// input string does not have the correct format
 func parseLineCol(linecol string) (int, int) {
 	lc := strings.Split(linecol, ",")
 	if l, err := strconv.ParseInt(lc[0], 10, 32); err == nil {
@@ -205,6 +244,5 @@ func parseLineCol(linecol string) (int, int) {
 			return int(l), int(c)
 		}
 	}
-
 	return -1, -1
 }
