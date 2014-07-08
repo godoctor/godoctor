@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 const diffTestDir = "testdata/diff/"
@@ -178,7 +179,7 @@ func testUnifiedDiff(a, b, expected, name string, t *testing.T) {
 
 	patch, _ := edits.CreatePatch(strings.NewReader(a))
 	var result bytes.Buffer
-	patch.Write("filename", "filename", &result)
+	patch.Write("filename", "filename", time.Time{}, time.Time{}, &result)
 	diff := strings.Replace(result.String(), "\r\n", "\n", -1)
 	expected = strings.Replace(expected, "\r\n", "\n", -1)
 
@@ -214,12 +215,14 @@ Line 3
 	}
 
 	var b bytes.Buffer
-	err = patch.Write("from", "to", &b)
+	time1 := time.Date(2013, time.June, 4, 0, 0, 0, 0, time.UTC)
+	time2 := time.Date(2014, time.July, 8, 13, 28, 43, 0, time.UTC)
+	err = patch.Write("from", "to", time1, time2, &b)
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected = strings.Replace(`--- from
-+++ to
+	expected = strings.Replace(`--- from  2013-06-04 00:00:00 +0000
++++ to  2014-07-08 13:28:43 +0000
 @@ -1,3 +1,4 @@
 +Before line 1
  Line 1
@@ -228,7 +231,7 @@ Line 3
 `, "\r\n", "\n", -1)
 	actual = strings.Replace(b.String(), "\r\n", "\n", -1)
 	if expected != actual {
-		t.Fatalf("patch.Write failed:\n%s", b.String())
+		t.Fatalf("patch.Write failed:\n%s", actual)
 	}
 }
 

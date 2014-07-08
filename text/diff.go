@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 )
 
 /* -=-=- Myers Diff Algorithm Implementation -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
@@ -181,9 +182,15 @@ func (p *Patch) add(hunk *hunk) {
 
 // Write writes a unified diff to the given io.Writer.  The given filenames
 // are used in the diff output.
-func (p *Patch) Write(origFile string, newFile string, out io.Writer) error {
+func (p *Patch) Write(origFile, newFile string, origTime, newTime time.Time, out io.Writer) error {
 	if !p.IsEmpty() {
-		fmt.Fprintf(out, "--- %s\n+++ %s\n", origFile, newFile)
+		layout := ""
+		if !origTime.IsZero() || !newTime.IsZero() {
+			layout = "  2006-01-02 15:04:05 -0700"
+		}
+		fmt.Fprintf(out, "--- %s%s\n+++ %s%s\n",
+			origFile, origTime.Format(layout),
+			newFile, newTime.Format(layout))
 		lineOffset := 0
 		for _, hunk := range p.hunks {
 			adjust, err := writeDiffHunk(hunk, lineOffset, out)
