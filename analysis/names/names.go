@@ -11,7 +11,6 @@ import (
 	"go/ast"
 	"go/token"
 	"regexp/syntax"
-	"unicode/utf8"
 
 	"code.google.com/p/go.tools/go/loader"
 	"code.google.com/p/go.tools/go/types"
@@ -359,13 +358,12 @@ func kmpWord(txt, pat string, T []int) (offsets []int) {
 // This function assumes it is given indices corresponding to a word,
 // and i, n are the beginning and end of that word, respectively.
 func isWord(txt string, i, n int) bool {
-	if i == 0 || n == len(txt)-1 {
-		return true
+	if i == 0 {
+		return !syntax.IsWordChar(rune(txt[n+1]))
+	} else if n == len(txt)-1 {
+		return !syntax.IsWordChar(rune(txt[i-1]))
 	}
-	b, _ := utf8.DecodeRuneInString(txt[:i])
-	e, _ := utf8.DecodeRuneInString(txt[n+1:])
-
-	return !syntax.IsWordChar(b) && !syntax.IsWordChar(e)
+	return !syntax.IsWordChar(rune(txt[i-1])) && !syntax.IsWordChar(rune(txt[n+1]))
 }
 
 // kmpFailure is the "failure function" for KMP.
