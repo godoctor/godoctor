@@ -40,7 +40,7 @@ func (r *ReverseAssign) Run(config *Config) *Result {
 
 	if r.selectedNode == nil {
 		r.Log.Error("selection cannot be null")
-		r.Log.AssociatePos(r.program.Fset, r.selectionStart, r.selectionEnd)
+		r.Log.AssociatePos(r.selectionStart, r.selectionEnd)
 		return &r.Result
 	}
 	switch selectedNode := r.selectedNode.(type) {
@@ -48,9 +48,9 @@ func (r *ReverseAssign) Run(config *Config) *Result {
 		r.callEditset(selectedNode)
 	default:
 		r.Log.Errorf("Select a short assignment (:=) statement! Selected node is %s", reflect.TypeOf(r.selectedNode))
-		r.Log.AssociatePos(r.program.Fset, r.selectionStart, r.selectionEnd)
+		r.Log.AssociatePos(r.selectionStart, r.selectionEnd)
 	}
-	r.updateLog(config)
+	r.updateLog(config, true)
 	return &r.Result
 }
 

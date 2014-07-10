@@ -44,5 +44,6 @@ func (r *Null) Run(config *Config) *Result {
 		return &r.Result
 	}
 
+	r.updateLog(config, false)
 	return &r.Result
 }

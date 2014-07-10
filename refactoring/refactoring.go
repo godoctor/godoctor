@@ -198,7 +198,7 @@ func (r *refactoringBase) Run(config *Config) *Result {
 			mutex.Lock()
 			r.Log.Error(message)
 			if err, ok := err.(types.Error); ok {
-				r.Log.AssociatePos(err.Fset, err.Pos, err.Pos)
+				r.Log.AssociatePos(err.Pos, err.Pos)
 			}
 			mutex.Unlock()
 		}
@@ -213,6 +213,7 @@ func (r *refactoringBase) Run(config *Config) *Result {
 		return &r.Result
 	}
 
+	r.Log.Fset = r.program.Fset
 	r.selectionStart, r.selectionEnd, err = config.Selection.Convert(r.program.Fset)
 	if err != nil {
 		r.Log.Error(err)
@@ -379,30 +380,38 @@ func (r *refactoringBase) lineColToPos(file *ast.File, line int, column int) tok
 	return file.Pos()
 }
 
-// updateLog applies the edits in r.Edits, updates existing error messages in
-// r.Log to reflect their locations in the resulting program, and if the log
-// does not contain any errors, type checks the refactored program, logging any
-// errors introduced by the refactoring.
-func (r *refactoringBase) updateLog(config *Config) {
+// updateLog applies the edits in r.Edits and updates existing error messages
+// in r.Log to reflect their locations in the resulting program.  If
+// checkForErrors is true, and if the log does not contain any initial errors,
+// the resulting program will be type checked, and any new errors introduced by
+// the refactoring will be logged.
+func (r *refactoringBase) updateLog(config *Config, checkForErrors bool) {
 	if r.Edits == nil || len(r.Edits) == 0 {
 		return
 	}
 
-	for _, entry := range r.Log.Entries {
-		// FIXME: Update existing entries' positions
-		entry = entry
+	if !r.Log.ContainsPositions() && !checkForErrors {
+		// No reason to load the program, since we won't update any
+		// positions and we won't report any new errors
+		return
 	}
 
-	logNewErrors := !r.Log.ContainsErrors()
+	if r.Log.ContainsInitialErrors() {
+		checkForErrors = false
+	}
 
 	oldFS := config.FileSystem
 	defer func() { config.FileSystem = oldFS }()
 	config.FileSystem = filesystem.NewEditedFileSystem(r.Edits)
 
+	newLogOldPos := NewLog()
+	newLogOldPos.Fset = r.program.Fset
+	newLogNewPos := NewLog()
+
 	mutex := &sync.Mutex{}
 	errors := 0
-	createLoader(config, func(err error) {
-		if !logNewErrors {
+	newProg, err := createLoader(config, func(err error) {
+		if !checkForErrors {
 			return
 		}
 		message := err.Error()
@@ -412,20 +421,34 @@ func (r *refactoringBase) updateLog(config *Config) {
 			errors < maxInitialErrors {
 			mutex.Lock()
 			errors++
-			r.Log.Errorf("Completing the transformation will introduce the following error: %s", message)
+			msg := fmt.Sprintf("Completing the transformation will introduce the following error: %s", message)
+			newLogOldPos.Error(msg)
+			newLogNewPos.Error(msg)
 			if err, ok := err.(types.Error); ok {
-				newPos := mapPos(err.Fset, err.Pos, r.Edits, r.program.Fset)
-				r.Log.AssociatePos(r.program.Fset, newPos, newPos)
+				oldPos := mapPos(err.Fset, err.Pos, r.Edits, r.program.Fset, true)
+				newLogOldPos.AssociatePos(oldPos, oldPos)
+				newLogNewPos.Fset = err.Fset
+				newLogNewPos.AssociatePos(err.Pos, err.Pos)
 			}
 			mutex.Unlock()
 		}
 	})
+	if newProg == nil || err != nil {
+		r.Log.Append(newLogOldPos.Entries)
+		return
+	}
+
+	r.Log.Fset = newProg.Fset
+	for _, entry := range r.Log.Entries {
+		entry.Pos = mapPos(r.program.Fset, entry.Pos, r.Edits, newProg.Fset, false)
+	}
+	r.Log.Append(newLogNewPos.Entries)
 }
 
 // mapPos takes a Pos in one FileSet and returns the corresponding Pos in
 // another FileSet, ``undoing'' the given edits to determine the corresponding
 // offset and comparing filenames (as strings) to find the corresponding file.
-func mapPos(from *token.FileSet, pos token.Pos, edits map[string]*text.EditSet, to *token.FileSet) token.Pos {
+func mapPos(from *token.FileSet, pos token.Pos, edits map[string]*text.EditSet, to *token.FileSet, reverse bool) token.Pos {
 	if !pos.IsValid() {
 		return pos
 	}
@@ -433,7 +456,11 @@ func mapPos(from *token.FileSet, pos token.Pos, edits map[string]*text.EditSet, 
 	filename := from.Position(pos).Filename
 	offset := from.Position(pos).Offset
 	if es, ok := edits[filename]; ok {
-		offset = es.OldOffset(offset)
+		if reverse {
+			offset = es.OldOffset(offset)
+		} else {
+			offset = es.NewOffset(offset)
+		}
 	}
 
 	result := token.NoPos

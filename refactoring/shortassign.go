@@ -42,7 +42,7 @@ func (r *ShortAssign) Run(config *Config) *Result {
 
 	if r.selectedNode == nil {
 		r.Log.Error("The selection cannot be null.Please select a valid node!")
-		r.Log.AssociatePos(r.program.Fset, r.selectionStart, r.selectionEnd)
+		r.Log.AssociatePos(r.selectionStart, r.selectionEnd)
 		return &r.Result
 	}
 
@@ -51,9 +51,9 @@ func (r *ShortAssign) Run(config *Config) *Result {
 		r.createEditSet(selectedNode)
 	default:
 		r.Log.Errorf("Select a short assignment (:=) statement! Selected node is %s", reflect.TypeOf(r.selectedNode))
-		r.Log.AssociatePos(r.program.Fset, r.selectionStart, r.selectionEnd)
+		r.Log.AssociatePos(r.selectionStart, r.selectionEnd)
 	}
-	r.updateLog(config)
+	r.updateLog(config, true)
 	return &r.Result
 }
 

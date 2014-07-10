@@ -101,7 +101,7 @@ func (r *Debug) showAffected(out io.Writer) {
 
 	if r.selectedNode == nil {
 		r.Log.Error(errorMsg)
-		r.Log.AssociatePos(r.program.Fset, r.selectionStart, r.selectionEnd)
+		r.Log.AssociatePos(r.selectionStart, r.selectionEnd)
 		return
 	}
 	switch id := r.selectedNode.(type) {
@@ -126,7 +126,7 @@ func (r *Debug) showAffected(out io.Writer) {
 		}
 	default:
 		r.Log.Error(errorMsg)
-		r.Log.AssociatePos(r.program.Fset, r.selectionStart, r.selectionEnd)
+		r.Log.AssociatePos(r.selectionStart, r.selectionEnd)
 		return
 	}
 }
@@ -217,7 +217,7 @@ func (r *Debug) showReferences(out io.Writer) {
 
 	if r.selectedNode == nil {
 		r.Log.Error(errorMsg)
-		r.Log.AssociatePos(r.program.Fset, r.selectionStart, r.selectionEnd)
+		r.Log.AssociatePos(r.selectionStart, r.selectionEnd)
 		return
 	}
 	switch id := r.selectedNode.(type) {
@@ -243,7 +243,7 @@ func (r *Debug) showReferences(out io.Writer) {
 		}
 	default:
 		r.Log.Error(errorMsg)
-		r.Log.AssociatePos(r.program.Fset, r.selectionStart, r.selectionEnd)
+		r.Log.AssociatePos(r.selectionStart, r.selectionEnd)
 		return
 	}
 }
