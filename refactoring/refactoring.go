@@ -114,6 +114,9 @@ type Config struct {
 	// for the entity being renamed.  If the refactoring does not require
 	// any arguments, this may be nil.
 	Args []interface{}
+	// If true, an exhaustive list of edits made by the refactoring will be
+	// appended to the log.
+	Verbose bool
 	// The GOPATH.  If this is set to the empty string, the GOPATH is
 	// determined from the environment.
 	GoPath string
@@ -181,7 +184,7 @@ func (r *refactoringBase) Run(config *Config) *Result {
 
 	if config.Scope == nil {
 		config.Scope = r.guessScope(config)
-		r.Log.Warnf("No scope provided; defaulting to %s",
+		r.Log.Infof("Using default scope %s",
 			strings.Join(config.Scope, " "))
 	} else {
 		r.Log.Infof("Scope is %s", strings.Join(config.Scope, " "))
@@ -391,7 +394,7 @@ func (r *refactoringBase) updateLog(config *Config, checkForErrors bool) {
 		return
 	}
 
-	if !r.Log.ContainsPositions() && !checkForErrors {
+	if !config.Verbose && !r.Log.ContainsPositions() && !checkForErrors {
 		// No reason to load the program, since we won't update any
 		// positions and we won't report any new errors
 		return
@@ -444,11 +447,56 @@ func (r *refactoringBase) updateLog(config *Config, checkForErrors bool) {
 		entry.Pos = mapPos(r.program.Fset, entry.Pos, r.Edits, newProg.Fset, false)
 	}
 	r.Log.Append(newLogNewPos.Entries)
+
+	if config.Verbose {
+		fileCount := len(r.Edits)
+		fileNum := 1
+		for filename, edits := range r.Edits {
+			firstEdit := true
+			edits.Iterate(func(extent text.Extent, replace string) {
+				oldFile := findFile(filename, r.program.Fset)
+				oldPos := oldFile.Pos(extent.Offset)
+				newPos := mapPos(r.program.Fset, oldPos,
+					r.Edits, r.Log.Fset, true)
+				if firstEdit && fileCount > 1 {
+					r.Log.Infof("File %d of %d: %s",
+						fileNum,
+						fileCount,
+						filepath.Base(filename))
+					r.Log.AssociatePos(newPos, newPos)
+					fileNum++
+					firstEdit = false
+				}
+				r.Log.Infof(describeEdit(extent, replace))
+				r.Log.AssociatePos(newPos, newPos)
+			})
+		}
+	}
+}
+
+// describeEdit returns a human-readable, one-line description of a text edit
+func describeEdit(extent text.Extent, replacement string) string {
+	if extent.Length == 0 {
+		return fmt.Sprintf("| Insert \"%s\"", shorten(replacement))
+	} else if replacement == "" {
+		return fmt.Sprintf("| Delete %d byte(s)", extent.Length)
+	} else {
+		return fmt.Sprintf("| Replace %d byte(s) with \"%s\"",
+			extent.Length, shorten(replacement))
+	}
+}
+
+func shorten(s string) string {
+	if len(s) < 23 {
+		return s
+	}
+	return s[:23] + "..."
 }
 
 // mapPos takes a Pos in one FileSet and returns the corresponding Pos in
-// another FileSet, ``undoing'' the given edits to determine the corresponding
-// offset and comparing filenames (as strings) to find the corresponding file.
+// another FileSet, applying or undoing the given edits (if reverse is false or
+// true, respectively) to determine the corresponding offset and comparing
+// filenames (as strings) to find the corresponding file.
 func mapPos(from *token.FileSet, pos token.Pos, edits map[string]*text.EditSet, to *token.FileSet, reverse bool) token.Pos {
 	if !pos.IsValid() {
 		return pos
@@ -465,9 +513,19 @@ func mapPos(from *token.FileSet, pos token.Pos, edits map[string]*text.EditSet, 
 	}
 
 	result := token.NoPos
-	to.Iterate(func(f *token.File) bool {
+	if file := findFile(filename, to); file != nil {
+		result = file.Pos(offset)
+	}
+	return result
+}
+
+// findFile searches the given FileSet for a File with the given name and
+// returns it (or nil if no such file could be found).
+func findFile(filename string, fset *token.FileSet) *token.File {
+	var result *token.File = nil
+	fset.Iterate(func(f *token.File) bool {
 		if f.Name() == filename {
-			result = f.Pos(offset)
+			result = f
 			return false
 		}
 		return true

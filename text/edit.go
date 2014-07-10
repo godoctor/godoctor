@@ -107,6 +107,11 @@ func (e *edit) overlaps(pos *Extent) bool {
 	return e.Extent.Intersect(pos) != nil
 }
 
+func (e *edit) String() string {
+	return "Replace " + e.Extent.String() +
+		" with \"" + e.replacement + "\""
+}
+
 // Add inserts an edit into this EditSet, returning an error if the edit has a
 // negative offset or overlaps an edit previously added to this EditSet.
 // FIXME(jeff): pos should be *Extent, not Extent
@@ -192,9 +197,12 @@ func (e *EditSet) SizeChange() int64 {
 	return total
 }
 
-func (e *edit) String() string {
-	return "Replace " + e.Extent.String() +
-		" with \"" + e.replacement + "\""
+// Iterate executes the given callback on each of the edits in this EditSet,
+// traversing the edits in ascending order by offset.
+func (e *EditSet) Iterate(callback func(Extent, string)) {
+	for _, edit := range e.edits {
+		callback(edit.Extent, edit.replacement)
+	}
 }
 
 // String returns a human-readable description of this EditSet (for debugging).
