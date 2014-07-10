@@ -231,7 +231,7 @@ func (log *Log) RemoveInitialEntries() {
 func (log *Log) ChangeInitialErrorsToWarnings() {
 	newEntries := []*Entry{}
 	for _, entry := range log.Entries {
-		if entry.isInitial {
+		if entry.isInitial && entry.Severity == Error {
 			entry.Severity = Warning
 			newEntries = append(newEntries, entry)
 		} else {

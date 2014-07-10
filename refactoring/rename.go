@@ -82,7 +82,7 @@ func (r *Rename) Run(config *Config) *Result {
 		}
 
 		r.rename(ident)
-
+		r.updateLog(config)
 	default:
 		r.Log.Error("Please select an identifier to rename.")
 		r.Log.AssociatePos(r.program.Fset, r.selectionStart, r.selectionEnd)

@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 
 	"code.google.com/p/go.tools/go/loader"
 	"code.google.com/p/go.tools/go/types"
@@ -178,50 +179,31 @@ func (r *refactoringBase) Run(config *Config) *Result {
 		return &r.Result
 	}
 
-	buildContext := build.Default
-	if os.Getenv("GOPATH") != "" {
-		// The test runner may change the GOPATH environment variable
-		// since the program was started, so set it here explicitly
-		// (not necessary when run as a CLI tool, but necessary when
-		// run from refactoring_test.go)
-		buildContext.GOPATH = os.Getenv("GOPATH")
-	}
-	if config.GoPath != "" {
-		buildContext.GOPATH = config.GoPath
-	}
-	buildContext.ReadDir = config.FileSystem.ReadDir
-	buildContext.OpenFile = config.FileSystem.OpenFile
-
-	var lconfig loader.Config
-	lconfig.Build = &buildContext
-	lconfig.ParserMode = parser.ParseComments | parser.DeclarationErrors
-	lconfig.AllowErrors = true
-	lconfig.SourceImports = true
-	lconfig.TypeChecker.Error = func(err error) {
-		message := err.Error()
-		// FIXME: Needs to be thread-safe
-		// TODO: This is temporary until go/loader handles cgo
-		if !strings.Contains(message, cgoError1) &&
-			!strings.HasSuffix(message, cgoError2) &&
-			len(r.Log.Entries) < maxInitialErrors {
-			r.Log.Error(message)
-			r.Log.AssociatePos(err.(types.Error).Fset,
-				err.(types.Error).Pos,
-				err.(types.Error).Pos)
-		}
-	}
-
 	if config.Scope == nil {
 		config.Scope = r.guessScope(config)
-		r.Log.Warnf("No scope provided; guessing %s",
+		r.Log.Warnf("No scope provided; defaulting to %s",
 			strings.Join(config.Scope, " "))
 	} else {
 		r.Log.Infof("Scope is %s", strings.Join(config.Scope, " "))
 	}
-	lconfig.FromArgs(config.Scope, true)
 
 	var err error
-	r.program, err = lconfig.Load()
+	mutex := &sync.Mutex{}
+	r.program, err = createLoader(config, func(err error) {
+		message := err.Error()
+		// TODO: This is temporary until go/loader handles cgo
+		if !strings.Contains(message, cgoError1) &&
+			!strings.HasSuffix(message, cgoError2) &&
+			len(r.Log.Entries) < maxInitialErrors {
+			mutex.Lock()
+			r.Log.Error(message)
+			if err, ok := err.(types.Error); ok {
+				r.Log.AssociatePos(err.Fset, err.Pos, err.Pos)
+			}
+			mutex.Unlock()
+		}
+	})
+
 	r.Log.MarkInitial()
 	if err != nil {
 		r.Log.Error(err)
@@ -266,6 +248,39 @@ func (r *refactoringBase) Run(config *Config) *Result {
 	return &r.Result
 }
 
+func createLoader(config *Config, errorHandler func(error)) (*loader.Program, error) {
+	buildContext := build.Default
+	if os.Getenv("GOPATH") != "" {
+		// The test runner may change the GOPATH environment variable
+		// since the program was started, so set it here explicitly
+		// (not necessary when run as a CLI tool, but necessary when
+		// run from refactoring_test.go)
+		buildContext.GOPATH = os.Getenv("GOPATH")
+	}
+	if config.GoPath != "" {
+		buildContext.GOPATH = config.GoPath
+	}
+	buildContext.ReadDir = config.FileSystem.ReadDir
+	buildContext.OpenFile = config.FileSystem.OpenFile
+
+	var lconfig loader.Config
+	lconfig.Build = &buildContext
+	lconfig.ParserMode = parser.ParseComments | parser.DeclarationErrors
+	lconfig.AllowErrors = true
+	lconfig.SourceImports = true
+	lconfig.TypeChecker.Error = errorHandler
+
+	rest, err := lconfig.FromArgs(config.Scope, true)
+	if len(rest) > 0 {
+		errorHandler(fmt.Errorf("Unrecognized argument %s",
+			strings.Join(rest, " ")))
+	}
+	if err != nil {
+		errorHandler(err)
+	}
+	return lconfig.Load()
+}
+
 // guessScope makes a reasonable guess at the refactoring scope if the user
 // does not provide an explicit scope.  It guesses as follows:
 //     1. If filename is not in $GOPATH/src, filename is used as the scope.
@@ -306,7 +321,12 @@ func (r *refactoringBase) guessScope(config *Config) []string {
 		return fnameScope
 	}
 
-	return []string{filepath.ToSlash(filepath.Dir(relFilename))}
+	dir := filepath.Dir(relFilename)
+	if dir == "." {
+		return fnameScope
+	}
+
+	return []string{filepath.ToSlash(dir)}
 }
 
 // validateArgs determines whether the arguments supplied in the given Config
@@ -359,62 +379,73 @@ func (r *refactoringBase) lineColToPos(file *ast.File, line int, column int) tok
 	return file.Pos()
 }
 
-func (r *refactoringBase) checkForErrors() {
-	contents, err := ioutil.ReadFile(r.filename(r.file))
-	if err != nil {
-		r.Log.Errorf("Unable to read source file: %v", err)
-		return
-	}
-	sourceFromFile := string(contents)
-
-	string, err := text.ApplyToString(r.Edits[r.filename(r.file)], sourceFromFile)
-	if err != nil {
-		r.Log.Errorf("Transformation produced invalid EditSet: %v",
-			err.Error())
+// updateLog applies the edits in r.Edits, updates existing error messages in
+// r.Log to reflect their locations in the resulting program, and if the log
+// does not contain any errors, type checks the refactored program, logging any
+// errors introduced by the refactoring.
+func (r *refactoringBase) updateLog(config *Config) {
+	if r.Edits == nil || len(r.Edits) == 0 {
 		return
 	}
 
-	_, err = parser.ParseFile(r.program.Fset, "", string, parser.ParseComments)
-	if err != nil {
-		fmt.Println("vvvvv")
-		fmt.Println(string)
-		fmt.Println("^^^^^")
-		r.Log.Errorf("Transformation will introduce syntax errors: %v", err)
-		r.Log.Associate(r.filename(r.file))
-		return
+	for _, entry := range r.Log.Entries {
+		// FIXME: Update existing entries' positions
+		entry = entry
 	}
 
-	/*
-		// TODO: This may be wrong if several files are changed...?
-		r.pkgInfo = r.program.CreatePackage(r.file.Name.Name, f)
-		if r.pkgInfo.Err != nil {
-			r.Log.Log(ERROR, "Transformation will introduce semantic "+
-				"errors: "+r.pkgInfo.Err.Error())
+	logNewErrors := !r.Log.ContainsErrors()
+
+	oldFS := config.FileSystem
+	defer func() { config.FileSystem = oldFS }()
+	config.FileSystem = filesystem.NewEditedFileSystem(r.Edits)
+
+	mutex := &sync.Mutex{}
+	errors := 0
+	createLoader(config, func(err error) {
+		if !logNewErrors {
 			return
 		}
-	*/
+		message := err.Error()
+		// TODO: This is temporary until go/loader handles cgo
+		if !strings.Contains(message, cgoError1) &&
+			!strings.HasSuffix(message, cgoError2) &&
+			errors < maxInitialErrors {
+			mutex.Lock()
+			errors++
+			r.Log.Errorf("Completing the transformation will introduce the following error: %s", message)
+			if err, ok := err.(types.Error); ok {
+				newPos := mapPos(err.Fset, err.Pos, r.Edits, r.program.Fset)
+				r.Log.AssociatePos(r.program.Fset, newPos, newPos)
+			}
+			mutex.Unlock()
+		}
+	})
 }
 
-/*
-//find occurrences of [top level] identifier across package
-//TODO filter file? /dumbfounded
-func (r *refactoringBase) findAnyOccurrences(name string) bool {
-	result := false
-	//ast.Inspect(r.file, func(n ast.Node) bool {
-	//switch thisIdent := n.(type) {
-	//case *ast.Ident:
-	//if r.pkgInfo.ObjectOf(thisIdent) == decl {
-	//offset := r.program.Fset.Position(thisIdent.NamePos).Offset
-	//length := utf8.RuneCountInString(thisIdent.Name)
-	//result = append(result, text.OffsetLength{offset, length})
-	//}
-	//}
+// mapPos takes a Pos in one FileSet and returns the corresponding Pos in
+// another FileSet, ``undoing'' the given edits to determine the corresponding
+// offset and comparing filenames (as strings) to find the corresponding file.
+func mapPos(from *token.FileSet, pos token.Pos, edits map[string]*text.EditSet, to *token.FileSet) token.Pos {
+	if !pos.IsValid() {
+		return pos
+	}
 
-	//return true
-	//})
+	filename := from.Position(pos).Filename
+	offset := from.Position(pos).Offset
+	if es, ok := edits[filename]; ok {
+		offset = es.OldOffset(offset)
+	}
+
+	result := token.NoPos
+	to.Iterate(func(f *token.File) bool {
+		if f.Name() == filename {
+			result = f.Pos(offset)
+			return false
+		}
+		return true
+	})
 	return result
 }
-*/
 
 /* -=-=- Utility Methods -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 

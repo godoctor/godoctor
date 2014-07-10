@@ -140,6 +140,48 @@ func (e *EditSet) Add(pos Extent, replacement string) error {
 	return nil
 }
 
+// NewOffset returns the offset that will contain the "same" byte as the
+// given offset after this edit has been applied.  If the given offset occurs
+// within a region of the text file that will be modified by this EditSet, a
+// "close enough" offset is returned (specifically, the offset corresponding to
+// the start of the first overlapping edit).  This is intended to be used to
+// position error messages.
+func (e *EditSet) NewOffset(offset int) int {
+	offsetExtent := &Extent{Offset: offset, Length: 1}
+	adjust := 0
+	// Iterate through edits in ascending order by offset
+	for _, edit := range e.edits {
+		if edit.overlaps(offsetExtent) {
+			// Return the offset at which this edit starts
+			adjust += edit.Offset - offset
+			break
+		}
+		if edit.Offset >= offset {
+			break
+		}
+		adjust += len(edit.replacement) - edit.Length
+	}
+	return offset + adjust
+}
+
+// OldOffset takes an offset in the string that would result if this EditSet
+// were applied and returns the corresponding offset in the unedited string.
+// If the given offset occurs within a region of the text file that will be
+// modified by this EditSet, a "close enough" offset is returned (specifically,
+// the offset corresponding to the start of the first overlapping edit).  This
+// is intended to be used to position error messages.
+func (e *EditSet) OldOffset(offset int) int {
+	adjust := 0
+	// Iterate through edits in ascending order by offset
+	for _, edit := range e.edits {
+		if edit.Offset >= offset-adjust {
+			break
+		}
+		adjust += len(edit.replacement) - edit.Length
+	}
+	return offset - adjust
+}
+
 // SizeChange returns the total number of bytes that will be added or removed
 // when this EditSet is applied.  A positive value indicates that bytes will be
 // added; negative, bytes will be removed.  A zero value indicates that the

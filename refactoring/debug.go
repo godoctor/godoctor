@@ -93,7 +93,6 @@ func (r *Debug) Run(config *Config) *Result {
 				b.String())
 		}
 	}
-
 	return &r.Result
 }
 

@@ -53,7 +53,7 @@ func (r *ShortAssign) Run(config *Config) *Result {
 		r.Log.Errorf("Select a short assignment (:=) statement! Selected node is %s", reflect.TypeOf(r.selectedNode))
 		r.Log.AssociatePos(r.program.Fset, r.selectionStart, r.selectionEnd)
 	}
-	r.checkForErrors()
+	r.updateLog(config)
 	return &r.Result
 }
 
