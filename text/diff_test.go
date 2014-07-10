@@ -189,67 +189,6 @@ func testUnifiedDiff(a, b, expected, name string, t *testing.T) {
 	}
 }
 
-func TestPatchOnFile(t *testing.T) {
-	// Insert "Before line 1" at the top of testdata/diff/lines.txt
-	testfile := "testdata/diff/lines.txt"
-
-	es := NewEditSet()
-	es.Add(Extent{0, 0}, "Before line 1\n")
-	patch, err := CreatePatchForFile(es, testfile)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	result, err := ApplyToFile(es, testfile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	expected := strings.Replace(`Before line 1
-Line 1
-Line 2
-Line 3
-`, "\r\n", "\n", -1)
-	actual := strings.Replace(string(result), "\r\n", "\n", -1)
-	if expected != actual {
-		t.Fatalf("ApplyToFile failed:\n%s", actual)
-	}
-
-	var b bytes.Buffer
-	time1 := time.Date(2013, time.June, 4, 0, 0, 0, 0, time.UTC)
-	time2 := time.Date(2014, time.July, 8, 13, 28, 43, 0, time.UTC)
-	err = patch.Write("from", "to", time1, time2, &b)
-	if err != nil {
-		t.Fatal(err)
-	}
-	expected = strings.Replace(`--- from  2013-06-04 00:00:00 +0000
-+++ to  2014-07-08 13:28:43 +0000
-@@ -1,3 +1,4 @@
-+Before line 1
- Line 1
- Line 2
- Line 3
-`, "\r\n", "\n", -1)
-	actual = strings.Replace(b.String(), "\r\n", "\n", -1)
-	if expected != actual {
-		t.Fatalf("patch.Write failed:\n%s", actual)
-	}
-}
-
-func TestPatchOnMissingFile(t *testing.T) {
-	fileDNE := "this_file_does_not_exist_ZzZzZz.txt"
-
-	es := NewEditSet()
-	_, err := CreatePatchForFile(es, fileDNE)
-	if err == nil {
-		t.Fatalf("Should have failed attempting to patch %s", fileDNE)
-	}
-
-	_, err = ApplyToFile(es, fileDNE)
-	if err == nil {
-		t.Fatalf("Should have failed attempting to patch %s", fileDNE)
-	}
-}
-
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 // These are utility methods used by other tests as well.  They need to be in

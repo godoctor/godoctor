@@ -13,9 +13,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"os"
 	"strings"
-	"syscall"
 )
 
 // -=-= Extent =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -26,9 +24,9 @@ import (
 // be specified by Extent{offset: 2, length: 3}.
 type Extent struct {
 	// Byte offset of the first character (0-based)
-	Offset int `json:"offset"`
+	Offset int
 	// Length in bytes (nonnegative)
-	Length int `json:"length"`
+	Length int
 }
 
 // OffsetPastEnd returns the offset of the first byte immediately beyond the
@@ -262,32 +260,6 @@ func (e *EditSet) applyTo(in *bufio.Reader, out *bufio.Writer) error {
 // unified diff by invoking the Patch's Write method.
 func (e *EditSet) CreatePatch(in io.Reader) (result *Patch, err error) {
 	return createPatch(e, in)
-}
-
-// CreatePatchForFile reads bytes from a file, applying the edits in an EditSet
-// and returning a Patch.
-func CreatePatchForFile(es *EditSet, filename string) (*Patch, error) {
-	file, err := os.OpenFile(filename, syscall.O_RDWR, 0666)
-	if err != nil {
-		return nil, err
-	}
-
-	defer file.Close()
-
-	return es.CreatePatch(file)
-}
-
-// ApplyToFile reads bytes from a file, applying the edits in an EditSet and
-// returning the result as a slice of bytes.
-func ApplyToFile(es *EditSet, filename string) ([]byte, error) {
-	file, err := os.OpenFile(filename, syscall.O_RDWR, 0666)
-	if err != nil {
-		return nil, err
-	}
-
-	defer file.Close()
-
-	return ApplyToReader(es, file)
 }
 
 // ApplyToString reads bytes from a string, applying the edits in an EditSet

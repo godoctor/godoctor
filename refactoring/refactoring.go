@@ -214,6 +214,7 @@ func (r *refactoringBase) Run(config *Config) *Result {
 	}
 
 	r.Log.Fset = r.program.Fset
+
 	r.selectionStart, r.selectionEnd, err = config.Selection.Convert(r.program.Fset)
 	if err != nil {
 		r.Log.Error(err)
@@ -476,7 +477,8 @@ func mapPos(from *token.FileSet, pos token.Pos, edits map[string]*text.EditSet, 
 
 /* -=-=- Utility Methods -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 
-func InterpretArgs(args []string, params []Parameter) []interface{} {
+func InterpretArgs(args []string, r Refactoring) []interface{} {
+	params := r.Description().Params
 	result := []interface{}{}
 	for i, opt := range args {
 		if i < len(params) && params[i].IsBoolean() {

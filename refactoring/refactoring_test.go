@@ -207,7 +207,7 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 		t.Fatal(err)
 	}
 
-	args := refactoring.InterpretArgs(remainder, r.Description().Params)
+	args := refactoring.InterpretArgs(remainder, r)
 
 	fileSystem := &filesystem.LocalFileSystem{}
 	config := &refactoring.Config{
@@ -226,7 +226,7 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 	}
 
 	for filename, edits := range result.Edits {
-		output, err := text.ApplyToFile(edits, filename)
+		output, err := filesystem.ApplyEdits(edits, fileSystem, filename)
 		if err != nil {
 			t.Fatal(err)
 		}

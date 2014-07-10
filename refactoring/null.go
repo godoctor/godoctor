@@ -8,7 +8,7 @@
 
 package refactoring
 
-// A nullRefactoring makes no changes to a program.
+// A Null refactoring makes no changes to a program.
 type Null struct {
 	refactoringBase
 }

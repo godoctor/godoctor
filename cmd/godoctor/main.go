@@ -5,37 +5,15 @@
 // The godoctor command refactors Go code.
 package main
 
-// example query: go-doctor -pos=11,8:11,8 someFile.go rename newName
-
-// TODO(reed): still not proud of this.
-// TODO(reed) take byte offsets AND line:col
-
-// TODO(jeff/robert): Support "put" command for Web demo
-
-// TODO(jeff/robert): The user should give "-" as the filename to indicate that
-// input will come from stdin.  Allowing the filename to be omitted is
-// confusing.
-// TODO(jeff/robert): If input is coming from stdin, don't support the -w
-// (write files) flag.
-
-// TODO(jeff/robert): If input is coming from std, check that it is a valid
-// go program (parse it).  If it is empty, or if it is not a valid Go program,
-// the go/loader gives cryptic error messages.
-
-// TODO(jeff/robert): If an error occurs when the refactoring is being loaded
-// (e.g., the file on stdin is empty or invalid), display the refactoring
-// error log before displaying the error.  I think there are useful error
-// messages in the log that are never getting displayed.
-
 import (
-	"bytes"
-	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
-	"strings"
 	"time"
+
+	"strings"
 
 	"golang-refactoring.org/go-doctor/engine"
 	"golang-refactoring.org/go-doctor/engine/protocol"
@@ -44,329 +22,237 @@ import (
 	"golang-refactoring.org/go-doctor/text"
 )
 
-var (
-	formatFlag = flag.String("format", "plain", "output in 'plain' or 'json'")
-	helpFlag   = flag.Bool("h", false, "prints usage")
-	diffFlag   = flag.Bool("d", false, "get diff of all files affected by given refactoring")
-	listFlag   = flag.Bool("l", false, "list all possible refactorings")
-	paramsFlag = flag.Bool("p", false, "get description of parameters for given refactoring")
-	posFlag    = flag.String("pos", "0,0:0,0", "line, col offset usually necessary, e.g. -pos=5,11:5,11")
-	scopeFlag  = flag.String("scope", "", "give a scope (package), e.g. -scope=code.google.com/p/go.tools/")
-	writeFlag  = flag.Bool("w", false, "write the refactored files in place")
-	// need json usage
-	jsonFlag = flag.Bool("json", false, "")
-)
+var fileFlag = flag.String("file", "",
+	"Filename containing an element to refactor (default: standard input)")
 
-func usage() {
-	fmt.Fprintf(os.Stderr,
-		`usage of `+os.Args[0]+`:
+var posFlag = flag.String("pos", "1,1:1,1",
+	"Position of a syntax element to refactor (default: entire file)")
 
-  `+os.Args[0]+` [<flag> ...] <file> <refactoring> <args> ...
+var scopeFlag = flag.String("scope", "",
+	"Package name(s), or source file containing a program entrypoint")
 
-The <refactoring> may be one of:
-%v
+var writeFlag = flag.Bool("w", false,
+	"Modify source files on disk (write) instead of displaying a diff")
 
-<args> are <refactoring> specific and must be provided in order
-for a <refactoring> to occur. To see the <args> for a <refactoring> do:
+var jsonFlag = flag.Bool("json", false,
+	"Accept commands in OpenRefactory JSON protocol format")
 
-  `+os.Args[0]+` -p <refactoring>
+const useHelp = "Run 'godoctor -help' for more information.\n"
 
-The <flag> arguments are:
+func printHelp() {
+	fmt.Fprintln(os.Stderr, `Go source code refactoring tool.
+Usage: godoctor [<flag> ...] <refactoring> <args> ...
 
-`,
-		func() (s string) {
-			for key, _ := range engine.AllRefactorings() {
-				s += "\n  " + key
-			}
-			return
-		}())
-	flag.PrintDefaults()
-	os.Exit(2)
+Each <flag> must be one of the following:`)
+	flag.CommandLine.VisitAll(func(flag *flag.Flag) {
+		fmt.Fprintf(os.Stderr, "    -%-8s %s\n", flag.Name, flag.Usage)
+	})
+	fmt.Fprintln(os.Stderr, `
+
+The <refactoring> argument determines the refactoring to perform:`)
+	for key, r := range engine.AllRefactorings() {
+		//if r.Description().Quality == refactoring.Production {
+		// FIXME: One-line description
+		fmt.Fprintf(os.Stderr, "    %-15s %s\n", key, r.Description().Name)
+		//}
+	}
+	fmt.Fprintln(os.Stderr, `
+The <args> following the refactoring name vary depending on the refactoring.
+
+To display usage information for a particular refactoring, such as rename, use:
+    %% godoctor rename
+
+For complete usage information, see the user manual:  FIXME: URL`)
 }
 
-// TODO(reed) usage() in JSON
-// TODO(reed/somebodyelse) find weird flag combos that shouldn't work
 func main() {
-	flag.Parse()
-	args := flag.Args()
-
-	// TODO(reed) are we [ever] going to have a default to run w/o any args or flags?
-	if *helpFlag || flag.NFlag() == 0 {
-		usage()
+	// Don't print full help unless -help was requested.
+	// Just gently remind users that it's there.
+	flag.Usage = func() { fmt.Fprint(os.Stderr, useHelp) }
+	flag.CommandLine.Init(os.Args[0], flag.ExitOnError)
+	if err := flag.CommandLine.Parse(os.Args[1:]); err != nil {
+		// (err has already been printed)
+		if err == flag.ErrHelp {
+			// Invoked as "godoctor [flags] -help"
+			printHelp()
+		}
+		os.Exit(2)
 	}
 
-	if *listFlag {
-		printAllRefactorings(*formatFlag)
-		return
+	args := flag.Args()
+	if len(args) == 0 || args[0] == "" || args[0] == "help" {
+		// Invoked as "godoctor [flags]" or "godoctor [flags] help"
+		printHelp()
+		os.Exit(2)
 	}
 
 	if *jsonFlag {
+		if flag.NFlag() != 1 {
+			fmt.Fprintln(os.Stderr, "Error: The -json flag "+
+				"cannot be used with any other flags")
+			os.Exit(1)
+		}
+		// Invoked as "godoctor -json [args]
 		protocol.Run(args)
 		return
 	}
 
-	if flag.NArg() == 0 {
-		printError(fmt.Errorf("given flag requires args, see -h"))
+	refac := engine.GetRefactoring(args[0])
+	args = args[1:]
+	if refac == nil {
+		fmt.Fprintf(os.Stderr, "There is no refactoring named \"%s\"\n", args[0])
+		os.Exit(1)
 	}
 
-	r := engine.GetRefactoring(args[0])
+	if flag.NFlag() == 0 && flag.NArg() == 1 {
+		// Invoked as "godoctor refactoring"
+		fmt.Fprintf(os.Stderr, "FIXME: refactoring usage\n")
+		os.Exit(2)
+	}
 
-	if *paramsFlag {
-		if r == nil {
-			printError(fmt.Errorf("no refactoring given to parameterize, see -h"))
+	stdin := ""
+
+	var fileName string
+	var fileSystem filesystem.FileSystem
+	if *fileFlag != "" {
+		fileName = *fileFlag
+		fileSystem = &filesystem.LocalFileSystem{}
+	} else {
+		// No filename; read from standard input
+		stdin, err := filesystem.FakeStdinPath()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
 		}
-		printRefactoringParams(r)
-		return
-	}
-
-	var filename, src string
-	// no file given (assume stdin), e.g. go-doctor refactor params...
-	if r != nil {
-		//		if stat, err := os.Stdin.Stat(); err != nil {
-		//			printError(err)
-		//		} else if stat.Size() < 1 {
-		//			printError(fmt.Errorf("no filename given and no input given on stdin, see -h"))
-		//		}
+		fileName = stdin
 		bytes, err := ioutil.ReadAll(os.Stdin)
 		if err != nil {
-			printError(err)
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
 		}
-		src = string(bytes)
-		filename = filesystem.FakeStdinFilename
-		args = args[1:]
-	} else { // file given, e.g. go-doctor file refactor params...
-		filename = args[0]
-		r = engine.GetRefactoring(args[1])
-		args = args[2:]
+		fileSystem, err = filesystem.NewSingleEditedFileSystem(
+			stdin, string(bytes))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "***")
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 	}
 
-	// at this point args = refactoring's args, possibly none
-
-	// do the refactoring
-	results, err := refactor(filename, src, args, r)
+	selection, err := text.NewSelection(fileName, *posFlag)
 	if err != nil {
-		printError(err)
-	}
-
-	log := results.Log
-	edits := results.Edits
-
-	// TODO: do something with result.FSChanges -- e.g., Rename Package
-	// will rename a directory
-
-	// map[filename]output
-	// where: output == diff || updated file
-	changes := make(map[string][]byte)
-
-	if log.ContainsErrors() {
-		printResults(r.Description().Name, log, changes)
-	}
-
-	if *diffFlag {
-		// compute diff for each file changed
-		for f, e := range edits {
-			var p *text.Patch
-			var err error
-			if src != "" {
-				// TODO(reed): I suppose passing on stdin we can trust
-				// that len(edits) == 1, but I'm skeptical...
-				// if scope is passed then multiple files could be effected.
-				p, err = e.CreatePatch(strings.NewReader(src))
-			} else {
-				p, err = text.CreatePatchForFile(e, f)
-			}
-			if err != nil {
-				printError(err)
-			}
-
-			if !p.IsEmpty() {
-				var b bytes.Buffer
-				fmt.Fprintf(&b, "diff -u %s %s\n", f, f)
-				p.Write(f, f, time.Time{}, time.Time{}, &b)
-				changes[f] = b.Bytes()
-			}
-		}
-		printResults(r.Description().Name, log, changes)
-	}
-
-	// write all edits out to new file contents in []byte; something to work with
-	for file, _ := range edits {
-		if src != "" {
-			str, err := text.ApplyToString(edits[file], src)
-			if err != nil {
-				printError(err)
-			}
-			changes[file] = []byte(str)
-		} else {
-			changes[file], err = text.ApplyToFile(edits[file], file)
-			if err != nil {
-				printError(err)
-			}
-		}
-	}
-
-	// write changes to their file and exit
-	if *writeFlag {
-		if *diffFlag || *formatFlag != "plain" {
-			printError(fmt.Errorf("cannot write files with json or diff flags, try again"))
-		}
-		for file, change := range changes {
-			if err := ioutil.WriteFile(file, change, 0); err != nil {
-				printError(err)
-			}
-		}
-		return
-	}
-
-	// so you came all this way for some output
-	printResults(r.Description().Name, log, changes)
-}
-
-type Response struct {
-	Reply string
-	JSON  fields
-	Plain []string
-}
-
-type fields map[string]interface{} // this got real old
-
-func (r Response) String() string {
-	var buf bytes.Buffer
-	switch *formatFlag {
-	case "plain":
-		for i, p := range r.Plain {
-			buf.WriteString(p)
-			if i != len(r.Plain)-1 {
-				buf.WriteString("\n")
-			}
-		}
-	case "json":
-		r.JSON["reply"] = r.Reply
-		b, _ := json.MarshalIndent(r.JSON, "", "\t")
-		buf.Write(b)
-	default:
-		return "invalid -format flag"
-	}
-	return buf.String()
-}
-
-func printError(err error) {
-	r := Response{
-		Reply: "Error",
-		JSON:  fields{"message": err.Error()},
-		Plain: []string{err.Error()},
-	}
-	fmt.Fprintf(os.Stderr, "%s\n", r)
-	os.Exit(2)
-}
-
-func printResults(refactoring string, l *refactoring.Log, changes map[string][]byte) {
-	c := make(map[string]string)
-	var contents []string
-	var exitCode int
-
-	for file, change := range changes {
-		c[file] = string(change)
-		contents = append(contents, string(change))
-	}
-	r := fields{
-		"log":     l,
-		"name":    refactoring,
-		"changes": c,
-	}
-	repl := Response{"OK", r, contents}
-
-	// log to stderr if not json
-	if *formatFlag == "plain" {
-		for _, e := range l.Entries {
-			fmt.Fprintln(os.Stderr, e.String())
-		}
-		if l.ContainsErrors() {
-			exitCode = 1
-		}
-	}
-
-	if *diffFlag {
-		fmt.Printf("%s", repl)
-	} else {
-		fmt.Printf("%s\n", repl)
-	}
-	os.Exit(exitCode)
-}
-
-func printRefactoringParams(r refactoring.Refactoring) {
-	params := []string{}
-	for _, param := range r.Description().Params {
-		params = append(params, param.Label)
-	}
-	resp := Response{"OK",
-		fields{"params": params},
-		params,
-	}
-	fmt.Printf("%s\n", resp)
-}
-
-func printAllRefactorings(format string) {
-	var names []string
-	for name, _ := range engine.AllRefactorings() {
-		names = append(names, name)
-	}
-
-	info := fields{
-		"refactorings": names,
-	}
-
-	r := Response{"OK", info, names}
-	fmt.Printf("%s\n", r)
-}
-func parseScopes(scope string) []string {
-	return strings.Split(scope, ",")
-}
-
-// TODO (jeff) figure out how to deal with scope/mainFile/2nd arg to SetSelection
-// Anyway I think we need to know which file the main function is in,
-// so I made that the second arg to SetSelection -- confirm with Alan
-//
-// This will do all of the configuration and execution for
-// a refactoring r, returning the results.
-func refactor(file string, src string, args []string, r refactoring.Refactoring) (*refactoring.Result, error) {
-	if r == nil {
-		return nil, fmt.Errorf("no refactoring given or in wrong place, see -h")
-	}
-
-	ts, err := text.NewSelection(file, *posFlag)
-	if err != nil {
-		return nil, err
+		fmt.Fprintf(os.Stderr, "Error: %s.\n", err)
+		os.Exit(1)
 	}
 
 	var scope []string
-	if *scopeFlag != "" {
-		scope = parseScopes(*scopeFlag)
-	}
-
-	var fs filesystem.FileSystem
-	if src != "" {
-		// FIXME(reed): Need a filename for what's being passed on standard input -- must exist on the file system already -- then pass in absolute path to file in editor rather than filesystem.FakeStdinPath
-		// FIXME(reed): Make sure the resulting edit set only changes the one file passed on stdin.  If it changes any others, bail with an error message
-		stdin, err := filesystem.FakeStdinPath()
-		if err != nil {
-			return nil, err
-		}
-		fs, err = filesystem.NewSingleEditedFileSystem(stdin, src)
-		if err != nil {
-			return nil, err
-		}
+	if *scopeFlag == "" {
+		scope = nil
 	} else {
-		fs = &filesystem.LocalFileSystem{}
+		scope = strings.Split(*scopeFlag, ",")
 	}
 
-	argArray := refactoring.InterpretArgs(args, r.Description().Params)
-
-	config := &refactoring.Config{
-		FileSystem: fs,
+	result := refac.Run(&refactoring.Config{
+		FileSystem: fileSystem,
 		Scope:      scope,
-		Selection:  ts,
-		Args:       argArray,
+		Selection:  selection,
+		Args:       refactoring.InterpretArgs(args, refac)})
+
+	// Display log in GNU-style 'file:line.col-line.col: message' format
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = ""
 	}
-	return r.Run(config), nil
+	result.Log.Write(os.Stderr, cwd)
+
+	// If input was supplied on standard input, ensure that the refactoring
+	// makes changes only to that code (and does not affect any other files)
+	if stdin != "" {
+		for f, _ := range result.Edits {
+			if f != stdin {
+				fmt.Fprintf(os.Stderr, "Error: When source code is given on standard input, refactorings are prohibited from changing any other files.  This refactoring would require modifying %s.\n", f)
+				os.Exit(1)
+			}
+		}
+		if len(result.FSChanges) > 0 {
+			fmt.Fprintf(os.Stderr, "Error: When source code is given on standard input, refactorings are prohibited from changing any other files.  This refactoring would require a change to the file system (%s).\n", result.FSChanges[0])
+			os.Exit(1)
+		}
+	}
+
+	if *writeFlag {
+		err = writeToDisk(result, fileSystem)
+	} else {
+		err = writeDiff(os.Stdout, result.Edits, fileSystem)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s.\n", err)
+		os.Exit(1)
+	}
+
+	if !*writeFlag && len(result.FSChanges) > 0 {
+		fmt.Fprintln(os.Stderr, "After applying the patch, the following file system changes must be made:")
+		for _, chg := range result.FSChanges {
+			fmt.Fprintf(os.Stderr, "    %s\n", chg.String(cwd))
+		}
+	}
+
+}
+
+// writeDiff outputs a multi-file unified diff describing this refactoring's
+// changes.  It can be applied using GNU patch.
+func writeDiff(out io.Writer, edits map[string]*text.EditSet, fs filesystem.FileSystem) error {
+	for f, e := range edits {
+		p, err := filesystem.CreatePatch(e, fs, f)
+		if err != nil {
+			return err
+		}
+
+		if !p.IsEmpty() {
+			inFile := f
+			outFile := f
+
+			stdin, _ := filesystem.FakeStdinPath()
+			if f == stdin {
+				inFile = os.Stdin.Name()
+				outFile = os.Stdout.Name()
+			}
+			fmt.Fprintf(out, "diff -u %s %s\n", inFile, outFile)
+			p.Write(inFile, outFile, time.Time{}, time.Time{}, out)
+		}
+	}
+	return nil
+}
+
+// writeToDisk overwrites existing files with their refactored versions and
+// applies any other changes to the file system that the refactoring requires
+// (e.g., renaming directories).
+func writeToDisk(result *refactoring.Result, fs filesystem.FileSystem) error {
+	for filename, edits := range result.Edits {
+		data, err := filesystem.ApplyEdits(edits, fs, filename)
+		if err != nil {
+			return err
+		}
+
+		f, err := fs.OverwriteFile(filename)
+		if err != nil {
+			return err
+		}
+		n, err := f.Write(data)
+		if err == nil && n < len(data) {
+			err = io.ErrShortWrite
+		}
+		if err1 := f.Close(); err == nil {
+			err = err1
+		}
+		if err != nil {
+			return err
+		}
+	}
+	for _, change := range result.FSChanges {
+		if err := change.ExecuteUsing(fs); err != nil {
+			return err
+		}
+	}
+	return nil
 }

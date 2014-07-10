@@ -274,7 +274,7 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 		for f, e := range result.Edits {
 			var p *text.Patch
 			var err error
-			p, err = text.CreatePatchForFile(e, f)
+			p, err = filesystem.CreatePatch(e, state.Filesystem, f)
 			if err != nil {
 				return Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}}, err
 			}
@@ -287,7 +287,7 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 		}
 	} else {
 		for f, e := range result.Edits {
-			content, err := text.ApplyToFile(e, f)
+			content, err := filesystem.ApplyEdits(e, state.Filesystem, f)
 			if err != nil {
 				return Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}}, err
 			}
