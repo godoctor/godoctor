@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"regexp/syntax"
+	"unicode/utf8"
 
 	"code.google.com/p/go.tools/go/loader"
 	"code.google.com/p/go.tools/go/types"
@@ -323,7 +325,7 @@ func (r *SearchEngine) occurrencesInComments(name string, pkgs map[*loader.Packa
 			fname := r.program.Fset.Position(f.Pos()).Filename
 			for _, comment := range f.Comments {
 				for _, c := range comment.List {
-					offsets := kmp(c.Text, name, T)
+					offsets := kmpWord(c.Text, name, T)
 					for _, o := range offsets {
 						foffset := r.program.Fset.Position(c.Slash).Offset + o
 						result[fname] = append(result[fname], text.Extent{foffset, len})
@@ -335,8 +337,9 @@ func (r *SearchEngine) occurrencesInComments(name string, pkgs map[*loader.Packa
 	return result
 }
 
-// kmp is the Knuth-Morris-Pratt string searching algorithm. O(m+n)
-func kmp(txt, pat string, T []int) (offsets []int) {
+// kmpWord is the Knuth-Morris-Pratt string searching algorithm,
+// slightly modified to only find entire word matches.
+func kmpWord(txt, pat string, T []int) (offsets []int) {
 	M, N := len(pat), len(txt)
 	for m, i := 0, 0; i < N; i++ {
 		for m > 0 && txt[i] != pat[m] {
@@ -344,11 +347,25 @@ func kmp(txt, pat string, T []int) (offsets []int) {
 		}
 		m++
 		if m >= M {
-			offsets = append(offsets, i-m+1)
+			if isWord(txt, i-m+1, i) { // could probably compute in failure func...
+				offsets = append(offsets, i-m+1)
+			}
 			m = 0
 		}
 	}
 	return offsets
+}
+
+// This function assumes it is given indices corresponding to a word,
+// and i, n are the beginning and end of that word, respectively.
+func isWord(txt string, i, n int) bool {
+	if i == 0 || n == len(txt)-1 {
+		return true
+	}
+	b, _ := utf8.DecodeRuneInString(txt[:i])
+	e, _ := utf8.DecodeRuneInString(txt[n+1:])
+
+	return !syntax.IsWordChar(b) && !syntax.IsWordChar(e)
 }
 
 // kmpFailure is the "failure function" for KMP.
