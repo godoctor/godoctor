@@ -74,7 +74,7 @@ func defs(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 		ast.Inspect(stmt.Body, func(n ast.Node) bool {
 			switch cc := n.(type) {
 			case *ast.CaseClause:
-				v := info.TypeCaseVar(cc)
+				v := typeCaseVar(info, cc)
 				if v != nil {
 					vars = append(vars, v)
 				}
@@ -94,6 +94,16 @@ func defs(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 		}
 	}
 	return vars
+}
+
+// typeCaseVar returns the implicit variable associated with a case clause in a
+// type switch statement.
+func typeCaseVar(info *loader.PackageInfo, cc *ast.CaseClause) *types.Var {
+	// Removed from go/loader
+	if v := info.Implicits[cc]; v != nil {
+		return v.(*types.Var)
+	}
+	return nil
 }
 
 // uses extracts local variables whose values are used in the given statement.
