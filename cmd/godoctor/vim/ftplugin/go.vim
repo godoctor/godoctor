@@ -272,7 +272,7 @@ func! s:RunDoctor(selected, refac, ...) range abort
     \ file,
     \ pos,
     \ shellescape(a:refac),
-    \ shellescape(join(a:000, ' ')))
+    \ join(map(copy(a:000), 'shellescape(v:val)'), ' '))
   let out = system(cmd)
   " echo cmd
   " echo out
