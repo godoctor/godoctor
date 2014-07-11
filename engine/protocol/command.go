@@ -269,7 +269,6 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 	textselection := input["textselection"].(map[string]interface{})
 
 	ts, _ := parseSelection(state, textselection)
->>>>>>> added textselection validation to protocol
 
 	// get refactoring
 	refac := engine.GetRefactoring(input["transformation"].(string))
