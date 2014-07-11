@@ -139,17 +139,23 @@ endfun
 
 " Scratch buffer ("dialog") callback to save, undo, and close buffers
 func! b:interpret(cmd)
-  close
+  if winnr('$') > 1
+    close
+  endif
   let view = winsaveview()
   let orig = bufnr("%")
 
   if a:cmd =~ "Save Changes"
     for buf in g:allbuffers
-      silent exec "buffer! " . buf . " | w"
+      if bufexists(buf)
+        silent exec "buffer! " . buf . " | w"
+      endif
     endfor
   elseif a:cmd =~ "Undo Changes"
     for buf in g:allbuffers
-      silent exec "buffer! " . buf . " | undo"
+      if bufexists(buf)
+        silent exec "buffer! " . buf . " | undo"
+      endif
     endfor
   endif
   cclose
@@ -159,7 +165,7 @@ func! b:interpret(cmd)
 
   if a:cmd =~ "Close New"
     for buf in g:newbuffers
-      if buf != orig
+      if buf != orig && bufexists(buf) && winnr('$') > 1
         silent exec buf . "bwipeout!"
       endif
     endfor
