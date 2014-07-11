@@ -8,8 +8,10 @@
 package protocol
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"golang-refactoring.org/go-doctor/filesystem"
 )
@@ -75,10 +77,10 @@ func Run(args []string) {
 func runSingle() {
 	cmdList := setup()
 	var state = State{0, "", "", nil}
-	var input []byte
 	var inputJson map[string]interface{}
+	ioreader := bufio.NewReader(os.Stdin)
 	for {
-		fmt.Scan(&input)
+		input, _ := ioreader.ReadBytes('\n')
 		err := json.Unmarshal(input, &inputJson)
 		if err != nil {
 			printReply(Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}})
