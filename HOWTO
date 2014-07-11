@@ -78,6 +78,12 @@ SET NAME/E-MAIL USED BY GIT
         $ git config --global user.name "Your Name"
         $ git config --global user.email "username@auburn.edu"
 
+    A nice idea from http://fredkschott.com/post/2014/02/git-log-is-so-2005/
+    is to configure a "git lg" command that displays the git log in a more
+    compact, readable form that better illustrates branching structure:
+
+        $ git config --global alias.lg "log --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr)%C(bold blue)<%an>%Creset' --abbrev-commit"
+
 
 CLONING THE GO DOCTOR GIT REPOSITORY
 
@@ -88,7 +94,7 @@ CLONING THE GO DOCTOR GIT REPOSITORY
         $ git config branch.autosetuprebase always
         $ git config branch.master.rebase true
         $ cd go-doctor
-        $ go get -u -v     # To get dependencies, including go.tools
+        $ go get -u -v ./...    # To get dependencies, including go.tools
 
 
 DEVELOPING A NEW FEATURE
