@@ -468,7 +468,7 @@ func (r *refactoringBase) updateLog(config *Config, checkForErrors bool) {
 				oldFile := findFile(filename, r.program.Fset)
 				oldPos := oldFile.Pos(extent.Offset)
 				newPos := mapPos(r.program.Fset, oldPos,
-					r.Edits, r.Log.Fset, true)
+					r.Edits, r.Log.Fset, false)
 				if firstEdit && fileCount > 1 {
 					r.Log.Infof("File %d of %d: %s",
 						fileNum,
