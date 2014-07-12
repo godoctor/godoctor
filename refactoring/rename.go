@@ -92,7 +92,7 @@ func (r *Rename) Run(config *Config) *Result {
 }
 
 func (r *Rename) isIdentifierValid(newName string) bool {
-	matched, err := regexp.MatchString("^[A-Za-z_][0-9A-Za-z_]*$", newName)
+	matched, err := regexp.MatchString("^\\p{L}[\\p{L}\\p{N}]*$", newName)
 	if matched && err == nil {
 		keyword, err := regexp.MatchString("^(break|case|chan|const|continue|default|defer|else|fallthrough|for|func|go|goto|if|import|interface|map|package|range|return|select|struct|switch|type|var)$", newName)
 		return !keyword && err == nil

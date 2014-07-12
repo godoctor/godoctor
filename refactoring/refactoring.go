@@ -176,6 +176,8 @@ type refactoringBase struct {
 // configures all of the fields in the refactoringBase struct.
 func (r *refactoringBase) Run(config *Config) *Result {
 	r.Log = NewLog()
+	r.Edits = map[string]*text.EditSet{}
+	r.FSChanges = []filesystem.Change{}
 
 	if config.FileSystem == nil {
 		r.Log.Error("INTERNAL ERROR: null Config.FileSystem")
@@ -183,9 +185,9 @@ func (r *refactoringBase) Run(config *Config) *Result {
 	}
 
 	if config.Scope == nil {
-		config.Scope = r.guessScope(config)
-		r.Log.Infof("Using default scope %s",
-			strings.Join(config.Scope, " "))
+		var msg string
+		config.Scope, msg = r.guessScope(config)
+		r.Log.Infof(msg)
 	} else {
 		r.Log.Infof("Scope is %s", strings.Join(config.Scope, " "))
 	}
@@ -247,8 +249,9 @@ func (r *refactoringBase) Run(config *Config) *Result {
 		return &r.Result
 	}
 
-	r.Edits = map[string]*text.EditSet{r.filename(r.file): text.NewEditSet()}
-	r.FSChanges = []filesystem.Change{}
+	r.Edits = map[string]*text.EditSet{
+		r.filename(r.file): text.NewEditSet(),
+	}
 
 	return &r.Result
 }
@@ -291,13 +294,19 @@ func createLoader(config *Config, errorHandler func(error)) (*loader.Program, er
 //     1. If filename is not in $GOPATH/src, filename is used as the scope.
 //     2. If filename is in $GOPATH/src, a package name is guessed by stripping
 //        $GOPATH/src/ from the filename, and that package is used as the scope.
-func (r *refactoringBase) guessScope(config *Config) []string {
-	fnameScope := []string{config.Selection.GetFilename()}
+func (r *refactoringBase) guessScope(config *Config) ([]string, string) {
+	fname := config.Selection.GetFilename()
+	fnameScope := []string{fname}
+	fnameMsg := fmt.Sprintf("Defaulting to file scope %s for refactoring (provide an explicit scope to change this)", fname)
 
-	absFilename, err := filepath.Abs(config.Selection.GetFilename())
+	if filepath.Base(fname) == filesystem.FakeStdinFilename {
+		return fnameScope, "Defaulting to file scope for refactoring (provide an explicit scope to change this)"
+	}
+
+	absFilename, err := filepath.Abs(fname)
 	if err != nil {
 		r.Log.Error(err.Error())
-		return fnameScope
+		return fnameScope, fnameMsg
 	}
 
 	gopath := config.GoPath
@@ -306,12 +315,12 @@ func (r *refactoringBase) guessScope(config *Config) []string {
 	}
 	if gopath == "" {
 		r.Log.Warn("GOPATH not set")
-		return fnameScope
+		return fnameScope, fnameMsg
 	}
 	gopath, err = filepath.Abs(gopath)
 	if err != nil {
 		r.Log.Error(err)
-		return fnameScope
+		return fnameScope, fnameMsg
 	}
 
 	gopathSrc := filepath.Join(gopath, "src")
@@ -319,19 +328,21 @@ func (r *refactoringBase) guessScope(config *Config) []string {
 	relFilename, err := filepath.Rel(gopathSrc, absFilename)
 	if err != nil {
 		r.Log.Error(err)
-		return fnameScope
+		return fnameScope, fnameMsg
 	}
 
 	if strings.HasPrefix(relFilename, "..") {
-		return fnameScope
+		return fnameScope, fnameMsg
 	}
 
 	dir := filepath.Dir(relFilename)
 	if dir == "." {
-		return fnameScope
+		return fnameScope, fnameMsg
 	}
 
-	return []string{filepath.ToSlash(dir)}
+	pkg := filepath.ToSlash(dir)
+	return []string{pkg},
+		fmt.Sprintf("Defaulting to package scope %s for refactoring (provide an explicit scope to change this)", pkg)
 }
 
 // validateArgs determines whether the arguments supplied in the given Config
