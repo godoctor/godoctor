@@ -25,6 +25,8 @@
 " http://vim.wikia.com/wiki/Fix_errors_that_relate_to_reading_or_creating_files_in_the_temp_or_tmp_environment_on_an_MS_Windows_PC
 " -- Inserting the contents of a variable into a buffer
 " http://stackoverflow.com/questions/16833217/set-buffer-content-with-variable
+" -- Calling a varargs function
+" http://stackoverflow.com/questions/11703297/how-can-i-pass-varargs-to-another-function-in-vimscript
 " -- Go Doctor ASCII art uses the AMC 3 Line font, generated here:
 " http://patorjk.com/software/taag/#p=display&v=3&f=AMC%203%20Line&t=Go%20Doctor
 " -- General Vimscript reference:
@@ -311,8 +313,21 @@ function! s:list_refacs(a, l, p)
   return out
 endfun
 
-command! -range=% -nargs=+ Rename
-  \ call s:RunDoctor(<count>, 'rename', <f-args>)
+func! s:RunRename(selected, ...) range abort
+  if len(a:000) > 0
+    call call("s:RunDoctor", [a:selected, 'rename'] + a:000)
+  else
+    let input = inputdialog("Enter new name: ")
+    if input == ""
+      echo ""
+    else
+      call s:RunDoctor(a:selected, 'rename', input)
+    endif
+  endif
+endfun
+
+command! -range=% -nargs=* Rename
+  \ call s:RunRename(<count>, <f-args>)
 
 command! -range=% -nargs=+ -complete=custom,<sid>list_refacs GoRefactor
   \ call s:RunDoctor(<count>, <f-args>)
