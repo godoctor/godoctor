@@ -6,13 +6,77 @@ package text
 
 import "testing"
 
+// -=-= Extent =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+func TestExtent(t *testing.T) {
+	ol := Extent{Offset: 5, Length: 20}
+	assertEquals("offset 5, length 20", ol.String(), t)
+}
+
+func TestExtentIntersect(t *testing.T) {
+	ol15 := &Extent{Offset: 1, Length: 5}
+	ol30 := &Extent{Offset: 3, Length: 0}
+	ol33 := &Extent{Offset: 3, Length: 3}
+	ol51 := &Extent{Offset: 5, Length: 1}
+	ol61 := &Extent{Offset: 6, Length: 1}
+
+	type test struct {
+		ol1, ol2 *Extent
+		expect   string
+	}
+
+	tests := []test{
+		test{ol15, ol15, "offset 1, length 5"},
+		test{ol15, ol30, "offset 3, length 0"},
+		test{ol15, ol33, "offset 3, length 3"},
+		test{ol15, ol51, "offset 5, length 1"},
+		test{ol15, ol61, ""},
+
+		test{ol30, ol15, "offset 3, length 0"},
+		test{ol30, ol30, ""},
+		test{ol30, ol33, ""},
+		test{ol30, ol51, ""},
+		test{ol30, ol61, ""},
+
+		test{ol33, ol15, "offset 3, length 3"},
+		test{ol33, ol30, ""},
+		test{ol33, ol33, "offset 3, length 3"},
+		test{ol33, ol51, "offset 5, length 1"},
+		test{ol33, ol61, ""},
+
+		test{ol51, ol15, "offset 5, length 1"},
+		test{ol51, ol30, ""},
+		test{ol51, ol33, "offset 5, length 1"},
+		test{ol51, ol51, "offset 5, length 1"},
+		test{ol51, ol61, ""},
+
+		test{ol61, ol15, ""},
+		test{ol61, ol30, ""},
+		test{ol61, ol33, ""},
+		test{ol61, ol51, ""},
+		test{ol61, ol61, "offset 6, length 1"},
+	}
+
+	for _, tst := range tests {
+		overlap := tst.ol1.Intersect(tst.ol2)
+		if overlap == nil && tst.expect != "" {
+			t.Fatalf("%s ∩ %s produced nil, expected %s",
+				tst.ol1, tst.ol2, tst.expect)
+		} else if overlap != nil && tst.expect != overlap.String() {
+			t.Fatalf("%s ∩ %s produced %s, expected %s",
+				tst.ol1, tst.ol2, overlap, tst.expect)
+		}
+	}
+}
+
+// -=-= EditSet -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
 func applyToString(e *EditSet, s string) string {
 	result, err := ApplyToString(e, s)
 	if err != nil {
 		return "ERROR: " + err.Error()
-	} else {
-		return result
 	}
+	return result
 }
 
 func TestSizeChange(t *testing.T) {
@@ -76,7 +140,7 @@ func TestOverlap(t *testing.T) {
 		edit := Extent{tst.offset, tst.length}
 		err := es.Add(edit, "z")
 		if tst.overlapExpected != (err != nil) {
-			t.Fatalf("Overlapping edit %s undetected", edit)
+			t.Fatalf("Overlapping edit %v undetected", edit)
 		}
 	}
 }

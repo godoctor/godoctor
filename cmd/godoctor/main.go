@@ -34,9 +34,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
+	"time"
 
 	"golang-refactoring.org/go-doctor/engine"
 	"golang-refactoring.org/go-doctor/engine/protocol"
@@ -183,7 +182,7 @@ func main() {
 			if !p.IsEmpty() {
 				var b bytes.Buffer
 				fmt.Fprintf(&b, "diff -u %s %s\n", f, f)
-				p.Write(f, f, &b)
+				p.Write(f, f, time.Time{}, time.Time{}, &b)
 				changes[f] = b.Bytes()
 			}
 		}
@@ -320,38 +319,6 @@ func printAllRefactorings(format string) {
 	r := Response{"OK", info, names}
 	fmt.Printf("%s\n", r)
 }
-
-// e.g. 302,6
-func parseLineCol(linecol string) (int, int) {
-	lc := strings.Split(linecol, ",")
-	if l, err := strconv.ParseInt(lc[0], 10, 32); err == nil {
-		if c, err := strconv.ParseInt(lc[1], 10, 32); err == nil {
-			return int(l), int(c)
-		}
-	}
-
-	return -1, -1
-}
-
-// e.g. pos=3,6:3,9
-func parsePositionToTextSelection(pos string) (*text.Selection, error) {
-	args := strings.Split(pos, ":")
-
-	if len(args) < 2 {
-		return nil, fmt.Errorf("invalid -pos")
-	}
-
-	sl, sc := parseLineCol(args[0])
-	el, ec := parseLineCol(args[1])
-
-	if sl < 0 || sc < 0 || el < 0 || ec < 0 {
-		return nil, fmt.Errorf("invalid -pos line, col")
-	}
-
-	return &text.Selection{StartLine: sl, StartCol: sc,
-		EndLine: el, EndCol: ec}, nil
-}
-
 func parseScopes(scope string) []string {
 	return strings.Split(scope, ",")
 }
@@ -367,12 +334,7 @@ func refactor(file string, src string, args []string, r refactoring.Refactoring)
 		return nil, fmt.Errorf("no refactoring given or in wrong place, see -h")
 	}
 
-	ts, err := parsePositionToTextSelection(*posFlag)
-	if err != nil {
-		return nil, err
-	}
-
-	ts.Filename, err = filepath.Abs(file)
+	ts, err := text.NewSelection(file, *posFlag)
 	if err != nil {
 		return nil, err
 	}

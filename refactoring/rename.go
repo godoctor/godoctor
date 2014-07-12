@@ -10,6 +10,7 @@ package refactoring
 import (
 	"go/ast"
 	"regexp"
+	"runtime"
 	//"fmt"
 	"go/parser"
 	"go/token"
@@ -158,14 +159,22 @@ func (r *Rename) identExists(ident *ast.Ident) bool {
 //addOccurrences adds all the Occurences to the editset
 func (r *Rename) addOccurrences(allOccurrences map[string][]text.Extent) {
 	for filename, occurrences := range allOccurrences {
-		for _, occurrence := range occurrences {
-			if r.Edits[filename] == nil {
-				r.Edits[filename] = text.NewEditSet()
+		if isInGoRoot(filename) {
+			r.Log.Warnf("Occurrences in %s will not be renamed",
+				filename)
+		} else {
+			for _, occurrence := range occurrences {
+				if r.Edits[filename] == nil {
+					r.Edits[filename] = text.NewEditSet()
+				}
+				r.Edits[filename].Add(occurrence, r.newName)
 			}
-			r.Edits[filename].Add(occurrence, r.newName)
-
 		}
 	}
+}
+
+func isInGoRoot(absPath string) bool {
+	return strings.HasPrefix(absPath, runtime.GOROOT())
 }
 
 func (r *Rename) addFileSystemChanges(allOccurrences map[string][]text.Extent, ident *ast.Ident) {

@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// This file defines EditSets, which describe changes (additions, deletions,
-// and modifications) to be made to a text file.
+// This file defines Extents and EditSets, which are used to describe
+// additions, deletions, and modifications to be made to a string or text file.
 
 package text
 
@@ -17,6 +17,57 @@ import (
 	"strings"
 	"syscall"
 )
+
+// -=-= Extent =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+// An Extent consists of two integers: a 0-based byte offset and a
+// nonnegative length.  An Extent is used to specify a region of a string
+// or file.  For example, given the string "ABCDEFG", the substring CDE could
+// be specified by Extent{offset: 2, length: 3}.
+type Extent struct {
+	// Byte offset of the first character (0-based)
+	Offset int `json:"offset"`
+	// Length in bytes (nonnegative)
+	Length int `json:"length"`
+}
+
+// OffsetPastEnd returns the offset of the first byte immediately beyond the
+// end of this region.  For example, a region at offset 2 with length 3
+// occupies bytes 2 through 4, so this method would return 5.
+func (o *Extent) OffsetPastEnd() int {
+	return o.Offset + o.Length
+}
+
+// Intersect returns the intersection (i.e., the overlapping region) of two
+// intervals, or nil iff the intervals do not overlap.  A length-zero overlap
+// is returned only if the two intervals are not adjacent.
+func (o *Extent) Intersect(other *Extent) *Extent {
+	start := max(o.Offset, other.Offset)
+	end := min(o.OffsetPastEnd(), other.OffsetPastEnd())
+	len := end - start
+	if len < 0 {
+		return nil
+	}
+	if len == 0 && o.IsAdjacentTo(other) {
+		return nil
+	}
+	return &Extent{start, len}
+}
+
+// IsAdjacentTo returns true iff two intervals describe regions immediately
+// next to one another, such as (offset 2, length 3) and (offset 5, length 1).
+// Specifically, [a,b) is adjacent to [c,d) iff b == c or d == a.  Note that a
+// length-zero interval is adjacent to itself.
+func (o *Extent) IsAdjacentTo(other *Extent) bool {
+	return o.OffsetPastEnd() == other.Offset ||
+		other.OffsetPastEnd() == o.Offset
+}
+
+func (o *Extent) String() string {
+	return fmt.Sprintf("offset %d, length %d", o.Offset, o.Length)
+}
+
+// -=-= EditSet -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 // An EditSet is a collection of changes to be made to a text file.  Each edit
 // is comprised of an offset, a length, and a replacement string.
@@ -68,7 +119,7 @@ func (e *EditSet) Add(pos Extent, replacement string) error {
 	}
 
 	// Insert edit into e.edits, keeping e.edits sorted by offset
-	var idx int = len(e.edits)
+	idx := len(e.edits)
 	for i := len(e.edits) - 1; i >= 0; i-- {
 		if e.edits[i].Offset >= pos.Offset {
 			idx = i
@@ -130,10 +181,10 @@ func (e *EditSet) applyTo(in *bufio.Reader, out *bufio.Writer) error {
 	// This uses the same idea as the linear-time merge in Merge Sort to
 	// apply the edits in this EditSet to the bytes from the input reader.
 	defer out.Flush()
-	var offset int = 0
+	offset := 0
 	for _, edit := range e.edits {
 		// Copy bytes preceding this edit
-		var bytesToWrite int64 = int64(edit.Offset - offset)
+		bytesToWrite := int64(edit.Offset - offset)
 		bytesWritten, err := io.CopyN(out, in, bytesToWrite)
 		offset += int(bytesWritten)
 		if bytesWritten < bytesToWrite {
@@ -197,8 +248,8 @@ func ApplyToFile(es *EditSet, filename string) ([]byte, error) {
 	return ApplyToReader(es, file)
 }
 
-// ApplyToFile reads bytes from a string, applying the edits in an EditSet and
-// returning the result as a string.
+// ApplyToString reads bytes from a string, applying the edits in an EditSet
+// and returning the result as a string.
 func ApplyToString(es *EditSet, s string) (string, error) {
 	bs, err := ApplyToReader(es, strings.NewReader(s))
 	return string(bs), err

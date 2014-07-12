@@ -10,8 +10,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
-	"regexp"
-	"strings"
+	"regexp/syntax"
 
 	"code.google.com/p/go.tools/go/loader"
 	"code.google.com/p/go.tools/go/types"
@@ -315,14 +314,21 @@ func allPackages(prog *loader.Program) map[*loader.PackageInfo]bool {
 	return pkgs
 }
 
-// occurrencesincomments checks if the name of the selected identifier occurs as a word in comments,if true then
-// all the source locations of name in comments are returned.
+// occurrencesInComments checks if the name of the selected identifier occurs as a
+// word in comments, if true then all the source locations of name in comments are returned.
 func (r *SearchEngine) occurrencesInComments(name string, pkgs map[*loader.PackageInfo]bool, result map[string][]text.Extent) map[string][]text.Extent {
+	T := kmpFailure(name) // precompute failure function once
+	len := len(name)
 	for pkgInfo := range pkgs {
 		for _, f := range pkgInfo.Files {
+			fname := r.program.Fset.Position(f.Pos()).Filename
 			for _, comment := range f.Comments {
-				if strings.Contains(comment.List[0].Text, name) {
-					result = r.occurrencesInFileComments(f, comment, name, result, r.program)
+				for _, c := range comment.List {
+					offsets := kmpWord(c.Text, name, T)
+					for _, o := range offsets {
+						foffset := r.program.Fset.Position(c.Slash).Offset + o
+						result[fname] = append(result[fname], text.Extent{foffset, len})
+					}
 				}
 			}
 		}
@@ -330,21 +336,48 @@ func (r *SearchEngine) occurrencesInComments(name string, pkgs map[*loader.Packa
 	return result
 }
 
-// occurrencesInFileComments finds the source location of  selected identifier names in
-// comments, appends them to the already found source locations of
-// selected identifier objects (result), and returns the result.
-func (r *SearchEngine) occurrencesInFileComments(f *ast.File, comment *ast.CommentGroup, name string, result map[string][]text.Extent, prog *loader.Program) map[string][]text.Extent {
-	var whitespaceindex int = 1
-	regexpstring := fmt.Sprintf("[\\PL]%s[\\PL]|//%s[\\PL]|/*%s[\\PL]|[\\PL]%s$", name, name, name, name)
-	re := regexp.MustCompile(regexpstring)
-	matchcount := strings.Count(comment.List[0].Text, name)
-	for _, matchindex := range re.FindAllStringIndex(comment.List[0].Text, matchcount) {
-		offset := prog.Fset.Position(comment.List[0].Slash).Offset + matchindex[0] + whitespaceindex
-		length := len(name)
-		filename := prog.Fset.Position(f.Pos()).Filename
-		result[filename] = append(result[filename], text.Extent{offset, length})
+// kmpWord is the Knuth-Morris-Pratt string searching algorithm,
+// slightly modified to only find entire word matches.
+func kmpWord(txt, pat string, T []int) (offsets []int) {
+	M, N := len(pat), len(txt)
+	for m, i := 0, 0; i < N; i++ {
+		for m > 0 && txt[i] != pat[m] {
+			m = T[m]
+		}
+		m++
+		if m >= M {
+			if isWord(txt, i-m+1, i) { // could probably compute in failure func...
+				offsets = append(offsets, i-m+1)
+			}
+			m = 0
+		}
 	}
-	return result
+	return offsets
+}
+
+// This function assumes it is given indices corresponding to a word,
+// and i, n are the beginning and end of that word, respectively.
+func isWord(txt string, i, n int) bool {
+	if i == 0 {
+		return !syntax.IsWordChar(rune(txt[n+1]))
+	} else if n == len(txt)-1 {
+		return !syntax.IsWordChar(rune(txt[i-1]))
+	}
+	return !syntax.IsWordChar(rune(txt[i-1])) && !syntax.IsWordChar(rune(txt[n+1]))
+}
+
+// kmpFailure is the "failure function" for KMP.
+func kmpFailure(pat string) (T []int) {
+	T = make([]int, len(pat))
+	T[0] = -1
+
+	for i := 1; i < len(pat); i++ {
+		T[i] = T[i-1] + 1
+		for T[i] > 0 && pat[i] != pat[T[i]-1] {
+			T[i] = T[T[i]-1] + 1
+		}
+	}
+	return T
 }
 
 /* -=-=- Utility Methods -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */

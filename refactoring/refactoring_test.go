@@ -88,8 +88,7 @@ func TestRefactorings(t *testing.T) {
 	testDirs, err := ioutil.ReadDir(directory)
 	failIfError(err, t)
 	for _, testDirInfo := range testDirs {
-		// FIXME(jeff): Move refactoring tests into testdata/refactoring/x and remove this hack
-		if testDirInfo.IsDir() && testDirInfo.Name() != "diff" {
+		if testDirInfo.IsDir() {
 			runAllTestsInSubdirectories(testDirInfo, t)
 		}
 	}
@@ -192,7 +191,7 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 	cwd, _ := os.Getwd()
 	absPath, _ := filepath.Abs(filename)
 	relativePath, _ := filepath.Rel(cwd, absPath)
-	fmt.Println(name, relativePath, selection.PosString())
+	fmt.Println(name, relativePath)
 
 	mainFile := filepath.Join(directory, MAIN_DOT_GO)
 	if !exists(mainFile, t) {
@@ -225,18 +224,33 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 		t.Fatalf("Refactoring should have produced errors but didn't")
 	}
 
-	for filename, edits := range result.Edits {
-		output, err := text.ApplyToFile(edits, filename)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if shouldPass {
-			checkResult(filename, string(output), t)
-
-		}
+	err = filepath.Walk(directory,
+		func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if strings.HasSuffix(path, ".go") {
+				path, err := filepath.Abs(path)
+				if err != nil {
+					return err
+				}
+				edits, ok := result.Edits[path]
+				if !ok {
+					edits = text.NewEditSet()
+				}
+				output, err := text.ApplyToFile(edits, path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if shouldPass {
+					checkResult(path, string(output), t)
+				}
+			}
+			return nil
+		})
+	if err != nil {
+		t.Fatal(err)
 	}
-	//fmt.Println("filesystem changes",result.FSChanges)
-	//  checkRenamedDir(result.RenameDir,"fschanges.txt")
 
 	fsChangesFile := filepath.Join(directory, FSCHANGES_TXT)
 	if !exists(fsChangesFile, t) {
@@ -359,7 +373,7 @@ func describe(s string) string {
 	return s
 }
 
-func splitMarker(filename string, marker string, t *testing.T) (refac string, selection *text.Selection, remainder []string, result string) {
+func splitMarker(filename string, marker string, t *testing.T) (refac string, selection text.Selection, remainder []string, result string) {
 	filename, err := filepath.Abs(filename)
 	if err != nil {
 		t.Fatal(err)
@@ -373,7 +387,7 @@ func splitMarker(filename string, marker string, t *testing.T) (refac string, se
 	startCol := parseInt(fields[2], t)
 	endLine := parseInt(fields[3], t)
 	endCol := parseInt(fields[4], t)
-	selection = &text.Selection{filename,
+	selection = &text.LineColSelection{filename,
 		startLine, startCol, endLine, endCol}
 	remainder = fields[5 : len(fields)-1]
 	result = fields[len(fields)-1]
