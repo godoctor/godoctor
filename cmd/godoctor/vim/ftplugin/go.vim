@@ -21,6 +21,10 @@
 " http://vimdoc.sourceforge.net/htmldoc/windows.html
 " -- Simulating hyperlinks in Vim:
 " http://stackoverflow.com/questions/10925030/vimscriptl-file-browser-hyperlink
+" -- Shell escaping/temp file problems under Windows
+" http://vim.wikia.com/wiki/Fix_errors_that_relate_to_reading_or_creating_files_in_the_temp_or_tmp_environment_on_an_MS_Windows_PC
+" -- Inserting the contents of a variable into a buffer
+" http://stackoverflow.com/questions/16833217/set-buffer-content-with-variable
 " -- Go Doctor ASCII art uses the AMC 3 Line font, generated here:
 " http://patorjk.com/software/taag/#p=display&v=3&f=AMC%203%20Line&t=Go%20Doctor
 " -- General Vimscript reference:
@@ -114,7 +118,10 @@ func! s:loadfiles(files)
       call add(g:newbuffers, nr)
     endif
     silent exec "buffer! ".nr
-    silent execute "%!echo ".shellescape(a:files[file], 1)
+    " silent execute "%!echo ".shellescape(a:files[file], 1)
+    silent :1,$delete
+    silent :put =a:files[file]
+    silent :1delete _
   endfor
 
   " Restore original cursor position, windows, etc.
