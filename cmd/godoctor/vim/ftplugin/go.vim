@@ -192,6 +192,7 @@ endfunc
 " Populate the quickfix list with the refactoring log, and populate each
 " window's location list with the positions the refactoring modified
 func! s:qfloclist(output)
+  let has_errors = 0
   let qflist = []
   let loclists = {}
   " Parse GNU-style 'file:line.col-line.col: message' format.
@@ -221,6 +222,7 @@ func! s:qfloclist(output)
     endif
     if item['text'] =~ 'rror:'
       let item['type'] = 'E'
+      let has_errors = 1
     elseif item['text'] =~ 'arning:'
       let item['type'] = 'W'
     else
@@ -246,7 +248,14 @@ func! s:qfloclist(output)
   if empty(qflist)
     cclose
   else
-    cwindow
+    if has_errors
+      " cwindow only opens the quickfix list when there are errors that are
+      " associated with a file position.  This ensures that it will be opened
+      " even if there are generic errors not associated with a file position.
+      copen
+    else
+      cwindow
+    endif
   endif
 endfun
 
