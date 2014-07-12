@@ -163,22 +163,24 @@ func TestRefactoringUsage(t *testing.T) {
 }
 
 func TestRenameDiff(t *testing.T) {
-	exit, stdout, _ := runCLI(hello, pos, "rename", "renamedネーム")
+	exit, stdout, stderr := runCLI(hello, "-scope=-", pos, "rename", "renamedネーム")
 	if exit != 0 {
 		t.Fatal("Rename expected clean exit")
 	}
 	if stdout != diff {
-		t.Fatalf("Output did not match expected diff:\n%s", stdout)
+		t.Fatalf("Output did not match expected diff:\n%s\n%s",
+			stdout, stderr)
 	}
 }
 
 func TestRenameComplete(t *testing.T) {
-	exit, stdout, _ := runCLI(hello, pos, "-complete", "rename", "renamedネーム")
+	exit, stdout, stderr := runCLI(hello, "-scope=-", pos, "-complete", "rename", "renamedネーム")
 	if exit != 0 {
 		t.Fatal("Rename expected clean exit")
 	}
 	if stdout != complete {
-		t.Fatalf("Output did not match expected output:\n%s", stdout)
+		t.Fatalf("Output did not match expected output:\n%s\n%s",
+			stdout, stderr)
 	}
 }
 

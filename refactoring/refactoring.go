@@ -86,6 +86,25 @@ type Description struct {
 	// (e.g., "Rename" or "Extract Function") as it would appear in a user
 	// interface.  Every refactoring should have a unique name.
 	Name string
+	// A brief phrase (≤50 characters) describing this refactoring, with
+	// the first letter capitalized.  For example:
+	//     ----+----1----+----2----+----3----+----4----+----5
+	//     Changes the name of an identifier
+	Synopsis string
+	// A one-line synopsis of this refactoring's arguments (≤50 characters)
+	// with angle brackets surrounding argument names (question marks
+	// denoting Boolean arguments) and square brackets surrounding optional
+	// arguments.  For example:
+	//     ----+----1----+----2----+----3----+----4----+----5
+	//     <new_name> [<rename_in_comments?>]
+	Usage string
+	// Multifile is set to true only if this refactoring may change files
+	// other than the file containing the selection.  For example, renaming
+	// an exported identifier may cause references to be updated in several
+	// files, so for the Rename refactoring, Multifile=true.  However,
+	// extracting a local variable will only change the file containing the
+	// selection, so Extract Local Variable has Multifile=false.
+	Multifile bool
 	// Additional input required for this refactoring.  See Parameter.
 	Params []Parameter
 	// Whether this refactoring is suitable for production use.
@@ -201,9 +220,11 @@ func (r *refactoringBase) Run(config *Config) *Result {
 			!strings.HasSuffix(message, cgoError2) &&
 			len(r.Log.Entries) < maxInitialErrors {
 			mutex.Lock()
-			r.Log.Error(message)
 			if err, ok := err.(types.Error); ok {
+				r.Log.Error(err.Msg)
 				r.Log.AssociatePos(err.Pos, err.Pos)
+			} else {
+				r.Log.Error(message)
 			}
 			mutex.Unlock()
 		}
@@ -297,10 +318,12 @@ func createLoader(config *Config, errorHandler func(error)) (*loader.Program, er
 func (r *refactoringBase) guessScope(config *Config) ([]string, string) {
 	fname := config.Selection.GetFilename()
 	fnameScope := []string{fname}
-	fnameMsg := fmt.Sprintf("Defaulting to file scope %s for refactoring (provide an explicit scope to change this)", fname)
 
+	var fnameMsg string
 	if filepath.Base(fname) == filesystem.FakeStdinFilename {
-		return fnameScope, "Defaulting to file scope for refactoring (provide an explicit scope to change this)"
+		fnameMsg = "Defaulting to file scope for refactoring (provide an explicit scope to change this)"
+	} else {
+		fnameMsg = fmt.Sprintf("Defaulting to file scope %s for refactoring (provide an explicit scope to change this)", fname)
 	}
 
 	absFilename, err := filepath.Abs(fname)
@@ -437,13 +460,16 @@ func (r *refactoringBase) updateLog(config *Config, checkForErrors bool) {
 			mutex.Lock()
 			errors++
 			msg := fmt.Sprintf("Completing the transformation will introduce the following error: %s", message)
-			newLogOldPos.Error(msg)
-			newLogNewPos.Error(msg)
 			if err, ok := err.(types.Error); ok {
+				newLogOldPos.Error(err.Msg)
+				newLogNewPos.Error(err.Msg)
 				oldPos := mapPos(err.Fset, err.Pos, r.Edits, r.program.Fset, true)
 				newLogOldPos.AssociatePos(oldPos, oldPos)
 				newLogNewPos.Fset = err.Fset
 				newLogNewPos.AssociatePos(err.Pos, err.Pos)
+			} else {
+				newLogOldPos.Error(msg)
+				newLogNewPos.Error(msg)
 			}
 			mutex.Unlock()
 		}

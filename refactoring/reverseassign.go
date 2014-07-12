@@ -23,9 +23,12 @@ type ReverseAssign struct {
 
 func (r *ReverseAssign) Description() *Description {
 	return &Description{
-		Name:    "Convert var to :=",
-		Params:  nil,
-		Quality: Development,
+		Name:      "Convert var to :=",
+		Synopsis:  "Changes a var declaration to a short assignment",
+		Usage:     "",
+		Multifile: false,
+		Params:    nil,
+		Quality:   Development,
 	}
 }
 

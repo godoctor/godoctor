@@ -27,6 +27,8 @@
 " http://stackoverflow.com/questions/16833217/set-buffer-content-with-variable
 " -- Calling a varargs function
 " http://stackoverflow.com/questions/11703297/how-can-i-pass-varargs-to-another-function-in-vimscript
+" -- Trim whitespace from a string
+" http://newsgroups.derkeiler.com/Archive/Comp/comp.editors/2005-08/msg00226.html
 " -- Go Doctor ASCII art uses the AMC 3 Line font, generated here:
 " http://patorjk.com/software/taag/#p=display&v=3&f=AMC%203%20Line&t=Go%20Doctor
 " -- General Vimscript reference:
@@ -41,7 +43,7 @@ if exists("g:loaded_doctor")
 endif
 let g:loaded_doctor = 1
 
-" Get the path to the godoctor executable.
+" Get the path to the godoctor executable.  Run once to assign s:go_doctor.
 func! s:go_doctor_bin()
   let [ext, sep] = (has('win32') || has('win64') ? ['.exe', ';'] : ['', ':'])
   let go_doctor = globpath(join(split($GOPATH, sep), ','), '/bin/godoctor' . ext)
@@ -51,13 +53,35 @@ func! s:go_doctor_bin()
   return go_doctor
 endfunction
 
-" Path to the godoctor executable.
+" Path to the godoctor executable
 let s:go_doctor = s:go_doctor_bin()
 
-" Parse the godoctor -complete output and store file contents in a dictionary
-" mapping filenames to file contents
+" Return 0 if the given refactoring can only change the file in the editor,
+" or 1 if it may affect other files as well.
+function! s:is_multifile(refac)
+  let out = system(printf('%s --list', s:go_doctor))
+  if v:shell_error
+    return 1
+  endif
+  let result = ""
+  let lines = split(out, "\n")
+  if len(lines) > 2
+    for line in lines[2:]
+      let fields = split(line, "\t")
+      let name = substitute(fields[0], "^\\s\\+\\|\\s\\+$", "", "g") 
+      let multi = substitute(fields[2], "^\\s\\+\\|\\s\\+$", "", "g") 
+      if name ==? a:refac
+	return multi == "true"
+      endif
+    endfor
+  endif
+  return 1
+endfun
+
+" Parse the godoctor -complete output and store files' contents in a
+" dictionary mapping filenames to their contents.
 "
-" When given the "-complete" flag, the output has the form:
+" When given the "-complete" flag, the Go Doctor's output has the form:
 "     log message
 "     log message
 "     ...
@@ -72,21 +96,25 @@ let s:go_doctor = s:go_doctor_bin()
 "     filen contents
 func! s:parsefiles(output)
   let result = {}
-  let pat = '@@@@@ \([^@]\+\) @@@@@ \(\d\+\) @@@@@\(\|\r\)\n'
+  let pattern = '@@@@@ \([^@]\+\) @@@@@ \(\d\+\) @@@@@\(\|\r\)\n'
   let start = 0
 
+  " Repeatedly find a @@@@@ line
   while start >= 0
-    let match = matchlist(a:output, pat, start)
+    let match = matchlist(a:output, pattern, start)
     let linelen = len(match[0])
-  
     let filename = match[1]
-    let nextmatch = match(a:output, pat, start+linelen)
+
+    " This file's contents ends just before the start of the next @@@@@ line
+    let nextmatch = match(a:output, pattern, start+linelen)
     if nextmatch < 0
       let contents = a:output[start+linelen : ]
     else
       let contents = a:output[start+linelen : nextmatch-1]
     endif
     let result[filename] = contents
+
+    " We know the location of the next @@@@@ line, so search there next
     let start = nextmatch
   endwhile
 
@@ -99,8 +127,8 @@ let g:allbuffers = []
 " List of new buffers opened by the most recent refactoring
 let g:newbuffers = []
 
-" Open all refactored files in (hidden) buffers
-func! s:loadfiles(files)
+" Open all refactored files in (hidden) buffers.
+func! s:loadfiles(files, used_stdin)
   " Save original view
   let view = winsaveview()
   let orig = bufnr("%")
@@ -111,16 +139,21 @@ func! s:loadfiles(files)
   let g:allbuffers = []
   let g:newbuffers = []
   for file in keys(a:files)
-    " Get or create buffer, and fill with refactored file contents
-    let oldnr = bufnr(fnameescape(file))
-    exec "badd ".fnameescape(file)
-    let nr = bufnr(fnameescape(file))
+    if a:used_stdin
+      " Use current buffer
+      let oldnr = bufnr('%')
+      let nr = bufnr('%')
+    else
+      " Get or create buffer, and fill with refactored file contents
+      let oldnr = bufnr(fnameescape(file))
+      exec "badd ".fnameescape(file)
+      let nr = bufnr(fnameescape(file))
+    endif
     call add(g:allbuffers, nr)
     if oldnr < 0
       call add(g:newbuffers, nr)
     endif
     silent exec "buffer! ".nr
-    " silent execute "%!echo ".shellescape(a:files[file], 1)
     silent :1,$delete
     silent :put =a:files[file]
     silent :1delete _
@@ -130,8 +163,8 @@ func! s:loadfiles(files)
   silent exec "buffer! ".orig
   call winrestview(view)
 
+  " If >1 file modified, display hyperlinks to make saving and undoing easier
   if len(a:files) > 1
-    " Create a sort of dialog to make saving and undoing easy
     exec "topleft 3new"
     call setline(1, "Save Changes & Close New Buffers     " .
                   \ "  .-. .-.   .-. .-. .-. .-. .-. .-.  ")
@@ -149,7 +182,7 @@ func! s:loadfiles(files)
   endif
 endfun
 
-" Scratch buffer ("dialog") callback to save, undo, and close buffers
+" Callback for hyperlinks displayed above (to save, undo, and close buffers)
 func! b:interpret(cmd)
   if winnr('$') > 1
     close
@@ -190,8 +223,8 @@ func! b:interpret(cmd)
 endfunc
 
 " Populate the quickfix list with the refactoring log, and populate each
-" window's location list with the positions the refactoring modified
-func! s:qfloclist(output)
+" window's location list with the positions the refactoring modified.
+func! s:qfloclist(output, used_stdin)
   let has_errors = 0
   let qflist = []
   let loclists = {}
@@ -199,25 +232,40 @@ func! s:qfloclist(output)
   let mx = '^\(\a:[\\/][^:]\+\|[^:]\+\):\(\d\+\):\(\d\+\):\(.*\)$'
   for line in split(a:output, "\n")
     if line =~ '^@@@@@'
-      " Log is displayed before file output, so this is the end of the log
+      " The log is displayed before files' contents, so as soon as we see a
+      " @@@@@ line, we have seen the last log message; no need to keep looking
       break
     endif
     let ml = matchlist(line, mx)
     " Ignore non-match lines or warnings
     if ml == []
       let item = {
+      \  'bufnr': bufnr('%'),
       \  'text': line,
       \}
     else
-      let item = {
-      \  'filename': ml[1],
-      \  'text': ml[4],
-      \  'lnum': ml[2],
-      \  'col': ml[3],
-      \}
-      let bnr = bufnr(fnameescape(ml[1]))
-      if bnr != -1
-        let item['bufnr'] = bnr
+      if a:used_stdin
+        let item = {
+        \  'bufnr': bufnr('%'),
+        \  'lnum': ml[2],
+        \  'col': ml[3],
+        \  'text': ml[4],
+        \}
+        let bname = bufname('%')
+        if bname != ""
+          let item['filename'] = bname
+        endif
+      else
+        let item = {
+        \  'filename': ml[1],
+        \  'lnum': ml[2],
+        \  'col': ml[3],
+        \  'text': ml[4],
+        \}
+        let bnr = bufnr(fnameescape(ml[1]))
+        if bnr != -1
+          let item['bufnr'] = bnr
+        endif
       endif
     endif
     if item['text'] =~ 'rror:'
@@ -259,11 +307,19 @@ func! s:qfloclist(output)
   endif
 endfun
 
-" Run the Go Doctor with the given selection, refactoring name, and arguments
+" Run the Go Doctor with the given selection, refactoring name, and arguments.
 func! s:RunDoctor(selected, refac, ...) range abort
+  let multifile = s:is_multifile(a:refac)
+  let cur_buf_file = expand('%:p')
   let bufcount = bufnr('$')
+
+  " The current buffer contents can be sent to the godoctor on stdin if
+  " (1) there are no other unsaved buffers, and
+  " (2) the current buffer is unnamed (i.e., it is a new file).
+  " So, check that there is at most one unsaved buffer, and it has no name.
+
   for i in range(1, bufcount)
-    if bufexists(i) && getbufvar(i, "&mod")
+    if bufexists(i) && getbufvar(i, "&mod") && bufname(i) != ""
       echohl Error
          \ | echom bufname(i) . " has unsaved changes; please save before refactoring"
          \ | echohl None
@@ -277,14 +333,12 @@ func! s:RunDoctor(selected, refac, ...) range abort
     let s:scope = " -scope=".shellescape(g:doctor_scope)
   endif
 
-  let file = expand('%:p')
-  if file == ""
-    echohl Error
-       \ | echom "The current buffer must be saved before refactoring"
-       \ | echohl None
-    return
+  if cur_buf_file == ""
+    " Read file from standard input
+    let file = " -file=-"
+  else
+    let file = printf(" -file=%s", cur_buf_file)
   endif
-  let file = printf(" -file=%s", shellescape(file))
 
   if a:selected != -1
     let pos = printf(" -pos=%d,%d:%d,%d",
@@ -302,7 +356,18 @@ func! s:RunDoctor(selected, refac, ...) range abort
     \ pos,
     \ shellescape(a:refac),
     \ join(map(copy(a:000), 'shellescape(v:val)'), ' '))
-  let out = system(cmd)
+  if cur_buf_file == ""
+    let cur_buf_contents = join(getline(1,'$'), "\n")
+    if cur_buf_contents == ""
+      echohl Error
+        \ | echom "The current buffer is empty; cannot refactor"
+        \ | echohl None
+      return
+    endif
+    let out = system(cmd, cur_buf_contents)
+  else
+    let out = system(cmd)
+  endif
   " echo cmd
   " echo out
   if v:shell_error
@@ -310,18 +375,30 @@ func! s:RunDoctor(selected, refac, ...) range abort
     echohl Error | echom lines[0] | echohl None
   endif
   let files = s:parsefiles(out)
-  call s:loadfiles(files)
-  call s:qfloclist(out)
+  call s:loadfiles(files, cur_buf_file == "")
+  call s:qfloclist(out, cur_buf_file == "")
 endfun
 
+" List the available refactorings, one per line.  Used for auto-completion.
 function! s:list_refacs(a, l, p)
   let out = system(printf('%s --list', s:go_doctor))
   if v:shell_error
     return ""
   endif
-  return out
+  let result = ""
+  let lines = split(out, "\n")
+  if len(lines) > 2
+    for line in lines[2:]
+      let fields = split(line, "\t")
+      let name = substitute(fields[0], "^\\s\\+\\|\\s\\+$", "", "g") 
+      let result = result . name . "\n"
+    endfor
+  endif
+  return result
 endfun
 
+" Run the Rename refactoring with the given arguments.  If a new name is not
+" provided, prompt for one.
 func! s:RunRename(selected, ...) range abort
   if len(a:000) > 0
     call call("s:RunDoctor", [a:selected, 'rename'] + a:000)
@@ -339,6 +416,9 @@ command! -range=% -nargs=* Rename
   \ call s:RunRename(<count>, <f-args>)
 
 command! -range=% -nargs=+ -complete=custom,<sid>list_refacs GoRefactor
+  \ call s:RunDoctor(<count>, <f-args>)
+
+command! -range=% -nargs=+ -complete=custom,<sid>list_refacs Refactor
   \ call s:RunDoctor(<count>, <f-args>)
 
 let b:did_ftplugin_doc = 1

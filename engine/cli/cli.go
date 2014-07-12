@@ -37,8 +37,8 @@ Each <flag> must be one of the following:`)
 The <refactoring> argument determines the refactoring to perform:`)
 	for key, r := range engine.AllRefactorings() {
 		//if r.Description().Quality == refactoring.Production {
-		// FIXME: One-line description
-		fmt.Fprintf(stderr, "    %-15s %s\n", key, r.Description().Name)
+		fmt.Fprintf(stderr, "    %-15s %s\n",
+			key, r.Description().Synopsis)
 		//}
 	}
 	fmt.Fprintln(stderr, `
@@ -75,7 +75,7 @@ func Run(stdin io.Reader, stdout io.Writer, stderr io.Writer, args []string) int
 		"Log all edits made by the refactoring (verbose)")
 
 	var listFlag = flags.Bool("list", false,
-		"List all refactoring names and exit")
+		"List all refactorings and exit")
 
 	var jsonFlag = flags.Bool("json", false,
 		"Accept commands in OpenRefactory JSON protocol format")
@@ -110,10 +110,14 @@ func Run(stdin io.Reader, stdout io.Writer, stderr io.Writer, args []string) int
 			return 1
 		}
 		// Invoked as "godoctor [-v] [-file=""] [-pos=""] -list
-		for key, _ := range engine.AllRefactorings() {
+		fmt.Fprintf(stderr, "%-15s\t%-47s\t%s\n",
+			"Refactoring", "Description", "     Multifile?")
+		fmt.Fprintf(stderr, "--------------------------------------------------------------------------------\n")
+		for key, r := range engine.AllRefactorings() {
+			d := r.Description()
 			//if r.Description().Quality == refactoring.Production {
-			// FIXME: One-line description
-			fmt.Fprintf(stderr, "%s\n", key)
+			fmt.Fprintf(stderr, "%-15s\t%-50s\t%v\n",
+				key, d.Synopsis, d.Multifile)
 			//}
 		}
 		return 0
@@ -142,9 +146,11 @@ func Run(stdin io.Reader, stdout io.Writer, stderr io.Writer, args []string) int
 		return 2
 	}
 
-	refac := engine.GetRefactoring(args[0])
+	refacName := args[0]
+	refac := engine.GetRefactoring(refacName)
 	if refac == nil {
-		fmt.Fprintf(stderr, "There is no refactoring named \"%s\"\n", args[0])
+		fmt.Fprintf(stderr, "There is no refactoring named \"%s\"\n",
+			refacName)
 		return 1
 	}
 
@@ -152,7 +158,8 @@ func Run(stdin io.Reader, stdout io.Writer, stderr io.Writer, args []string) int
 
 	if flags.NFlag() == 0 && flags.NArg() == 1 {
 		// Invoked as "godoctor refactoring"
-		fmt.Fprintf(stderr, "FIXME: Usage: refactoring\n")
+		fmt.Fprintf(stderr, "Usage: %s %s\n",
+			refacName, refac.Description().Usage)
 		return 2
 	}
 
@@ -165,7 +172,8 @@ func Run(stdin io.Reader, stdout io.Writer, stderr io.Writer, args []string) int
 		fileSystem = &filesystem.LocalFileSystem{}
 	} else {
 		// Filename is - or no filename given; read from standard input
-		stdinPath, err := filesystem.FakeStdinPath()
+		var err error
+		stdinPath, err = filesystem.FakeStdinPath()
 		if err != nil {
 			fmt.Fprintln(stderr, err)
 			return 1
@@ -192,8 +200,13 @@ func Run(stdin io.Reader, stdout io.Writer, stderr io.Writer, args []string) int
 
 	var scope []string
 	if *scopeFlag == "" {
-		scope = nil // refactoring.go will guess the scope
+		// If no scope provided, let refactoring.go guess the scope
+		scope = nil
+	} else if *scopeFlag == "-" && stdinPath != "" {
+		// Use -scope=- to indicate "stdin file (not package) scope"
+		scope = []string{stdinPath}
 	} else {
+		// Use -scope=a,b,c to specify multiple files/packages
 		scope = strings.Split(*scopeFlag, ",")
 	}
 

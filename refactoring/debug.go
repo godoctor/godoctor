@@ -43,7 +43,10 @@ type Debug struct {
 
 func (r *Debug) Description() *Description {
 	return &Description{
-		Name: "Debug Refactoring",
+		Name:      "Debug Refactoring",
+		Synopsis:  "Provides assorted debugging outputs",
+		Usage:     "<options>",
+		Multifile: false,
 		Params: []Parameter{Parameter{
 			Label:        "Options",
 			Prompt:       "Options",

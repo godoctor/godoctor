@@ -33,7 +33,10 @@ type Rename struct {
 
 func (r *Rename) Description() *Description {
 	return &Description{
-		Name: "Rename",
+		Name:      "Rename",
+		Synopsis:  "Changes the name of an identifier",
+		Usage:     "<new_name>",
+		Multifile: true,
 		Params: []Parameter{Parameter{
 			Label:        "New Name:",
 			Prompt:       "What to rename this identifier to.",

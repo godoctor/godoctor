@@ -15,7 +15,10 @@ type Null struct {
 
 func (r *Null) Description() *Description {
 	return &Description{
-		Name: "Null Refactoring",
+		Name:      "Null Refactoring",
+		Synopsis:  "Refactoring that makes no changes to a program",
+		Usage:     "<allow_errors?>",
+		Multifile: false,
 		Params: []Parameter{Parameter{
 			Label:        "Allow Errors",
 			Prompt:       "Allow Errors",

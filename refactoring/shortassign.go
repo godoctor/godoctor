@@ -25,9 +25,12 @@ type ShortAssign struct {
 
 func (r *ShortAssign) Description() *Description {
 	return &Description{
-		Name:    "Convert := to var",
-		Params:  nil,
-		Quality: Development,
+		Name:      "Convert := to var",
+		Synopsis:  "Changes a short assignment to a var declaration",
+		Usage:     "",
+		Multifile: false,
+		Params:    nil,
+		Quality:   Development,
 	}
 }
 
