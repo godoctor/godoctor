@@ -15,6 +15,7 @@ import (
 	"bytes"
 	"fmt"
 	"go/ast"
+	"go/printer"
 	"io"
 	"os"
 	"sort"
@@ -30,6 +31,7 @@ import (
 
 const usage = `Usage: debug <options>
 where <options> can be any or all of:
+    fmt               Format the node enclosing the selection using go/printer
     showaffected      Show names affected if the selected identifier is renamed
     showast           Show the abstract syntax tree for the selected file
     showflow          Show GraphViz DOT flow graphs for the selected file
@@ -73,8 +75,11 @@ func (r *Debug) Run(config *Config) *Result {
 	}
 
 	for _, arg := range config.Args {
+		cmd := strings.ToLower(strings.TrimSpace(arg.(string)))
 		var b bytes.Buffer
-		switch strings.ToLower(strings.TrimSpace(arg.(string))) {
+		switch cmd {
+		case "fmt":
+			r.fmt()
 		case "showaffected":
 			r.showAffected(&b)
 		case "showast":
@@ -91,12 +96,57 @@ func (r *Debug) Run(config *Config) *Result {
 			r.Log.Errorf("Unknown option %s", arg.(string))
 			return &r.Result
 		}
-		if !r.Log.ContainsErrors() {
-			r.Edits[r.filename(r.file)].Add(text.Extent{0, 0},
-				b.String())
+		if !r.Log.ContainsErrors() && cmd != "fmt" {
+			insert := text.Extent{0, 0}
+			r.Edits[r.filename(r.file)].Add(insert, b.String())
 		}
 	}
 	return &r.Result
+}
+
+func (r *Debug) fmt() {
+	// Find the smallest formattable node enclosing the selection
+	_, nodes, _ := r.program.PathEnclosingInterval(r.selectionStart, r.selectionEnd)
+	for _, node := range nodes {
+		if canFormat(node) {
+			cnode := &printer.CommentedNode{
+				Node:     node,
+				Comments: r.file.Comments}
+			printConfig := &printer.Config{
+				Mode:     printer.UseSpaces | printer.TabIndent,
+				Tabwidth: 8}
+			var b bytes.Buffer
+			err := printConfig.Fprint(&b, r.program.Fset, cnode)
+			if err != nil {
+				r.Log.Error(err)
+				return
+			}
+
+			offset, length := r.offsetLength(node)
+			r.Edits[r.filename(r.file)].Add(
+				text.Extent{offset, length},
+				b.String())
+			return
+		}
+	}
+}
+
+func canFormat(node interface{}) bool {
+	switch node.(type) {
+	case ast.Expr:
+		return true
+	case ast.Stmt:
+		return true
+	case ast.Spec:
+		return true
+	case ast.Decl:
+		return true
+	case *ast.File:
+		return true
+	default:
+		return false
+	}
+
 }
 
 func (r *Debug) showAffected(out io.Writer) {

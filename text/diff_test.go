@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -187,6 +188,51 @@ func testUnifiedDiff(a, b, expected, name string, t *testing.T) {
 		t.Fatalf("Diff test %s failed.  Expected:\n[%s]\nActual:\n[%s]\n",
 			name, expected, diff)
 	}
+}
+
+func TestRandomDiffs(t *testing.T) {
+	seed := time.Now().Unix()
+	r := rand.New(rand.NewSource(seed))
+	for i := 0; i < 100; i++ {
+		s1 := makeLines(100, r)
+		s1s := strings.Join(s1, "")
+		s2 := makeLines(100, r)
+		s2s := strings.Join(s2, "")
+		edits := Diff(s1, s2)
+		result, err := ApplyToString(edits, s1s)
+		if err != nil || result != s2s {
+			t.Errorf("Random diff failed - seed %d, iteration %d",
+				seed, i)
+		}
+	}
+}
+
+func BenchmarkDiff(b *testing.B) {
+	r := rand.New(rand.NewSource(time.Now().Unix()))
+	s1 := makeLines(5000, r)
+	s1s := strings.Join(s1, "\n")
+	s2 := makeLines(5000, r)
+	for i := 0; i < b.N; i++ {
+		Diff(s1, s2).CreatePatch(strings.NewReader(s1s))
+	}
+}
+
+func makeLines(count int, r *rand.Rand) []string {
+	possibilities := []string{
+		"Lorem ipsum dolor sit amet, consectetur adipisicing elit,\n",
+		"sed do eiusmod tempor incididunt ut labore et dolore magna\n",
+		"aliqua. Ut enim ad minim veniam, quis nostrud exercitation\n",
+		"ullamco laboris nisi ut aliquip ex ea commodo consequat.\n",
+		"Duis aute irure dolor in reprehenderit in voluptate velit\n",
+		"esse cillum dolore eu fugiat nulla pariatur. Excepteur sint\n",
+		"occaecat cupidatat non proident, sunt in culpa qui officia\n",
+		"deserunt mollit anim id est laborum.\n"}
+	result := make([]string, 0, count)
+	for i := 0; i < count; i++ {
+		line := possibilities[r.Intn(len(possibilities))]
+		result = append(result, line)
+	}
+	return result
 }
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
