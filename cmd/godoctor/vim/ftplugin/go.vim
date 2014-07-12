@@ -167,12 +167,14 @@ func! b:interpret(cmd)
   endif
   cclose
 
-  silent exec "buffer! ".orig
+  if bufexists(orig)
+    silent exec "buffer! ".orig
+  endif
   call winrestview(view)
 
   if a:cmd =~ "Close New"
     for buf in g:newbuffers
-      if buf != orig && bufexists(buf) && winnr('$') > 1
+      if buf != orig && bufexists(buf)
         silent exec buf . "bwipeout!"
       endif
     endfor
