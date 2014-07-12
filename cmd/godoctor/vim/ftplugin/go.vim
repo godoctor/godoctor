@@ -140,6 +140,9 @@ func! s:loadfiles(files)
     call setline(4, "Undo Changes")
     call setline(5, "Close This Window")
     setlocal nomodifiable buftype=nofile bufhidden=wipe nobuflisted noswapfile
+    " Fix its height so, e.g., it doesn't grow when quickfix list is closed
+    setlocal wfh
+    " Hyperlink each line to be interpreted by b:interpret
     nnoremap <silent> <buffer> <CR> :call b:interpret(getline('.'))<CR>
   endif
 endfun
