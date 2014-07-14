@@ -4,8 +4,16 @@
 
 " Vim integration for the Go Doctor.
 
-" To use, add this to ~/.vimrc:
-" set rtp+=$GOPATH/src/golang-refactoring.org/go-doctor/cmd/godoctor/vim
+" To use, add these lines to ~/.vimrc:
+"
+"     if exists("g:did_load_filetypes")
+"       filetype off
+"       filetype plugin indent off
+"     endif
+"     " IMPORTANT: REPLACE THE FOLLOWING LINE WITH THE PATH ON YOUR MACHINE
+"     set rtp+=/path/to/golang-refactoring.org/go-doctor/cmd/godoctor/vim
+"     filetype plugin indent on
+"     syntax on
 
 " TODO: If a refactoring only affects a single file, allow unsaved buffers
 " and pipe the current buffer's contents into the godoctor via stdin
@@ -68,10 +76,12 @@ function! s:is_multifile(refac)
   if len(lines) > 2
     for line in lines[2:]
       let fields = split(line, "\t")
-      let name = substitute(fields[0], "^\\s\\+\\|\\s\\+$", "", "g") 
-      let multi = substitute(fields[2], "^\\s\\+\\|\\s\\+$", "", "g") 
-      if name ==? a:refac
-	return multi == "true"
+      if len(fields) >= 3
+        let name = substitute(fields[0], "^\\s\\+\\|\\s\\+$", "", "g") 
+        let multi = substitute(fields[2], "^\\s\\+\\|\\s\\+$", "", "g") 
+        if name ==? a:refac
+  	return multi == "true"
+        endif
       endif
     endfor
   endif
@@ -393,8 +403,10 @@ function! s:list_refacs(a, l, p)
   if len(lines) > 2
     for line in lines[2:]
       let fields = split(line, "\t")
-      let name = substitute(fields[0], "^\\s\\+\\|\\s\\+$", "", "g") 
-      let result = result . name . "\n"
+      if len(fields) >= 1
+        let name = substitute(fields[0], "^\\s\\+\\|\\s\\+$", "", "g") 
+        let result = result . name . "\n"
+      endif
     endfor
   endif
   return result
