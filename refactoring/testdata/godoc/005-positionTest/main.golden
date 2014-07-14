@@ -6,17 +6,17 @@ func main() {
 	Exported()
 }
 
-// Exported TODO: FUNC NEEDS COMMENT INFO
+// Exported TODO: NEEDS COMMENT INFO
 func Exported() {
   fmt.Println("Hello, Go")
 }
 
-// Shaper TODO: STRUCT/INTERFACE NEEDS COMMENT INFO
+// Shaper TODO: NEEDS COMMENT INFO
 type Shaper interface {
 
 }
 
-// Rectangle TODO: STRUCT/INTERFACE NEEDS COMMENT INFO
+// Rectangle TODO: NEEDS COMMENT INFO
 type Rectangle struct {
 
 }

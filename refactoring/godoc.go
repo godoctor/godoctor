@@ -65,19 +65,17 @@ func (r *AddGoDoc) addComments() {
 	for _, d := range r.file.Decls {
 		switch decl := d.(type) {
 		case *ast.FuncDecl: // function or method declaration
-			fcomment := "// " + decl.Name.Name + " TODO: FUNC NEEDS COMMENT INFO\n"
 			if ast.IsExported(decl.Name.Name) && decl.Doc == nil {
-				r.addComment(decl, fcomment)
+				r.addComment(decl, decl.Name.Name)
 			}
 		case *ast.GenDecl: // types (including structs/interfaces)
 			for _, spec := range decl.Specs {
 				if spec, ok := spec.(*ast.TypeSpec); ok {
-					sIcomment := "// " + spec.Name.Name + " TODO: STRUCT/INTERFACE NEEDS COMMENT INFO\n"
 					if ast.IsExported(spec.Name.Name) && spec.Doc == nil {
 						if decl.Lparen.IsValid() {
-							r.addComment(spec, sIcomment)
+							r.addComment(spec, spec.Name.Name)
 						} else {
-							r.addComment(decl, sIcomment)
+							r.addComment(decl, spec.Name.Name)
 						}
 					}
 				}
@@ -89,6 +87,7 @@ func (r *AddGoDoc) addComments() {
 // addComment inserts the given comment string immediately before the given
 // declaration
 func (r *AddGoDoc) addComment(decl ast.Node, comment string) {
+	comment = "// " + comment + " TODO: NEEDS COMMENT INFO\n"
 	insertOffset := r.program.Fset.Position(decl.Pos()).Offset
 	r.Edits[r.filename(r.file)].Add(text.Extent{insertOffset, 0}, comment)
 }
