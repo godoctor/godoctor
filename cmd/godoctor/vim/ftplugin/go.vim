@@ -48,7 +48,7 @@ func! s:go_doctor_bin()
   let [ext, sep] = (has('win32') || has('win64') ? ['.exe', ';'] : ['', ':'])
   let go_doctor = globpath(join(split($GOPATH, sep), ','), '/bin/godoctor' . ext)
   if go_doctor == ''
-    let go_doctor = globpath($GOROOT, '/bin/doctor' . ext)
+    let go_doctor = 'godoctor' . ext
   endif
   return go_doctor
 endfunction
@@ -102,6 +102,9 @@ func! s:parsefiles(output)
   " Repeatedly find a @@@@@ line
   while start >= 0
     let match = matchlist(a:output, pattern, start)
+    if match == []
+      return result
+    endif
     let linelen = len(match[0])
     let filename = match[1]
 
@@ -177,13 +180,13 @@ func! s:loadfiles(files, used_stdin)
     setlocal nomodifiable buftype=nofile bufhidden=wipe nobuflisted noswapfile
     " Fix its height so, e.g., it doesn't grow when quickfix list is closed
     setlocal wfh
-    " Hyperlink each line to be interpreted by b:interpret
-    nnoremap <silent> <buffer> <CR> :call b:interpret(getline('.'))<CR>
+    " Hyperlink each line to be interpreted by s:interpret
+    nnoremap <silent> <buffer> <CR> :call <sid>interpret(getline('.'))<CR>
   endif
 endfun
 
 " Callback for hyperlinks displayed above (to save, undo, and close buffers)
-func! b:interpret(cmd)
+func! s:interpret(cmd)
   if winnr('$') > 1
     close
   endif
