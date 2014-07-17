@@ -87,6 +87,16 @@ func (r *Rename) Run(config *Config) *Result {
 
 		r.rename(ident)
 		r.updateLog(config, false)
+	case *ast.BasicLit:
+		for pkg, _ := range r.program.AllPackages {
+			if pkg.Name() == strings.Replace(ident.Value, "\"", "", 2) {
+				search := names.NewSearchEngine(r.program)
+				searchResult := search.PackageRename(pkg.Name())
+				r.addOccurrences(searchResult)
+				r.addFileSystemChanges(searchResult, pkg.Name())
+			}
+		}
+		r.updateLog(config, false)
 	default:
 		r.Log.Error("Please select an identifier to rename.")
 		r.Log.AssociatePos(r.selectionStart, r.selectionEnd)
@@ -114,7 +124,7 @@ func (r *Rename) rename(ident *ast.Ident) {
 
 		r.addOccurrences(searchResult)
 		if search.IsPackageName(ident) {
-			r.addFileSystemChanges(searchResult, ident)
+			r.addFileSystemChanges(searchResult, ident.Name)
 		}
 		//TODO: r.checkForErrors()
 		return
@@ -181,17 +191,17 @@ func isInGoRoot(absPath string) bool {
 	return strings.HasPrefix(absPath, runtime.GOROOT())
 }
 
-func (r *Rename) addFileSystemChanges(allOccurrences map[string][]text.Extent, ident *ast.Ident) {
+func (r *Rename) addFileSystemChanges(allOccurrences map[string][]text.Extent, identName string) {
 	for filename, _ := range allOccurrences {
 
-		if filepath.Base(filepath.Dir(filename)) == ident.Name && allFilesinDirectoryhaveSamePkg(filepath.Dir(filename), ident) {
+		if filepath.Base(filepath.Dir(filename)) == identName && allFilesinDirectoryhaveSamePkg(filepath.Dir(filename), identName) {
 			chg := &filesystem.Rename{filepath.Dir(filename), r.newName}
 			r.FSChanges = append(r.FSChanges, chg)
 		}
 	}
 }
 
-func allFilesinDirectoryhaveSamePkg(directorypath string, ident *ast.Ident) bool {
+func allFilesinDirectoryhaveSamePkg(directorypath string, identName string) bool {
 
 	var renamefile bool = false
 	fileInfos, _ := ioutil.ReadDir(directorypath)
@@ -203,7 +213,7 @@ func allFilesinDirectoryhaveSamePkg(directorypath string, ident *ast.Ident) bool
 			if err != nil {
 				panic(err)
 			}
-			if f.Name.Name == ident.Name {
+			if f.Name.Name == identName {
 				renamefile = true
 			}
 		}
