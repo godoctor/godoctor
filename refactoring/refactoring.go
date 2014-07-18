@@ -133,9 +133,13 @@ type Config struct {
 	// for the entity being renamed.  If the refactoring does not require
 	// any arguments, this may be nil.
 	Args []interface{}
-	// If true, an exhaustive list of edits made by the refactoring will be
-	// appended to the log.
-	Verbose bool
+	// Level of verbosity, i.e., how many types of informational items to
+	// include in the log.  If Verbosity ≥ 0, only essential log messages
+	// (usually errors and warnings) are included.  If ≥ 1, a list of files
+	// modified by the refactoring are added to the log.  If ≥ 2, an
+	// exhaustive list of edits made by the refactoring is appended to
+	// the log.
+	Verbosity int
 	// The GOPATH.  If this is set to the empty string, the GOPATH is
 	// determined from the environment.
 	GoPath string
@@ -180,12 +184,19 @@ const cgoError1 = "could not import C (cannot"
 const cgoError2 = "undeclared name: C"
 
 type refactoringBase struct {
-	program        *loader.Program
-	file           *ast.File
-	fileContents   []byte
+	// The program to be refactored, including all dependent files
+	program *loader.Program
+	// The AST of the file containing the user's selection
+	file *ast.File
+	// The complete contents of the file containing the user's selection
+	fileContents []byte
+	// The position of the first character of the user's selection
 	selectionStart token.Pos
-	selectionEnd   token.Pos
-	selectedNode   ast.Node
+	// The position immediately following the user's selection
+	selectionEnd token.Pos
+	// The deepest ast.Node enclosing the user's selection
+	selectedNode ast.Node
+	// The Result of this refactoring, returned to the client invoking it
 	Result
 }
 
@@ -428,14 +439,46 @@ func (r *refactoringBase) updateLog(config *Config, checkForErrors bool) {
 		return
 	}
 
-	if !config.Verbose && !r.Log.ContainsPositions() && !checkForErrors {
-		// No reason to load the program, since we won't update any
-		// positions and we won't report any new errors
+	// Avoid loading the refactored program into a new go/loader if at all
+	// possible.  If we won't update the positions of any log entries and
+	// won't report any new errors, then we can avoid loading the
+	// refactored program.
+	canSkipLoadingProgram := !r.Log.ContainsPositions() && !checkForErrors
+
+	if config.Verbosity == 0 && canSkipLoadingProgram {
 		return
 	}
 
 	if r.Log.ContainsInitialErrors() {
 		checkForErrors = false
+	}
+
+	programFiles := map[string]*token.File{}
+	r.program.Fset.Iterate(func(f *token.File) bool {
+		programFiles[f.Name()] = f
+		return true
+	})
+
+	fileCount := len(r.Edits)
+	if fileCount >= 2 && config.Verbosity >= 1 {
+		fileNum := 1
+		for filename, edits := range r.Edits {
+			edits.Iterate(func(extent text.Extent, _ string) bool {
+				file := programFiles[filename]
+				oldPos := file.Pos(extent.Offset)
+				r.Log.Infof("File %d of %d: %s",
+					fileNum,
+					fileCount,
+					filepath.Base(filename))
+				r.Log.AssociatePos(oldPos, oldPos)
+				fileNum++
+				return false
+			})
+		}
+	}
+
+	if config.Verbosity == 1 && canSkipLoadingProgram {
+		return
 	}
 
 	oldFS := config.FileSystem
@@ -463,7 +506,7 @@ func (r *refactoringBase) updateLog(config *Config, checkForErrors bool) {
 			if err, ok := err.(types.Error); ok {
 				newLogOldPos.Error(err.Msg)
 				newLogNewPos.Error(err.Msg)
-				oldPos := mapPos(err.Fset, err.Pos, r.Edits, r.program.Fset, true)
+				oldPos := mapPos(err.Fset, err.Pos, r.Edits, programFiles, true)
 				newLogOldPos.AssociatePos(oldPos, oldPos)
 				newLogNewPos.Fset = err.Fset
 				newLogNewPos.AssociatePos(err.Pos, err.Pos)
@@ -479,33 +522,28 @@ func (r *refactoringBase) updateLog(config *Config, checkForErrors bool) {
 		return
 	}
 
+	newProgFiles := map[string]*token.File{}
+	newProg.Fset.Iterate(func(f *token.File) bool {
+		newProgFiles[f.Name()] = f
+		return true
+	})
+
 	r.Log.Fset = newProg.Fset
 	for _, entry := range r.Log.Entries {
-		entry.Pos = mapPos(r.program.Fset, entry.Pos, r.Edits, newProg.Fset, false)
+		entry.Pos = mapPos(r.program.Fset, entry.Pos, r.Edits, newProgFiles, false)
 	}
 	r.Log.Append(newLogNewPos.Entries)
 
-	if config.Verbose {
-		fileCount := len(r.Edits)
-		fileNum := 1
+	if config.Verbosity >= 2 {
 		for filename, edits := range r.Edits {
-			firstEdit := true
-			edits.Iterate(func(extent text.Extent, replace string) {
-				oldFile := findFile(filename, r.program.Fset)
+			edits.Iterate(func(extent text.Extent, replace string) bool {
+				oldFile := programFiles[filename]
 				oldPos := oldFile.Pos(extent.Offset)
 				newPos := mapPos(r.program.Fset, oldPos,
-					r.Edits, r.Log.Fset, false)
-				if firstEdit && fileCount > 1 {
-					r.Log.Infof("File %d of %d: %s",
-						fileNum,
-						fileCount,
-						filepath.Base(filename))
-					r.Log.AssociatePos(newPos, newPos)
-					fileNum++
-					firstEdit = false
-				}
+					r.Edits, newProgFiles, false)
 				r.Log.Infof(describeEdit(extent, replace))
 				r.Log.AssociatePos(newPos, newPos)
+				return true
 			})
 		}
 	}
@@ -534,7 +572,7 @@ func shorten(s string) string {
 // another FileSet, applying or undoing the given edits (if reverse is false or
 // true, respectively) to determine the corresponding offset and comparing
 // filenames (as strings) to find the corresponding file.
-func mapPos(from *token.FileSet, pos token.Pos, edits map[string]*text.EditSet, to *token.FileSet, reverse bool) token.Pos {
+func mapPos(from *token.FileSet, pos token.Pos, edits map[string]*text.EditSet, toFiles map[string]*token.File, reverse bool) token.Pos {
 	if !pos.IsValid() {
 		return pos
 	}
@@ -550,23 +588,9 @@ func mapPos(from *token.FileSet, pos token.Pos, edits map[string]*text.EditSet, 
 	}
 
 	result := token.NoPos
-	if file := findFile(filename, to); file != nil {
+	if file, ok := toFiles[filename]; ok {
 		result = file.Pos(offset)
 	}
-	return result
-}
-
-// findFile searches the given FileSet for a File with the given name and
-// returns it (or nil if no such file could be found).
-func findFile(filename string, fset *token.FileSet) *token.File {
-	var result *token.File = nil
-	fset.Iterate(func(f *token.File) bool {
-		if f.Name() == filename {
-			result = f
-			return false
-		}
-		return true
-	})
 	return result
 }
 

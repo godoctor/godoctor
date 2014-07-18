@@ -198,10 +198,13 @@ func (e *EditSet) SizeChange() int64 {
 }
 
 // Iterate executes the given callback on each of the edits in this EditSet,
-// traversing the edits in ascending order by offset.
-func (e *EditSet) Iterate(callback func(Extent, string)) {
+// traversing the edits in ascending order by offset.  Iteration stops
+// immediately after the callback returns false.
+func (e *EditSet) Iterate(callback func(Extent, string) bool) {
 	for _, edit := range e.edits {
-		callback(edit.Extent, edit.replacement)
+		if !callback(edit.Extent, edit.replacement) {
+			break
+		}
 	}
 }
 

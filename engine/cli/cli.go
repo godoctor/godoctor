@@ -72,7 +72,10 @@ func Run(stdin io.Reader, stdout io.Writer, stderr io.Writer, args []string) int
 		"Modify source files on disk (write) instead of displaying a diff")
 
 	var verboseFlag = flags.Bool("v", false,
-		"Log all edits made by the refactoring (verbose)")
+		"Verbose: list files if ≥ 1 file affected")
+
+	var veryVerboseFlag = flags.Bool("vv", false,
+		"Very verbose: list individual edits (implies -v)")
 
 	var listFlag = flags.Bool("list", false,
 		"List all refactorings and exit")
@@ -103,10 +106,10 @@ func Run(stdin io.Reader, stdout io.Writer, stderr io.Writer, args []string) int
 				"cannot be used with any arguments")
 			return 1
 		}
-		if *verboseFlag || *writeFlag || *completeFlag || *jsonFlag {
+		if *verboseFlag || *veryVerboseFlag || *writeFlag || *completeFlag || *jsonFlag {
 			fmt.Fprintln(stderr, "Error: The -list flag "+
-				"cannot be used with the -v, -w, -complete, "+
-				"or -json flags")
+				"cannot be used with the -v, -vv, -w, "+
+				"-complete, or -json flags")
 			return 1
 		}
 		// Invoked as "godoctor [-v] [-file=""] [-pos=""] -list
@@ -210,12 +213,20 @@ func Run(stdin io.Reader, stdout io.Writer, stderr io.Writer, args []string) int
 		scope = strings.Split(*scopeFlag, ",")
 	}
 
+	verbosity := 0
+	if *verboseFlag {
+		verbosity = 1
+	}
+	if *veryVerboseFlag {
+		verbosity = 2
+	}
+
 	result := refac.Run(&refactoring.Config{
 		FileSystem: fileSystem,
 		Scope:      scope,
 		Selection:  selection,
 		Args:       refactoring.InterpretArgs(args, refac),
-		Verbose:    *verboseFlag})
+		Verbosity:  verbosity})
 
 	// Display log in GNU-style 'file:line.col-line.col: message' format
 	cwd, err := os.Getwd()
