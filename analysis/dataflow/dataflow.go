@@ -65,18 +65,45 @@ func defs(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 		}
 	case *ast.RangeStmt: // only [ x, y ] on Lhs
 		idnts = union(idents(stmt.Key), idents(stmt.Value))
+	case *ast.TypeSwitchStmt:
+		// The assigned variable does not have a types.Var
+		// associated in this stmt; rather, the uses of that
+		// variable in the case clauses have several different
+		// types.Vars associated with them, according to type
+		var vars []*types.Var
+		ast.Inspect(stmt.Body, func(n ast.Node) bool {
+			switch cc := n.(type) {
+			case *ast.CaseClause:
+				v := typeCaseVar(info, cc)
+				if v != nil {
+					vars = append(vars, v)
+				}
+				return false
+			default:
+				return true
+			}
+		})
+		return vars
 	}
 
 	var vars []*types.Var
-
 	// should all map to types.Var's, if not we don't want anyway
 	for i, _ := range idnts {
 		if v, ok := info.ObjectOf(i).(*types.Var); ok {
 			vars = append(vars, v)
 		}
 	}
-
 	return vars
+}
+
+// typeCaseVar returns the implicit variable associated with a case clause in a
+// type switch statement.
+func typeCaseVar(info *loader.PackageInfo, cc *ast.CaseClause) *types.Var {
+	// Removed from go/loader
+	if v := info.Implicits[cc]; v != nil {
+		return v.(*types.Var)
+	}
+	return nil
 }
 
 // uses extracts local variables whose values are used in the given statement.
@@ -106,8 +133,10 @@ func uses(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 			for _, s := range stmt.Rhs {
 				idnts = union(idnts, idents(s))
 			}
-		case *ast.BlockStmt: // no uses, skip
+		case *ast.BlockStmt: // no uses, skip - should not appear in cfg
 		case *ast.BranchStmt: // no uses, skip
+		case *ast.CaseClause: // no uses, skip
+		case *ast.CommClause: // no uses, skip
 		case *ast.DeclStmt: // no uses, skip
 		case *ast.DeferStmt:
 			idnts = idents(stmt.Call)

@@ -22,6 +22,96 @@ const (
 	END   = 100000000 //if there's this many statements, may god have mercy on your soul
 )
 
+func TestEmptyBlock(t *testing.T) {
+	c := getWrapper(t, `
+package main
+
+func foo(i int) {
+  if true {  //1
+  } else {
+      bar(i) //2
+  }
+}
+func bar(i int) {}`)
+
+	c.expectLive(t, START, "i")
+	c.expectLive(t, 1, "i")
+	c.expectLive(t, 2)
+	c.expectLive(t, END)
+}
+
+func TestBlockStmt(t *testing.T) {
+	c := getWrapper(t, `
+package main
+
+func foo(i int) {
+  {
+    {
+      bar(i) //1
+    }
+  }
+}
+func bar(i int) {}`)
+
+	c.expectLive(t, START, "i")
+	c.expectLive(t, 1)
+	c.expectLive(t, END)
+}
+
+func TestLiveSelect(t *testing.T) {
+	c := getWrapper(t, `
+package main
+
+func main() {
+	c := make(chan int)      // 1
+	go func() {              // 2
+		c <- 5
+	}()
+	for {                    // 3
+		select {         // 4
+		case val := <-c: // 5 (comm), 6 (asgt)
+			foo(val) // 7
+			return   // 8
+		}
+	}
+}
+func foo(n int) {}`)
+
+	c.expectLive(t, START)
+	c.expectLive(t, 1, "c")
+	c.expectLive(t, 2, "c")
+	c.expectLive(t, 3, "c")
+	c.expectLive(t, 4, "c")
+	c.expectLive(t, 5, "c")
+	c.expectLive(t, 6, "val")
+	c.expectLive(t, 7)
+	c.expectLive(t, 8)
+	c.expectLive(t, END)
+}
+
+func TestLiveTypeSwitch(t *testing.T) {
+	c := getWrapper(t, `
+  package main
+
+  func main() {
+    var x interface{} = 1.2 // 1
+    switch i := x.(type) {  // 2 (switch), 3 (assignment)
+    case int:               // 4
+      fooi(i)               // 5
+    }
+  }
+  func fooi(n int) {}
+  func foof(n float64) {}`)
+
+	c.expectLive(t, START)
+	c.expectLive(t, 1, "x")
+	c.expectLive(t, 2, "x", "i")
+	c.expectLive(t, 3, "i")
+	c.expectLive(t, 4, "i")
+	c.expectLive(t, 5)
+	c.expectLive(t, END)
+}
+
 func TestLiveLabeledLoopAndSwitch(t *testing.T) {
 	c := getWrapper(t, `
   package main
@@ -261,19 +351,20 @@ func TestFuncLit(t *testing.T) {
   func foo() {
     // START
     f := func() { // 1
-      fmt.Println("foo") // 2
+      fmt.Println("foo")
     }
-    for _ = range []int{1, 2, 3} { // 3
-      f() // 4
+    for _ = range []int{1, 2, 3} { // 2
+      f() // 3
     }
 
-    fmt.Println("bar") // 5
+    fmt.Println("bar") // 4
     // END
   }`)
 
 	c.expectLive(t, 1, "f")
-	c.expectLive(t, 4, "f")
-	c.expectLive(t, 5)
+	c.expectLive(t, 2, "f")
+	c.expectLive(t, 3, "f")
+	c.expectLive(t, 4)
 }
 
 func BenchmarkReaching(b *testing.B) {
@@ -404,7 +495,9 @@ func getWrapper(t *testing.T, str string) *CFGWrapper {
 			v[i] = x
 			stmts[x] = i
 			i++
-			//TODO skip over any statements w/i inner func... as our graph does
+		case *ast.FuncLit:
+			// skip statements in anonymous functions
+			return false
 		}
 		return true
 	})

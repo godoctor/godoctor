@@ -25,9 +25,12 @@ type ShortAssign struct {
 
 func (r *ShortAssign) Description() *Description {
 	return &Description{
-		Name:    "Convert := to var",
-		Params:  nil,
-		Quality: Development,
+		Name:      "Convert := to var",
+		Synopsis:  "Changes a short assignment to a var declaration",
+		Usage:     "",
+		Multifile: false,
+		Params:    nil,
+		Quality:   Development,
 	}
 }
 
@@ -42,7 +45,7 @@ func (r *ShortAssign) Run(config *Config) *Result {
 
 	if r.selectedNode == nil {
 		r.Log.Error("The selection cannot be null.Please select a valid node!")
-		r.Log.AssociatePos(r.program.Fset, r.selectionStart, r.selectionEnd)
+		r.Log.AssociatePos(r.selectionStart, r.selectionEnd)
 		return &r.Result
 	}
 
@@ -51,9 +54,9 @@ func (r *ShortAssign) Run(config *Config) *Result {
 		r.createEditSet(selectedNode)
 	default:
 		r.Log.Errorf("Select a short assignment (:=) statement! Selected node is %s", reflect.TypeOf(r.selectedNode))
-		r.Log.AssociatePos(r.program.Fset, r.selectionStart, r.selectionEnd)
+		r.Log.AssociatePos(r.selectionStart, r.selectionEnd)
 	}
-	r.checkForErrors()
+	r.updateLog(config, true)
 	return &r.Result
 }
 

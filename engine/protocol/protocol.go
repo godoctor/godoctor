@@ -8,8 +8,12 @@
 package protocol
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"os"
 
 	"golang-refactoring.org/go-doctor/filesystem"
 )
@@ -37,49 +41,47 @@ func Run(args []string) {
 		runSingle()
 		return
 	}
-	cmdList := setup()
+
 	// list of commands
 	var argJson []map[string]interface{}
-	err := json.Unmarshal([]byte(args[0]), &argJson)
-	if err != nil {
-		printReply(Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}})
-		return
-	}
-	var state = State{1, "", "", nil}
-	for i, cmdObj := range argJson {
-		// has command?
-		cmd, found := cmdObj["command"]
-		if !found { // no command
-			printReply(Reply{map[string]interface{}{"reply": "Error", "message": "Invalid JSON command"}})
+	if len(args) == 1 && args[0] == "-" {
+		// read command list from stdin
+		bytes, err := ioutil.ReadAll(os.Stdin)
+		if err != nil {
+			printReply(Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}})
 			return
 		}
-		// valid command?
-		if _, found := cmdList[cmd.(string)]; found {
-			resultReply, err := cmdList[cmd.(string)].Run(&state, cmdObj)
-			if err != nil {
-				printReply(resultReply)
-				return
-			}
-			// last command?
-			if i == len(argJson)-1 {
-				printReply(resultReply)
-			}
-		} else {
-			printReply(Reply{map[string]interface{}{"reply": "Error", "message": "Invalid JSON command"}})
+		err = json.Unmarshal(bytes, &argJson)
+		if err != nil {
+			printReply(Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}})
+			return
+		}
+	} else {
+		// assemble command list from args
+		err := json.Unmarshal([]byte(args[0]), &argJson)
+		if err != nil {
+			printReply(Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}})
 			return
 		}
 	}
-
+	runList(argJson)
 }
 
 func runSingle() {
 	cmdList := setup()
 	var state = State{0, "", "", nil}
-	var input []byte
 	var inputJson map[string]interface{}
+	ioreader := bufio.NewReader(os.Stdin)
 	for {
-		fmt.Scan(&input)
-		err := json.Unmarshal(input, &inputJson)
+		input, err := ioreader.ReadBytes('\n')
+		if err == io.EOF {
+			// exit
+			break
+		} else if err != nil {
+			printReply(Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}})
+			continue
+		}
+		err = json.Unmarshal(input, &inputJson)
 		if err != nil {
 			printReply(Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}})
 			continue
@@ -105,6 +107,34 @@ func runSingle() {
 	}
 }
 
+func runList(argJson []map[string]interface{}) {
+	cmdList := setup()
+	var state = State{1, "", "", nil}
+	for i, cmdObj := range argJson {
+		// has command?
+		cmd, found := cmdObj["command"]
+		if !found { // no command
+			printReply(Reply{map[string]interface{}{"reply": "Error", "message": "Invalid JSON command"}})
+			return
+		}
+		// valid command?
+		if _, found := cmdList[cmd.(string)]; found {
+			resultReply, err := cmdList[cmd.(string)].Run(&state, cmdObj)
+			if err != nil {
+				printReply(resultReply)
+				return
+			}
+			// last command?
+			if i == len(argJson)-1 {
+				printReply(resultReply)
+			}
+		} else {
+			printReply(Reply{map[string]interface{}{"reply": "Error", "message": "Invalid JSON command"}})
+			return
+		}
+	}
+}
+
 // little helpers
 func setup() map[string]Command {
 	cmds := make(map[string]Command)
@@ -113,6 +143,7 @@ func setup() map[string]Command {
 	cmds["list"] = &List{}
 	cmds["setdir"] = &Setdir{}
 	cmds["params"] = &Params{}
+	cmds["put"] = &Put{}
 	cmds["xrun"] = &XRun{}
 	return cmds
 }

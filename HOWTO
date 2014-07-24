@@ -1,0 +1,198 @@
+
+
+                       "HOWTO" FOR GO DOCTOR DEVELOPERS
+
+
+RUN TESTS----------------------------------------------------------------------
+
+The following commands assume your working directory is
+$GOPATH/src/golang-refactoring.org/go-doctor
+
+To run all tests for all packages:
+    go test ./...               # Be patient!  It may take a while
+
+To run tests for refactorings only:
+    cd refactoring
+    go test                     # To run all tests for all refactorings
+    go test -filter=rename      # E.g., to test a specific refactoring
+    go test -filter=rename/023  # E.g., to run a particular test
+
+
+UPDATE GO.TOOLS----------------------------------------------------------------
+
+The easy way:
+    go get -u code.google.com/p/go.tools
+
+The less easy way:
+    cd $GOPATH/src/code.google.com/p/go.tools
+    hg pull
+    hg update
+
+
+CHECK CODE COVERAGE FOR A TEST-------------------------------------------------
+
+See http://blog.golang.org/cover
+
+To display just the percentage of code covered:
+    go test -cover
+
+To open a Web browser showing individual lines covered/not covered:
+    go test -coverprofile=coverage.out && go tool cover -html=coverage.out
+
+
+VIEW GODOC IN YOUR BROWSER-----------------------------------------------------
+
+Viewing the Go Doctor's GoDoc is a good way to check that a package's API is
+sane, since it lets you see each package as a third-party developer would.
+
+In a shell, start the godoc server in the background:
+    godoc -http :8080 &
+Wait a minute for it to load (if your workspace is huge)
+Browse to http://localhost:8080/pkg/golang-refactoring.org/
+When you don't need it anymore, shut down the godoc server:
+    killall godoc
+
+If you have Go 1.3, you can add type analysis:
+    godoc -analysis type -http :8080 &
+
+
+GIT STUFF----------------------------------------------------------------------
+
+This is not intended to teach you how to use Git.  It's only meant to give a
+sense of the workflows that we use and the exact syntax of the Git commands
+involved.
+
+The commands below assume that you are running Linux or Mac OS X.  Some of
+these commands will not work under Windows; others require modifications (e.g.,
+changing $GOPATH to %GOPATH%).
+
+The Git commands in most of these scenarios will require your working directory
+to be $GOPATH/src/golang-refactoring.org/go-doctor.
+
+
+SET NAME/E-MAIL USED BY GIT
+
+    After you install Git for the first time, you will need to configure your
+    name and e-mail address, which will be associated with your commits.
+
+        $ git config --global user.name "Your Name"
+        $ git config --global user.email "username@auburn.edu"
+
+    A nice idea from http://fredkschott.com/post/2014/02/git-log-is-so-2005/
+    is to configure a "git lg" command that displays the git log in a more
+    compact, readable form that better illustrates branching structure:
+
+        $ git config --global alias.lg "log --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr)%C(bold blue)<%an>%Creset' --abbrev-commit"
+
+
+CLONING THE GO DOCTOR GIT REPOSITORY
+
+    The source code for the Go Doctor should be stored in
+    $GOPATH/src/golang-refactoring.org.  Use the following to get the code:
+
+        $ git clone ssh://username@git.golang-refactoring.org/gitroot/go-doctor.git $GOPATH/src/golang-refactoring.org
+        $ git config branch.autosetuprebase always
+        $ git config branch.master.rebase true
+        $ cd go-doctor
+        $ go get -u -v ./...    # To get dependencies, including go.tools
+
+
+DEVELOPING A NEW FEATURE
+
+    New features and bug fixes should be developed in branches.  This allows
+    them to be reviewed, tested, and revised before they are moved into the
+    production Go Doctor branch (the "master" branch).
+
+    To create a new branch called "devel-something" for a new feature you intend
+    to work on,
+
+        $ git pull origin master
+        $ git checkout -b devel-something origin/master
+
+    Note that the "devel-something" branch exists only on your local machine.
+    It's not on the server.  If you want to share it on the server, you can
+    (we'll get to that later), but you don't have to.
+
+    To list the branches that are currently available on your machine:
+
+        $ git branch
+
+    In the output, the starred branch is the one you're currently working on.
+    If you just created the devel-something branch, it is probably that.  To
+    switch back to the master branch, use
+
+        $ git checkout master
+
+    and likewise, to switch back to your development branch,
+
+        $ git checkout devel-something
+
+    Commit frequently to your branch.  Every time you make a significant
+    change, commit.  Commit, commit, commit.  Git makes it easy to undo
+    everything since your last commit, and you can even revert specific
+    commits.  One of the main advantages of using a version control system is
+    that it makes it easy to "jump back" to any previous point in time (as long
+    as you have a commit that records what the project looked like at that
+    point in time).
+
+    Eventually, there will be changes in the master branch that you need to
+    integrate into your development work.  To do that,
+
+    1. Use "git branch" to make sure you're on the right (development) branch.
+    2. Commit any outstanding changes.  If you still have work to do, that's
+       fine.  You're on a branch, so you can continue fixing things later and
+       make more commits to your branch.  The commit just records what your
+       project looked like at this point in time.  So, if something goes
+       horribly wrong, you can always "go back in time" and make your project
+       look exactly the same way it does right now.
+    3. Use "git pull" to integrate the changes from the master branch:
+        $ git pull origin master
+
+    Then, continue making changes, making commits, and periodically
+    integrating the changes from the master branch until you're done.
+
+    When you're ready to share your development branch on the server (e.g., so
+    others can try out your code), make sure you've pulled in the latest
+    changes from the master branch (as above), then
+
+        $ git push origin devel-something:devel-something
+
+    After sharing your branch on the server, when you make new commits to your
+    branch, you can use "git push" to push those commits to the server.
+
+
+CHECK OUT OTHER DEVELOPERS' FEATURES
+
+    Suppose you want to check out someone else's new feature, which is in a
+    development branch on the server.
+
+    First, commit any outstanding changes in your current branch.  Run
+    "git status", and make sure you don't have any outstanding modifications or
+    untracked files (e.g., uncommitted tests that don't pass yet).  When you
+    switch branches, your untracked and modified files will still be there.  If
+    you're checking out someone else's work, this probably isn't what you want.
+
+    To list all the branches available on the server:
+
+        $ git fetch
+        $ git branch -r
+
+    This will give a list of branches, like this:
+
+          origin/HEAD -> origin/master
+          origin/devel-something
+          origin/devel-whatever
+
+    Suppose you want to check out a new feature someone else is working on in
+    in the devel-whatever branch on the server.  Run "git status" to make
+    sure you don't have any changes in your local Git repository.  Then:
+
+        $ git checkout --track origin/devel-whatever
+
+    To switch back to the master branch (without the new feature/bugfix),
+
+        $ git checkout master
+
+    or to switch back to your local devel-something branch,
+
+        $ git checkout devel-something

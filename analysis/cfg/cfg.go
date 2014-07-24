@@ -189,6 +189,8 @@ func (b *builder) buildStmt(cur ast.Stmt) {
 	// Each buildXxx method will flow the previous blocks to itself appropiately and also
 	// set the appropriate blocks to flow from at the end of the method.
 	switch cur := cur.(type) {
+	case *ast.BlockStmt:
+		b.buildBlock(cur.List)
 	case *ast.IfStmt:
 		b.buildIf(cur)
 	case *ast.ForStmt, *ast.RangeStmt:
