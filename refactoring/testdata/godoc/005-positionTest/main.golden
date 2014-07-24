@@ -8,15 +8,13 @@ func main() {
 
 // Exported TODO: NEEDS COMMENT INFO
 func Exported() {
-  fmt.Println("Hello, Go")
+	fmt.Println("Hello, Go")
 }
 
 // Shaper TODO: NEEDS COMMENT INFO
 type Shaper interface {
-
 }
 
 // Rectangle TODO: NEEDS COMMENT INFO
 type Rectangle struct {
-
 }

@@ -17,6 +17,7 @@ import (
 	"go/ast"
 	"go/build"
 	"go/parser"
+	"go/printer"
 	"go/token"
 	"io/ioutil"
 	"os"
@@ -427,6 +428,39 @@ func (r *refactoringBase) lineColToPos(file *ast.File, line int, column int) tok
 		lastLine = thisLine
 	}
 	return file.Pos()
+}
+
+func (r *refactoringBase) formatFileInEditor() {
+	oldFileContents := string(r.fileContents)
+	string, err := text.ApplyToString(r.Edits[r.filename(r.file)], oldFileContents)
+	if err != nil {
+		r.Log.Errorf("Transformation produced invalid EditSet: %v",
+			err.Error())
+		return
+	}
+
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "", string, parser.ParseComments)
+	if err != nil {
+		r.Log.Errorf("Transformation will introduce syntax errors: %v", err)
+		r.Log.AssociatePos(r.file.Pos(), r.file.End())
+		return
+	}
+
+	printConfig := &printer.Config{
+		Mode:     printer.UseSpaces | printer.TabIndent,
+		Tabwidth: 8}
+	var b bytes.Buffer
+	if err = printConfig.Fprint(&b, fset, file); err != nil {
+		r.Log.Error(err)
+		return
+	}
+	newFileContents := b.String()
+
+	editSet := text.Diff(
+		strings.SplitAfter(oldFileContents, "\n"),
+		strings.SplitAfter(newFileContents, "\n"))
+	r.Edits[r.filename(r.file)] = editSet
 }
 
 // updateLog applies the edits in r.Edits and updates existing error messages

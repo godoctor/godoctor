@@ -3,12 +3,12 @@ package main // <<<<< godoc,1,1,1,1,pass
 type (
 	a int
 	// B TODO: NEEDS COMMENT INFO
-B int
+	B int
 	c int
 	// D TODO: NEEDS COMMENT INFO
-D int
+	D int
 	// E TODO: NEEDS COMMENT INFO
-E struct{}
+	E struct{}
 )
 
 func main() {

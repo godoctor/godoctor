@@ -30,21 +30,21 @@ type Oval struct {
 }
 
 // A TODO: NEEDS COMMENT INFO
-func A() { }
+func A() {}
 
 // B TODO: NEEDS COMMENT INFO
-func B() { }
+func B() {}
 
-type alpha struct { }
+type alpha struct{}
 
 // Beta TODO: NEEDS COMMENT INFO
-type Beta struct { }
+type Beta struct{}
 
-func c() { }
+func c() {}
 
 // D TODO: NEEDS COMMENT INFO
-func D() { }
+func D() {}
 
-func e() { }
+func e() {}
 
-func f() { }
+func f() {}

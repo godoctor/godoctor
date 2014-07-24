@@ -37,25 +37,46 @@ func (r *AddGoDoc) Run(config *Config) *Result {
 		return &r.Result
 	}
 
-	r.removeSemicolonsBetweenDecls()
+	r.removeSemicolons()
 	r.addComments()
+	r.formatFileInEditor()
 	return &r.Result
 }
 
-// removeSemicolonsBetweenDecls iterates through the top-level declarations in
-// a file, and if two consecutive declarations occur on the same line, splits
-// them onto separate lines.
-func (r *AddGoDoc) removeSemicolonsBetweenDecls() {
-	for i := 0; i < len(r.file.Decls)-1; i++ {
-		// check if the 2 declarations are on the same line
-		line1 := r.program.Fset.Position(r.file.Decls[i].Pos()).Line
-		line2 := r.program.Fset.Position(r.file.Decls[i+1].Pos()).Line
-		if line1 == line2 {
-			// replace separator (;) with 2 newlines
-			offset1 := r.program.Fset.Position(r.file.Decls[i].End()).Offset
-			offset2 := r.program.Fset.Position(r.file.Decls[i+1].Pos()).Offset - offset1
-			r.Edits[r.filename(r.file)].Add(text.Extent{offset1, offset2}, "\n\n")
+// removeSemicolons iterates through the top-level declarations in a file and
+// the specs of general declarations, and if two consecutive declarations occur
+// on the same line, splits them onto separate lines.  The intention is to
+// split semicolon-separated declarations onto separate lines.
+func (r *AddGoDoc) removeSemicolons() {
+	for i, d := range r.file.Decls {
+		if i > 0 {
+			r.removeSemicolonBetween(r.file.Decls[i-1], r.file.Decls[i], "\n\n")
 		}
+		if decl, ok := d.(*ast.GenDecl); ok {
+			for j, spec := range decl.Specs {
+				if spec, ok := spec.(*ast.TypeSpec); ok {
+					if ast.IsExported(spec.Name.Name) && spec.Doc == nil && j > 0 {
+						r.removeSemicolonBetween(decl.Specs[j-1], decl.Specs[j], "\n")
+					}
+				}
+			}
+		}
+
+	}
+}
+
+func (r *AddGoDoc) removeSemicolonBetween(node1, node2 ast.Node, replacement string) {
+	// Check if the 2 declarations are on the same line
+	line1 := r.program.Fset.Position(node1.Pos()).Line
+	line2 := r.program.Fset.Position(node2.Pos()).Line
+	if line1 == line2 {
+		// Replace text between the end of the first declaration and
+		// the start of the second declaration with the given
+		// separators.  If there are comments, they will be eliminated,
+		// but this should occur rarely enough we'll ignore it for now.
+		offset := r.program.Fset.Position(node1.End()).Offset
+		length := r.program.Fset.Position(node2.Pos()).Offset - offset
+		r.Edits[r.filename(r.file)].Add(text.Extent{offset, length}, replacement)
 	}
 }
 
@@ -66,16 +87,16 @@ func (r *AddGoDoc) addComments() {
 		switch decl := d.(type) {
 		case *ast.FuncDecl: // function or method declaration
 			if ast.IsExported(decl.Name.Name) && decl.Doc == nil {
-				r.addComment(decl, decl.Name.Name)//, 1)
+				r.addComment(decl, decl.Name.Name) //, 1)
 			}
 		case *ast.GenDecl: // types (including structs/interfaces)
 			for _, spec := range decl.Specs {
 				if spec, ok := spec.(*ast.TypeSpec); ok {
 					if ast.IsExported(spec.Name.Name) && spec.Doc == nil {
 						if decl.Lparen.IsValid() {
-							r.addComment(spec, spec.Name.Name)//, 2)
+							r.addComment(spec, spec.Name.Name) //, 2)
 						} else {
-							r.addComment(decl, spec.Name.Name)//, 1)
+							r.addComment(decl, spec.Name.Name) //, 1)
 						}
 					}
 				}
@@ -86,9 +107,9 @@ func (r *AddGoDoc) addComments() {
 
 // addComment inserts the given comment string immediately before the given
 // declaration
-func (r *AddGoDoc) addComment(decl ast.Node, comment string) {//, count int) {
+func (r *AddGoDoc) addComment(decl ast.Node, comment string) { //, count int) {
 	//if count == 1 {
-		comment = "// " + comment + " TODO: NEEDS COMMENT INFO\n"
+	comment = "// " + comment + " TODO: NEEDS COMMENT INFO\n"
 	//} else if count == 2 {
 	//	comment = "\n// " + comment + " TODO: NEEDS COMMENT INFO\n"
 	//}
