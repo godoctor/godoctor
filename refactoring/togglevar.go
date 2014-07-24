@@ -72,7 +72,11 @@ func (r *ToggleVar) Run(config *Config) *Result {
 
 func (r *ToggleVar) short2var(assign *ast.AssignStmt) {
 	start, length := r.offsetLength(assign)
-	r.Edits[r.filename(r.file)].Add(text.Extent{start, length}, r.varDeclString(assign))
+	replacement := r.varDeclString(assign)
+	r.Edits[r.filename(r.file)].Add(text.Extent{start, length}, replacement)
+	if strings.Contains(replacement, "\n") {
+		r.formatFileInEditor()
+	}
 }
 
 func (r *ToggleVar) rhsExprs(assign *ast.AssignStmt) []string {

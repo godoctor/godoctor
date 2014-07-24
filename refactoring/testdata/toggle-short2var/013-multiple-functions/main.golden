@@ -16,8 +16,8 @@ func h() float64 {
 }
 
 func main() {
-var i int = f()
-var j string = g()
-var k float64 = h()
-fmt.Println("Value of i,j,k:", i, j, k)
+	var i int = f()
+	var j string = g()
+	var k float64 = h()
+	fmt.Println("Value of i,j,k:", i, j, k)
 }
