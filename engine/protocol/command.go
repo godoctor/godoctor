@@ -184,6 +184,48 @@ func (p *Params) Validate(state *State, input map[string]interface{}) (bool, err
 	return true, nil
 }
 
+// -=-= Put -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+type Put struct { // FIXME: Robert -- make sure this is right
+	Filename string `json:"filename"`
+	Content  string `json:"content"`
+}
+
+func (p *Put) Run(state *State, input map[string]interface{}) (Reply, error) {
+	if valid, err := p.Validate(state, input); !valid {
+		return Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}}, err
+	}
+
+	var editedFS *filesystem.EditedFileSystem
+	var ok bool
+	if editedFS, ok = state.Filesystem.(*filesystem.EditedFileSystem); !ok {
+		return Reply{map[string]interface{}{"reply": "Error",
+				"message": "put can only be executed in Web mode"}},
+			nil // FIXME: Robert -- OK to return nil here?
+	}
+
+	if input["filename"] != filesystem.FakeStdinFilename {
+		return Reply{map[string]interface{}{"reply": "Error", "message": fmt.Sprintf("put filename must be \"%s\"", filesystem.FakeStdinFilename)}},
+			nil // FIXME: Robert -- OK to return nil here?
+	}
+
+	stdinPath, err := filesystem.FakeStdinPath()
+	if err != nil {
+		return Reply{map[string]interface{}{"reply": "Error",
+			"message": err.Error()}}, err
+	}
+
+	es := text.NewEditSet()
+	es.Add(text.Extent{0, 0}, input["content"].(string))
+	editedFS.Edits[stdinPath] = es
+	return Reply{map[string]interface{}{"reply": "OK"}}, nil
+}
+
+func (p *Put) Validate(state *State, input map[string]interface{}) (bool, error) {
+	//FIXME: Robert: implement Validate please
+	return true, nil
+}
+
 // -=-= Setdir =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 type Setdir struct {
@@ -203,10 +245,11 @@ func (s *Setdir) Run(state *State, input map[string]interface{}) (Reply, error) 
 			state.Filesystem = filesystem.NewLocalFileSystem()
 		}
 
-		// web mode? get that virtual filesystem
+		// web mode? use edited filesystem
 		if mode == "web" {
-			//state.Filesystem = filesystem.NewVirtualFileSystem()
-			return Reply{map[string]interface{}{"reply": "Error", "message": "Web mode not supported"}}, err
+			state.Dir = "."
+			state.Filesystem = filesystem.NewEditedFileSystem(
+				map[string]*text.EditSet{})
 		}
 
 		state.State = 2

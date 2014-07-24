@@ -115,6 +115,7 @@ func setup() map[string]Command {
 	cmds["list"] = &List{}
 	cmds["setdir"] = &Setdir{}
 	cmds["params"] = &Params{}
+	cmds["put"] = &Put{}
 	cmds["xrun"] = &XRun{}
 	return cmds
 }
