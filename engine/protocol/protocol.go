@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 
 	"golang-refactoring.org/go-doctor/filesystem"
@@ -40,39 +41,30 @@ func Run(args []string) {
 		runSingle()
 		return
 	}
-	cmdList := setup()
+
 	// list of commands
 	var argJson []map[string]interface{}
-	err := json.Unmarshal([]byte(args[0]), &argJson)
-	if err != nil {
-		printReply(Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}})
-		return
-	}
-	var state = State{1, "", "", nil}
-	for i, cmdObj := range argJson {
-		// has command?
-		cmd, found := cmdObj["command"]
-		if !found { // no command
-			printReply(Reply{map[string]interface{}{"reply": "Error", "message": "Invalid JSON command"}})
+	if len(args) == 1 && args[0] == "-" {
+		// read command list from stdin
+		bytes, err := ioutil.ReadAll(os.Stdin)
+		if err != nil {
+			printReply(Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}})
 			return
 		}
-		// valid command?
-		if _, found := cmdList[cmd.(string)]; found {
-			resultReply, err := cmdList[cmd.(string)].Run(&state, cmdObj)
-			if err != nil {
-				printReply(resultReply)
-				return
-			}
-			// last command?
-			if i == len(argJson)-1 {
-				printReply(resultReply)
-			}
-		} else {
-			printReply(Reply{map[string]interface{}{"reply": "Error", "message": "Invalid JSON command"}})
+		err = json.Unmarshal(bytes, &argJson)
+		if err != nil {
+			printReply(Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}})
+			return
+		}
+	} else {
+		// assemble command list from args
+		err := json.Unmarshal([]byte(args[0]), &argJson)
+		if err != nil {
+			printReply(Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}})
 			return
 		}
 	}
-
+	runList(argJson)
 }
 
 func runSingle() {
@@ -112,6 +104,34 @@ func runSingle() {
 		// everything good to run command
 		result, _ := cmdList[cmd.(string)].Run(&state, inputJson) // run the command
 		printReply(result)
+	}
+}
+
+func runList(argJson []map[string]interface{}) {
+	cmdList := setup()
+	var state = State{1, "", "", nil}
+	for i, cmdObj := range argJson {
+		// has command?
+		cmd, found := cmdObj["command"]
+		if !found { // no command
+			printReply(Reply{map[string]interface{}{"reply": "Error", "message": "Invalid JSON command"}})
+			return
+		}
+		// valid command?
+		if _, found := cmdList[cmd.(string)]; found {
+			resultReply, err := cmdList[cmd.(string)].Run(&state, cmdObj)
+			if err != nil {
+				printReply(resultReply)
+				return
+			}
+			// last command?
+			if i == len(argJson)-1 {
+				printReply(resultReply)
+			}
+		} else {
+			printReply(Reply{map[string]interface{}{"reply": "Error", "message": "Invalid JSON command"}})
+			return
+		}
 	}
 }
 
