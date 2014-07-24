@@ -47,11 +47,11 @@ func (r *Debug) Description() *Description {
 	return &Description{
 		Name:      "Debug Refactoring",
 		Synopsis:  "Provides assorted debugging outputs",
-		Usage:     "<options>",
+		Usage:     "<command>",
 		Multifile: false,
 		Params: []Parameter{Parameter{
-			Label:        "Options",
-			Prompt:       "Options",
+			Label:        "Command",
+			Prompt:       "Command",
 			DefaultValue: "",
 		}},
 		Quality: Development,
@@ -70,36 +70,35 @@ func (r *Debug) Run(config *Config) *Result {
 		r.Log.Error(usage)
 		return &r.Result
 	}
+
 	if !validateArgs(config, r.Description(), r.Log) {
 		return &r.Result
 	}
+	command := strings.ToLower(strings.TrimSpace(config.Args[0].(string)))
 
-	for _, arg := range config.Args {
-		cmd := strings.ToLower(strings.TrimSpace(arg.(string)))
-		var b bytes.Buffer
-		switch cmd {
-		case "fmt":
-			r.fmt()
-		case "showaffected":
-			r.showAffected(&b)
-		case "showast":
-			r.showAST(&b)
-		case "showflow":
-			r.showCFG(&b)
-		case "showidentifiers":
-			r.showIdentifiers(&b)
-		case "showpackages":
-			r.showLoadedPackagesAndFiles(&b)
-		case "showreferences":
-			r.showReferences(&b)
-		default:
-			r.Log.Errorf("Unknown option %s", arg.(string))
-			return &r.Result
-		}
-		if !r.Log.ContainsErrors() && cmd != "fmt" {
-			insert := text.Extent{0, 0}
-			r.Edits[r.filename(r.file)].Add(insert, b.String())
-		}
+	var b bytes.Buffer
+	switch command {
+	case "fmt":
+		r.fmt()
+	case "showaffected":
+		r.showAffected(&b)
+	case "showast":
+		r.showAST(&b)
+	case "showflow":
+		r.showCFG(&b)
+	case "showidentifiers":
+		r.showIdentifiers(&b)
+	case "showpackages":
+		r.showLoadedPackagesAndFiles(&b)
+	case "showreferences":
+		r.showReferences(&b)
+	default:
+		r.Log.Errorf("Unknown option %s", command)
+		return &r.Result
+	}
+	if !r.Log.ContainsErrors() && command != "fmt" {
+		insert := text.Extent{0, 0}
+		r.Edits[r.filename(r.file)].Add(insert, b.String())
 	}
 	return &r.Result
 }
