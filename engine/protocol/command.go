@@ -151,7 +151,7 @@ func (p *Params) Run(state *State, input map[string]interface{}) (Reply, error) 
 		// since GetParams returns just a string, assume it as prompt and label
 		params := make([]map[string]interface{}, 0)
 		for _, param := range refactoring.Description().Params {
-			params = append(params, map[string]interface{}{"label": param.Label, "prompt": param.Prompt, "type": reflect.TypeOf(param.DefaultValue), "default": param.DefaultValue})
+			params = append(params, map[string]interface{}{"label": param.Label, "prompt": param.Prompt, "type": reflect.TypeOf(param.DefaultValue).String(), "default": param.DefaultValue})
 		}
 		return Reply{map[string]interface{}{"reply": "OK", "params": params}}, nil
 	} else {
@@ -313,6 +313,22 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 
 	ts, _ := parseSelection(state, textselection)
 
+	if ts.GetFilename() != filesystem.FakeStdinFilename {
+		return Reply{map[string]interface{}{"reply": "Error", "message": fmt.Sprintf("put filename must be \"%s\"", filesystem.FakeStdinFilename)}},
+			nil // FIXME: Robert -- OK to return nil here?
+	}
+	stdinPath, err := filesystem.FakeStdinPath()
+	if err != nil {
+		return Reply{map[string]interface{}{"reply": "Error",
+			"message": err.Error()}}, err
+	}
+	switch ts := ts.(type) {
+	case *text.OffsetLengthSelection:
+		ts.Filename = stdinPath
+	case *text.LineColSelection:
+		ts.Filename = stdinPath
+	}
+
 	// get refactoring
 	refac := engine.GetRefactoring(input["transformation"].(string))
 
@@ -470,8 +486,9 @@ func parseSelection(state *State, input map[string]interface{}) (text.Selection,
 		return nil, fmt.Errorf("invalid offset/length combo: value(s) missing")
 	} else {
 		// validate
-		if reflect.TypeOf(offset).Kind() != reflect.Int || reflect.TypeOf(length).Kind() != reflect.Int {
-			return nil, fmt.Errorf("Invalid type(s) given for offset/length combo")
+		if reflect.TypeOf(offset).Kind() != reflect.Float64 ||
+			reflect.TypeOf(length).Kind() != reflect.Float64 {
+			return nil, fmt.Errorf("Invalid type(s) given for offset/length combo (%v, %v)", reflect.TypeOf(offset), reflect.TypeOf(length))
 		}
 
 		pos := fmt.Sprintf("%d,%d", int(offset.(float64)), int(length.(float64)))
