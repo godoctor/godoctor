@@ -710,22 +710,3 @@ func (r *refactoringBase) forEachInitialFile(f func(ast *ast.File)) {
 func (r *refactoringBase) offsetLength(node ast.Node) (int, int) {
 	return r.program.Fset.Position(node.Pos()).Offset, (r.program.Fset.Position(node.End()).Offset - r.program.Fset.Position(node.Pos()).Offset)
 }
-
-func (r *refactoringBase) lhsNames(assign *ast.AssignStmt) []bytes.Buffer {
-	var lhsbuf bytes.Buffer
-	buf := make([]bytes.Buffer, len(assign.Lhs))
-	for i, lhs := range assign.Lhs {
-		offset, length := r.offsetLength(lhs)
-		lhsText := r.fileContents[offset : offset+length]
-		if len(assign.Lhs) == len(assign.Rhs) {
-			buf[i].Write(lhsText)
-		} else {
-			lhsbuf.Write(lhsText)
-			if i < len(assign.Lhs)-1 {
-				lhsbuf.WriteString(", ")
-			}
-			buf[0] = lhsbuf
-		}
-	}
-	return buf
-}
