@@ -11,6 +11,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 
 	"golang-refactoring.org/go-doctor/filesystem"
@@ -80,8 +81,15 @@ func runSingle() {
 	var inputJson map[string]interface{}
 	ioreader := bufio.NewReader(os.Stdin)
 	for {
-		input, _ := ioreader.ReadBytes('\n')
-		err := json.Unmarshal(input, &inputJson)
+		input, err := ioreader.ReadBytes('\n')
+		if err == io.EOF {
+			// exit
+			break
+		} else if err != nil {
+			printReply(Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}})
+			continue
+		}
+		err = json.Unmarshal(input, &inputJson)
 		if err != nil {
 			printReply(Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}})
 			continue
