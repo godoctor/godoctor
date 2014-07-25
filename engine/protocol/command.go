@@ -249,6 +249,7 @@ func (s *Setdir) Run(state *State, input map[string]interface{}) (Reply, error) 
 		if mode == "web" {
 			state.Dir = "."
 			state.Filesystem = filesystem.NewEditedFileSystem(
+				filesystem.NewLocalFileSystem(),
 				map[string]*text.EditSet{})
 		}
 

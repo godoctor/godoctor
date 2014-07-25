@@ -517,7 +517,7 @@ func (r *refactoringBase) updateLog(config *Config, checkForErrors bool) {
 
 	oldFS := config.FileSystem
 	defer func() { config.FileSystem = oldFS }()
-	config.FileSystem = filesystem.NewEditedFileSystem(r.Edits)
+	config.FileSystem = filesystem.NewEditedFileSystem(oldFS, r.Edits)
 
 	newLogOldPos := NewLog()
 	newLogOldPos.Fset = r.program.Fset

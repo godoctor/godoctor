@@ -154,12 +154,12 @@ func (fi *fileInfo) Sys() interface{}   { return nil }
 // program after refactoring, without actually changing the program on disk.
 // File/directory creation, renaming, and deletion are not currently supported.
 type EditedFileSystem struct {
-	LocalFileSystem
-	Edits map[string]*text.EditSet
+	BaseFS FileSystem
+	Edits  map[string]*text.EditSet
 }
 
-func NewEditedFileSystem(edits map[string]*text.EditSet) *EditedFileSystem {
-	return &EditedFileSystem{Edits: edits}
+func NewEditedFileSystem(base FileSystem, edits map[string]*text.EditSet) *EditedFileSystem {
+	return &EditedFileSystem{BaseFS: base, Edits: edits}
 }
 
 func NewSingleEditedFileSystem(filename, contents string) (*EditedFileSystem, error) {
@@ -169,7 +169,7 @@ func NewSingleEditedFileSystem(filename, contents string) (*EditedFileSystem, er
 	}
 	es := text.NewEditSet()
 	es.Add(text.Extent{0, size}, contents)
-	return NewEditedFileSystem(map[string]*text.EditSet{filename: es}), nil
+	return NewEditedFileSystem(NewLocalFileSystem(), map[string]*text.EditSet{filename: es}), nil
 }
 
 func sizeOf(filename string) (int, error) {
@@ -207,12 +207,11 @@ func (fs *EditedFileSystem) OpenFile(path string) (io.ReadCloser, error) {
 	stdin, err := FakeStdinPath()
 	if err != nil {
 		return nil, err
-	}
-	if path == stdin {
-		localReader = ioutil.NopCloser(strings.NewReader(""))
 	} else {
-		localReader, err = fs.LocalFileSystem.OpenFile(path)
-		if err != nil {
+		localReader, err = fs.BaseFS.OpenFile(path)
+		if err != nil && os.IsNotExist(err) && path == stdin {
+			localReader = ioutil.NopCloser(strings.NewReader(""))
+		} else if err != nil {
 			return nil, err
 		}
 	}
