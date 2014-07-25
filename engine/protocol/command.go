@@ -339,20 +339,18 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 
 	ts, _ := parseSelection(state, textselection)
 
-	if ts.GetFilename() != filesystem.FakeStdinFilename {
-		return Reply{map[string]interface{}{"reply": "Error", "message": fmt.Sprintf("put filename must be \"%s\"", filesystem.FakeStdinFilename)}},
-			nil // FIXME: Robert -- OK to return nil here?
-	}
-	stdinPath, err := filesystem.FakeStdinPath()
-	if err != nil {
-		return Reply{map[string]interface{}{"reply": "Error",
-			"message": err.Error()}}, err
-	}
-	switch ts := ts.(type) {
-	case *text.OffsetLengthSelection:
-		ts.Filename = stdinPath
-	case *text.LineColSelection:
-		ts.Filename = stdinPath
+	if ts.GetFilename() == filesystem.FakeStdinFilename {
+		stdinPath, err := filesystem.FakeStdinPath()
+		if err != nil {
+			return Reply{map[string]interface{}{"reply": "Error",
+				"message": err.Error()}}, err
+		}
+		switch ts := ts.(type) {
+		case *text.OffsetLengthSelection:
+			ts.Filename = stdinPath
+		case *text.LineColSelection:
+			ts.Filename = stdinPath
+		}
 	}
 
 	// get refactoring
