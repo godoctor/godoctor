@@ -223,10 +223,12 @@ func (r *refactoringBase) Run(config *Config) *Result {
 		r.Log.Infof("Scope is %s", strings.Join(config.Scope, " "))
 	}
 
+	stdin, _ := filesystem.FakeStdinPath()
+
 	var err error
 	mutex := &sync.Mutex{}
 	r.program, err = createLoader(config, func(err error) {
-		message := err.Error()
+		message := strings.Replace(err.Error(), stdin+":", "<stdin>:", -1)
 		// TODO: This is temporary until go/loader handles cgo
 		if !strings.Contains(message, cgoError1) &&
 			!strings.HasSuffix(message, cgoError2) &&
@@ -523,13 +525,15 @@ func (r *refactoringBase) updateLog(config *Config, checkForErrors bool) {
 	newLogOldPos.Fset = r.program.Fset
 	newLogNewPos := NewLog()
 
+	stdin, _ := filesystem.FakeStdinPath()
+
 	mutex := &sync.Mutex{}
 	errors := 0
 	newProg, err := createLoader(config, func(err error) {
 		if !checkForErrors {
 			return
 		}
-		message := err.Error()
+		message := strings.Replace(err.Error(), stdin+":", "<stdin>:", -1)
 		// TODO: This is temporary until go/loader handles cgo
 		if !strings.Contains(message, cgoError1) &&
 			!strings.HasSuffix(message, cgoError2) &&
