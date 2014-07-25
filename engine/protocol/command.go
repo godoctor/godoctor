@@ -62,12 +62,22 @@ type List struct {
 }
 
 func (l *List) Run(state *State, input map[string]interface{}) (Reply, error) {
-
 	if valid, err := l.Validate(state, input); valid {
+		minQuality := refactoring.Development
+		switch input["quality"].(string) {
+		case "in_testing":
+			minQuality = refactoring.Testing
+		case "production":
+			minQuality = refactoring.Production
+		}
+
 		// get all of the refactoring names
 		namesList := make([]map[string]string, 0)
-		for shortName, refactoring := range engine.AllRefactorings() {
-			namesList = append(namesList, map[string]string{"shortName": shortName, "name": refactoring.Description().Name})
+		for _, shortName := range engine.AllRefactoringNames() {
+			refactoring := engine.GetRefactoring(shortName)
+			if refactoring.Description().Quality >= minQuality {
+				namesList = append(namesList, map[string]string{"shortName": shortName, "name": refactoring.Description().Name})
+			}
 		}
 		return Reply{map[string]interface{}{"reply": "OK", "transformations": namesList}}, nil
 	} else {
@@ -416,13 +426,7 @@ func (x *XRun) Validate(state *State, input map[string]interface{}) (bool, error
 	}
 
 	// check transformation is valid
-	var valid bool
-	for shortName, _ := range engine.AllRefactorings() {
-		if shortName == input["transformation"].(string) {
-			valid = true
-		}
-	}
-	if !valid {
+	if engine.GetRefactoring(input["transformation"].(string)) == nil {
 		return false, errors.New("Transformation given is not a valid refactoring name")
 	}
 

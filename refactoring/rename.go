@@ -42,7 +42,7 @@ func (r *Rename) Description() *Description {
 			Prompt:       "What to rename this identifier to.",
 			DefaultValue: "",
 		}},
-		Quality: Development,
+		Quality: Testing,
 	}
 }
 

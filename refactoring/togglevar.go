@@ -29,11 +29,11 @@ type ToggleVar struct {
 func (r *ToggleVar) Description() *Description {
 	return &Description{
 		Name:      "Toggle var <-> :=",
-		Synopsis:  "Converts between var declarations and short assignments",
+		Synopsis:  "Toggles between a var declaration and := statement",
 		Usage:     "",
 		Multifile: false,
 		Params:    nil,
-		Quality:   Development,
+		Quality:   Testing,
 	}
 }
 

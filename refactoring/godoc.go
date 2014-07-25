@@ -21,9 +21,12 @@ type AddGoDoc struct {
 
 func (r *AddGoDoc) Description() *Description {
 	return &Description{
-		Name:    "Add GoDoc",
-		Params:  nil,
-		Quality: Development,
+		Name:      "Add GoDoc",
+		Synopsis:  "Adds stub GoDoc comments where they are missing",
+		Usage:     "",
+		Multifile: false,
+		Params:    nil,
+		Quality:   Testing,
 	}
 }
 
