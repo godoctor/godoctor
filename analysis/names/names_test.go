@@ -153,25 +153,22 @@ func TestFindOccurrences(t *testing.T) {
 		[]string{
 			"testdata/src/bar/bar.go:18",
 			"testdata/src/foo/foo.go:71"}, t)
-	// FIXME: These do not pass
-	/*
-				check(findOccurrences("bar", "t", t),
-					[]string{
-						"testdata/src/bar/bar.go:95",
-						"testdata/src/bar/bar.go:107"}, t)
-			check(findOccurrences("bar", "Method", t),
-				[]string{
-					"testdata/src/bar/bar.go:74",
-					"testdata/src/bar/bar.go:174",
-					"testdata/src/foo/foo.go:246"}, t)
-		check(findOccurrences("foo", "q", t),
-			[]string{
-				"testdata/src/foo/foo.go:136",
-				"testdata/src/foo/foo.go:144",
-				"testdata/src/foo/foo.go:151",
-				"testdata/src/foo/foo.go:163",
-				"testdata/src/foo/foo.go:210"}, t)
-	*/
+	check(findOccurrences("bar", "t", t),
+		[]string{
+			"testdata/src/bar/bar.go:95",
+			"testdata/src/bar/bar.go:107"}, t)
+	check(findOccurrences("bar", "Method", t),
+		[]string{
+			"testdata/src/bar/bar.go:74",
+			"testdata/src/bar/bar.go:174",
+			"testdata/src/foo/foo.go:246"}, t)
+	check(findOccurrences("foo", "q", t),
+		[]string{
+			"testdata/src/foo/foo.go:136",
+			"testdata/src/foo/foo.go:144",
+			"testdata/src/foo/foo.go:151",
+			"testdata/src/foo/foo.go:163",
+			"testdata/src/foo/foo.go:210"}, t)
 }
 
 func check(actual, expect []string, t *testing.T) {
