@@ -10,7 +10,9 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"regexp"
 	"regexp/syntax"
+	"strings"
 
 	"code.google.com/p/go.tools/go/loader"
 	"code.google.com/p/go.tools/go/types"
@@ -200,9 +202,8 @@ func (r *SearchEngine) FindOccurrences(ident *ast.Ident) (map[string][]text.Exte
 		return nil, fmt.Errorf("Unable to find declaration of %s", ident.Name)
 	}
 	if r.IsPackageName(ident) {
-		result = r.occurrencesofpkg(ident)
-		pkgs = allPackages(r.program)
 
+		return r.PackageRename(ident.Name), nil
 	} else {
 
 		var decls map[types.Object]bool
@@ -221,6 +222,14 @@ func (r *SearchEngine) FindOccurrences(ident *ast.Ident) (map[string][]text.Exte
 	}
 
 	return r.occurrencesInComments(ident.Name, pkgs, result), nil
+}
+
+func (r *SearchEngine) PackageRename(identName string) map[string][]text.Extent {
+
+	result := r.occurrencesofpkg(identName)
+	pkgs := allPackages(r.program)
+	return r.occurrencesInComments(identName, pkgs, result)
+
 }
 
 // occurrences returns the source locations of all identifiers that resolve
@@ -247,39 +256,73 @@ func (r *SearchEngine) occurrences(decls map[types.Object]bool) map[string][]tex
 	return result
 }
 
-func (r *SearchEngine) occurrencesofpkg(ident *ast.Ident) map[string][]text.Extent {
+//TODO : Make the search robust for packagenames in importspec
+func (r *SearchEngine) occurrencesofpkg(identName string) map[string][]text.Extent {
 
 	result := make(map[string][]text.Extent)
-
 	for pkgInfo := range allPackages(r.program) {
 		for id, obj := range pkgInfo.Defs {
-			if obj == nil && id.Name == ident.Name {
+			if obj == nil && id.Name == identName {
+
 				filename := r.position(id).Filename
 				result[filename] = append(result[filename],
 					r.offsetLength(id))
 			}
 		}
 		for id, obj := range pkgInfo.Uses {
-			if obj == nil && id.Name == ident.Name {
+			if (obj == nil || obj.Name() == identName) && id.Name == identName {
+
 				filename := r.position(id).Filename
 				result[filename] = append(result[filename],
 					r.offsetLength(id))
 			}
 		}
+
+		for node, pkgObject := range pkgInfo.Implicits {
+			if pkgObject.Name() == identName {
+
+				filename := r.positionofObject(pkgObject).Filename
+
+				result[filename] = append(result[filename],
+					r.offsetLengthofObject(node, pkgObject))
+			}
+		}
+
 	}
 
 	return result
-
 }
 
 func (r *SearchEngine) position(id *ast.Ident) token.Position {
 	return r.program.Fset.Position(id.NamePos)
+}
+func (r *SearchEngine) positionofObject(pkgObject types.Object) token.Position {
+	return r.program.Fset.Position(pkgObject.Pos())
 }
 
 func (r *SearchEngine) offsetLength(id *ast.Ident) text.Extent {
 	position := r.position(id)
 	offset := position.Offset
 	length := len(id.Name)
+	return text.Extent{offset, length}
+}
+
+func (r *SearchEngine) offsetLengthofObject(node ast.Node, obj types.Object) text.Extent {
+
+	var offset int
+	position := r.positionofObject(obj)
+	offset = position.Offset + 1
+	length := len(obj.Name())
+
+	switch ident := node.(type) {
+	case *ast.ImportSpec:
+
+		if strings.Replace(ident.Path.Value, "\"", "", 2) != obj.Name() {
+
+			offset = position.Offset + len(strings.Replace(ident.Path.Value, "\"", "", 2)) - len(obj.Name()) + 1
+		}
+	}
+
 	return text.Extent{offset, length}
 }
 
@@ -353,6 +396,29 @@ func kmpWord(txt, pat string, T []int) (offsets []int) {
 		}
 	}
 	return offsets
+}
+
+// occurrencesInFileComments finds the source location of  selected identifier
+// names in comments, appends them to the already found source locations of
+// selected identifier objects (result), and returns the result.
+func (r *SearchEngine) occurrencesInFileComments(f *ast.File, comment *ast.CommentGroup, name string, result map[string][]text.Extent, prog *loader.Program) map[string][]text.Extent {
+	var whitespaceindex int = 1
+	var offset int
+	//regexpstring := fmt.Sprintf("[\\PL]%s[\\PL]|//%s[\\PL]|/*%s[\\PL]|[\\PL]%s$", name, name, name, name)
+	regexpstring := fmt.Sprintf("[\\PL]%s[\\PL]|//%s[\\PL]|/\\*%s[\\PL]|[\\PL]%s$", name, name, name, name)
+	re := regexp.MustCompile(regexpstring)
+	matchcount := strings.Count(comment.List[0].Text, name)
+	for _, matchindex := range re.FindAllStringIndex(comment.List[0].Text, matchcount) {
+		if matchindex[0] == 0 {
+			offset = prog.Fset.Position(comment.List[0].Slash).Offset + matchindex[0] + whitespaceindex + 1
+		} else {
+			offset = prog.Fset.Position(comment.List[0].Slash).Offset + matchindex[0] + whitespaceindex
+		}
+		length := len(name)
+		filename := prog.Fset.Position(f.Pos()).Filename
+		result[filename] = append(result[filename], text.Extent{offset, length})
+	}
+	return result
 }
 
 // This function assumes it is given indices corresponding to a word,

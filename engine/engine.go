@@ -19,6 +19,7 @@ func init() {
 		"rename":        new(refactoring.Rename),
 		"reverseassign": new(refactoring.ReverseAssign),
 		"shortassign":   new(refactoring.ShortAssign),
+		"godoc":         new(refactoring.AddGoDoc),
 		"debug":         new(refactoring.Debug),
 		"null":          new(refactoring.Null),
 	}

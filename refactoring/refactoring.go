@@ -17,12 +17,14 @@ import (
 	"go/ast"
 	"go/build"
 	"go/parser"
+	"go/printer"
 	"go/token"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 
 	"code.google.com/p/go.tools/go/loader"
 	"code.google.com/p/go.tools/go/types"
@@ -85,6 +87,25 @@ type Description struct {
 	// (e.g., "Rename" or "Extract Function") as it would appear in a user
 	// interface.  Every refactoring should have a unique name.
 	Name string
+	// A brief phrase (≤50 characters) describing this refactoring, with
+	// the first letter capitalized.  For example:
+	//     ----+----1----+----2----+----3----+----4----+----5
+	//     Changes the name of an identifier
+	Synopsis string
+	// A one-line synopsis of this refactoring's arguments (≤50 characters)
+	// with angle brackets surrounding argument names (question marks
+	// denoting Boolean arguments) and square brackets surrounding optional
+	// arguments.  For example:
+	//     ----+----1----+----2----+----3----+----4----+----5
+	//     <new_name> [<rename_in_comments?>]
+	Usage string
+	// Multifile is set to true only if this refactoring may change files
+	// other than the file containing the selection.  For example, renaming
+	// an exported identifier may cause references to be updated in several
+	// files, so for the Rename refactoring, Multifile=true.  However,
+	// extracting a local variable will only change the file containing the
+	// selection, so Extract Local Variable has Multifile=false.
+	Multifile bool
 	// Additional input required for this refactoring.  See Parameter.
 	Params []Parameter
 	// Whether this refactoring is suitable for production use.
@@ -113,6 +134,13 @@ type Config struct {
 	// for the entity being renamed.  If the refactoring does not require
 	// any arguments, this may be nil.
 	Args []interface{}
+	// Level of verbosity, i.e., how many types of informational items to
+	// include in the log.  If Verbosity ≥ 0, only essential log messages
+	// (usually errors and warnings) are included.  If ≥ 1, a list of files
+	// modified by the refactoring are added to the log.  If ≥ 2, an
+	// exhaustive list of edits made by the refactoring is appended to
+	// the log.
+	Verbosity int
 	// The GOPATH.  If this is set to the empty string, the GOPATH is
 	// determined from the environment.
 	GoPath string
@@ -157,12 +185,19 @@ const cgoError1 = "could not import C (cannot"
 const cgoError2 = "undeclared name: C"
 
 type refactoringBase struct {
-	program        *loader.Program
-	file           *ast.File
-	fileContents   []byte
+	// The program to be refactored, including all dependent files
+	program *loader.Program
+	// The AST of the file containing the user's selection
+	file *ast.File
+	// The complete contents of the file containing the user's selection
+	fileContents []byte
+	// The position of the first character of the user's selection
 	selectionStart token.Pos
-	selectionEnd   token.Pos
-	selectedNode   ast.Node
+	// The position immediately following the user's selection
+	selectionEnd token.Pos
+	// The deepest ast.Node enclosing the user's selection
+	selectedNode ast.Node
+	// The Result of this refactoring, returned to the client invoking it
 	Result
 }
 
@@ -172,56 +207,41 @@ type refactoringBase struct {
 // configures all of the fields in the refactoringBase struct.
 func (r *refactoringBase) Run(config *Config) *Result {
 	r.Log = NewLog()
+	r.Edits = map[string]*text.EditSet{}
+	r.FSChanges = []filesystem.Change{}
 
 	if config.FileSystem == nil {
 		r.Log.Error("INTERNAL ERROR: null Config.FileSystem")
 		return &r.Result
 	}
 
-	buildContext := build.Default
-	if os.Getenv("GOPATH") != "" {
-		// The test runner may change the GOPATH environment variable
-		// since the program was started, so set it here explicitly
-		// (not necessary when run as a CLI tool, but necessary when
-		// run from refactoring_test.go)
-		buildContext.GOPATH = os.Getenv("GOPATH")
+	if config.Scope == nil {
+		var msg string
+		config.Scope, msg = r.guessScope(config)
+		r.Log.Infof(msg)
+	} else {
+		r.Log.Infof("Scope is %s", strings.Join(config.Scope, " "))
 	}
-	if config.GoPath != "" {
-		buildContext.GOPATH = config.GoPath
-	}
-	buildContext.ReadDir = config.FileSystem.ReadDir
-	buildContext.OpenFile = config.FileSystem.OpenFile
 
-	var lconfig loader.Config
-	lconfig.Build = &buildContext
-	lconfig.ParserMode = parser.ParseComments | parser.DeclarationErrors
-	lconfig.AllowErrors = true
-	lconfig.SourceImports = true
-	lconfig.TypeChecker.Error = func(err error) {
+	var err error
+	mutex := &sync.Mutex{}
+	r.program, err = createLoader(config, func(err error) {
 		message := err.Error()
-		// FIXME: Needs to be thread-safe
 		// TODO: This is temporary until go/loader handles cgo
 		if !strings.Contains(message, cgoError1) &&
 			!strings.HasSuffix(message, cgoError2) &&
 			len(r.Log.Entries) < maxInitialErrors {
-			r.Log.Error(message)
-			r.Log.AssociatePos(err.(types.Error).Fset,
-				err.(types.Error).Pos,
-				err.(types.Error).Pos)
+			mutex.Lock()
+			if err, ok := err.(types.Error); ok {
+				r.Log.Error(err.Msg)
+				r.Log.AssociatePos(err.Pos, err.Pos)
+			} else {
+				r.Log.Error(message)
+			}
+			mutex.Unlock()
 		}
-	}
+	})
 
-	if config.Scope == nil {
-		config.Scope = r.guessScope(config)
-		r.Log.Warnf("No scope provided; guessing %s",
-			strings.Join(config.Scope, " "))
-	} else {
-		r.Log.Infof("Scope is %s", strings.Join(config.Scope, " "))
-	}
-	lconfig.FromArgs(config.Scope, true)
-
-	var err error
-	r.program, err = lconfig.Load()
 	r.Log.MarkInitial()
 	if err != nil {
 		r.Log.Error(err)
@@ -230,6 +250,8 @@ func (r *refactoringBase) Run(config *Config) *Result {
 		r.Log.Error("INTERNAL ERROR: Loader failed")
 		return &r.Result
 	}
+
+	r.Log.Fset = r.program.Fset
 
 	r.selectionStart, r.selectionEnd, err = config.Selection.Convert(r.program.Fset)
 	if err != nil {
@@ -260,10 +282,44 @@ func (r *refactoringBase) Run(config *Config) *Result {
 		return &r.Result
 	}
 
-	r.Edits = map[string]*text.EditSet{r.filename(r.file): text.NewEditSet()}
-	r.FSChanges = []filesystem.Change{}
+	r.Edits = map[string]*text.EditSet{
+		r.filename(r.file): text.NewEditSet(),
+	}
 
 	return &r.Result
+}
+
+func createLoader(config *Config, errorHandler func(error)) (*loader.Program, error) {
+	buildContext := build.Default
+	if os.Getenv("GOPATH") != "" {
+		// The test runner may change the GOPATH environment variable
+		// since the program was started, so set it here explicitly
+		// (not necessary when run as a CLI tool, but necessary when
+		// run from refactoring_test.go)
+		buildContext.GOPATH = os.Getenv("GOPATH")
+	}
+	if config.GoPath != "" {
+		buildContext.GOPATH = config.GoPath
+	}
+	buildContext.ReadDir = config.FileSystem.ReadDir
+	buildContext.OpenFile = config.FileSystem.OpenFile
+
+	var lconfig loader.Config
+	lconfig.Build = &buildContext
+	lconfig.ParserMode = parser.ParseComments | parser.DeclarationErrors
+	lconfig.AllowErrors = true
+	lconfig.SourceImports = true
+	lconfig.TypeChecker.Error = errorHandler
+
+	rest, err := lconfig.FromArgs(config.Scope, true)
+	if len(rest) > 0 {
+		errorHandler(fmt.Errorf("Unrecognized argument %s",
+			strings.Join(rest, " ")))
+	}
+	if err != nil {
+		errorHandler(err)
+	}
+	return lconfig.Load()
 }
 
 // guessScope makes a reasonable guess at the refactoring scope if the user
@@ -271,13 +327,21 @@ func (r *refactoringBase) Run(config *Config) *Result {
 //     1. If filename is not in $GOPATH/src, filename is used as the scope.
 //     2. If filename is in $GOPATH/src, a package name is guessed by stripping
 //        $GOPATH/src/ from the filename, and that package is used as the scope.
-func (r *refactoringBase) guessScope(config *Config) []string {
-	fnameScope := []string{config.Selection.GetFilename()}
+func (r *refactoringBase) guessScope(config *Config) ([]string, string) {
+	fname := config.Selection.GetFilename()
+	fnameScope := []string{fname}
 
-	absFilename, err := filepath.Abs(config.Selection.GetFilename())
+	var fnameMsg string
+	if filepath.Base(fname) == filesystem.FakeStdinFilename {
+		fnameMsg = "Defaulting to file scope for refactoring (provide an explicit scope to change this)"
+	} else {
+		fnameMsg = fmt.Sprintf("Defaulting to file scope %s for refactoring (provide an explicit scope to change this)", fname)
+	}
+
+	absFilename, err := filepath.Abs(fname)
 	if err != nil {
 		r.Log.Error(err.Error())
-		return fnameScope
+		return fnameScope, fnameMsg
 	}
 
 	gopath := config.GoPath
@@ -286,12 +350,12 @@ func (r *refactoringBase) guessScope(config *Config) []string {
 	}
 	if gopath == "" {
 		r.Log.Warn("GOPATH not set")
-		return fnameScope
+		return fnameScope, fnameMsg
 	}
 	gopath, err = filepath.Abs(gopath)
 	if err != nil {
 		r.Log.Error(err)
-		return fnameScope
+		return fnameScope, fnameMsg
 	}
 
 	gopathSrc := filepath.Join(gopath, "src")
@@ -299,14 +363,21 @@ func (r *refactoringBase) guessScope(config *Config) []string {
 	relFilename, err := filepath.Rel(gopathSrc, absFilename)
 	if err != nil {
 		r.Log.Error(err)
-		return fnameScope
+		return fnameScope, fnameMsg
 	}
 
 	if strings.HasPrefix(relFilename, "..") {
-		return fnameScope
+		return fnameScope, fnameMsg
 	}
 
-	return []string{filepath.ToSlash(filepath.Dir(relFilename))}
+	dir := filepath.Dir(relFilename)
+	if dir == "." {
+		return fnameScope, fnameMsg
+	}
+
+	pkg := filepath.ToSlash(dir)
+	return []string{pkg},
+		fmt.Sprintf("Defaulting to package scope %s for refactoring (provide an explicit scope to change this)", pkg)
 }
 
 // validateArgs determines whether the arguments supplied in the given Config
@@ -359,66 +430,208 @@ func (r *refactoringBase) lineColToPos(file *ast.File, line int, column int) tok
 	return file.Pos()
 }
 
-func (r *refactoringBase) checkForErrors() {
-	contents, err := ioutil.ReadFile(r.filename(r.file))
-	if err != nil {
-		r.Log.Errorf("Unable to read source file: %v", err)
-		return
-	}
-	sourceFromFile := string(contents)
-
-	string, err := text.ApplyToString(r.Edits[r.filename(r.file)], sourceFromFile)
+func (r *refactoringBase) formatFileInEditor() {
+	oldFileContents := string(r.fileContents)
+	string, err := text.ApplyToString(r.Edits[r.filename(r.file)], oldFileContents)
 	if err != nil {
 		r.Log.Errorf("Transformation produced invalid EditSet: %v",
 			err.Error())
 		return
 	}
 
-	_, err = parser.ParseFile(r.program.Fset, "", string, parser.ParseComments)
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "", string, parser.ParseComments)
 	if err != nil {
-		fmt.Println("vvvvv")
-		fmt.Println(string)
-		fmt.Println("^^^^^")
 		r.Log.Errorf("Transformation will introduce syntax errors: %v", err)
-		r.Log.Associate(r.filename(r.file))
+		r.Log.AssociatePos(r.file.Pos(), r.file.End())
 		return
 	}
 
-	/*
-		// TODO: This may be wrong if several files are changed...?
-		r.pkgInfo = r.program.CreatePackage(r.file.Name.Name, f)
-		if r.pkgInfo.Err != nil {
-			r.Log.Log(ERROR, "Transformation will introduce semantic "+
-				"errors: "+r.pkgInfo.Err.Error())
+	printConfig := &printer.Config{
+		Mode:     printer.UseSpaces | printer.TabIndent,
+		Tabwidth: 8}
+	var b bytes.Buffer
+	if err = printConfig.Fprint(&b, fset, file); err != nil {
+		r.Log.Error(err)
+		return
+	}
+	newFileContents := b.String()
+
+	editSet := text.Diff(
+		strings.SplitAfter(oldFileContents, "\n"),
+		strings.SplitAfter(newFileContents, "\n"))
+	r.Edits[r.filename(r.file)] = editSet
+}
+
+// updateLog applies the edits in r.Edits and updates existing error messages
+// in r.Log to reflect their locations in the resulting program.  If
+// checkForErrors is true, and if the log does not contain any initial errors,
+// the resulting program will be type checked, and any new errors introduced by
+// the refactoring will be logged.
+func (r *refactoringBase) updateLog(config *Config, checkForErrors bool) {
+	if r.Edits == nil || len(r.Edits) == 0 {
+		return
+	}
+
+	// Avoid loading the refactored program into a new go/loader if at all
+	// possible.  If we won't update the positions of any log entries and
+	// won't report any new errors, then we can avoid loading the
+	// refactored program.
+	canSkipLoadingProgram := !r.Log.ContainsPositions() && !checkForErrors
+
+	if config.Verbosity == 0 && canSkipLoadingProgram {
+		return
+	}
+
+	if r.Log.ContainsInitialErrors() {
+		checkForErrors = false
+	}
+
+	programFiles := map[string]*token.File{}
+	r.program.Fset.Iterate(func(f *token.File) bool {
+		programFiles[f.Name()] = f
+		return true
+	})
+
+	fileCount := len(r.Edits)
+	if fileCount >= 2 && config.Verbosity >= 1 {
+		fileNum := 1
+		for filename, edits := range r.Edits {
+			edits.Iterate(func(extent text.Extent, _ string) bool {
+				file := programFiles[filename]
+				oldPos := file.Pos(extent.Offset)
+				r.Log.Infof("File %d of %d: %s",
+					fileNum,
+					fileCount,
+					filepath.Base(filename))
+				r.Log.AssociatePos(oldPos, oldPos)
+				fileNum++
+				return false
+			})
+		}
+	}
+
+	if config.Verbosity == 1 && canSkipLoadingProgram {
+		return
+	}
+
+	oldFS := config.FileSystem
+	defer func() { config.FileSystem = oldFS }()
+	config.FileSystem = filesystem.NewEditedFileSystem(r.Edits)
+
+	newLogOldPos := NewLog()
+	newLogOldPos.Fset = r.program.Fset
+	newLogNewPos := NewLog()
+
+	mutex := &sync.Mutex{}
+	errors := 0
+	newProg, err := createLoader(config, func(err error) {
+		if !checkForErrors {
 			return
 		}
-	*/
+		message := err.Error()
+		// TODO: This is temporary until go/loader handles cgo
+		if !strings.Contains(message, cgoError1) &&
+			!strings.HasSuffix(message, cgoError2) &&
+			errors < maxInitialErrors {
+			mutex.Lock()
+			errors++
+			msg := fmt.Sprintf("Completing the transformation will introduce the following error: %s", message)
+			if err, ok := err.(types.Error); ok {
+				newLogOldPos.Error(err.Msg)
+				newLogNewPos.Error(err.Msg)
+				oldPos := mapPos(err.Fset, err.Pos, r.Edits, programFiles, true)
+				newLogOldPos.AssociatePos(oldPos, oldPos)
+				newLogNewPos.Fset = err.Fset
+				newLogNewPos.AssociatePos(err.Pos, err.Pos)
+			} else {
+				newLogOldPos.Error(msg)
+				newLogNewPos.Error(msg)
+			}
+			mutex.Unlock()
+		}
+	})
+	if newProg == nil || err != nil {
+		r.Log.Append(newLogOldPos.Entries)
+		return
+	}
+
+	newProgFiles := map[string]*token.File{}
+	newProg.Fset.Iterate(func(f *token.File) bool {
+		newProgFiles[f.Name()] = f
+		return true
+	})
+
+	r.Log.Fset = newProg.Fset
+	for _, entry := range r.Log.Entries {
+		entry.Pos = mapPos(r.program.Fset, entry.Pos, r.Edits, newProgFiles, false)
+	}
+	r.Log.Append(newLogNewPos.Entries)
+
+	if config.Verbosity >= 2 {
+		for filename, edits := range r.Edits {
+			edits.Iterate(func(extent text.Extent, replace string) bool {
+				oldFile := programFiles[filename]
+				oldPos := oldFile.Pos(extent.Offset)
+				newPos := mapPos(r.program.Fset, oldPos,
+					r.Edits, newProgFiles, false)
+				r.Log.Infof(describeEdit(extent, replace))
+				r.Log.AssociatePos(newPos, newPos)
+				return true
+			})
+		}
+	}
 }
 
-/*
-//find occurrences of [top level] identifier across package
-//TODO filter file? /dumbfounded
-func (r *refactoringBase) findAnyOccurrences(name string) bool {
-	result := false
-	//ast.Inspect(r.file, func(n ast.Node) bool {
-	//switch thisIdent := n.(type) {
-	//case *ast.Ident:
-	//if r.pkgInfo.ObjectOf(thisIdent) == decl {
-	//offset := r.program.Fset.Position(thisIdent.NamePos).Offset
-	//length := utf8.RuneCountInString(thisIdent.Name)
-	//result = append(result, text.OffsetLength{offset, length})
-	//}
-	//}
+// describeEdit returns a human-readable, one-line description of a text edit
+func describeEdit(extent text.Extent, replacement string) string {
+	if extent.Length == 0 {
+		return fmt.Sprintf("| Insert \"%s\"", shorten(replacement))
+	} else if replacement == "" {
+		return fmt.Sprintf("| Delete %d byte(s)", extent.Length)
+	} else {
+		return fmt.Sprintf("| Replace %d byte(s) with \"%s\"",
+			extent.Length, shorten(replacement))
+	}
+}
 
-	//return true
-	//})
+func shorten(s string) string {
+	if len(s) < 23 {
+		return s
+	}
+	return s[:23] + "..."
+}
+
+// mapPos takes a Pos in one FileSet and returns the corresponding Pos in
+// another FileSet, applying or undoing the given edits (if reverse is false or
+// true, respectively) to determine the corresponding offset and comparing
+// filenames (as strings) to find the corresponding file.
+func mapPos(from *token.FileSet, pos token.Pos, edits map[string]*text.EditSet, toFiles map[string]*token.File, reverse bool) token.Pos {
+	if !pos.IsValid() {
+		return pos
+	}
+
+	filename := from.Position(pos).Filename
+	offset := from.Position(pos).Offset
+	if es, ok := edits[filename]; ok {
+		if reverse {
+			offset = es.OldOffset(offset)
+		} else {
+			offset = es.NewOffset(offset)
+		}
+	}
+
+	result := token.NoPos
+	if file, ok := toFiles[filename]; ok {
+		result = file.Pos(offset)
+	}
 	return result
 }
-*/
 
 /* -=-=- Utility Methods -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 
-func InterpretArgs(args []string, params []Parameter) []interface{} {
+func InterpretArgs(args []string, r Refactoring) []interface{} {
+	params := r.Description().Params
 	result := []interface{}{}
 	for i, opt := range args {
 		if i < len(params) && params[i].IsBoolean() {

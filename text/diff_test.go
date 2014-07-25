@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -189,65 +190,49 @@ func testUnifiedDiff(a, b, expected, name string, t *testing.T) {
 	}
 }
 
-func TestPatchOnFile(t *testing.T) {
-	// Insert "Before line 1" at the top of testdata/diff/lines.txt
-	testfile := "testdata/diff/lines.txt"
-
-	es := NewEditSet()
-	es.Add(Extent{0, 0}, "Before line 1\n")
-	patch, err := CreatePatchForFile(es, testfile)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	result, err := ApplyToFile(es, testfile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	expected := strings.Replace(`Before line 1
-Line 1
-Line 2
-Line 3
-`, "\r\n", "\n", -1)
-	actual := strings.Replace(string(result), "\r\n", "\n", -1)
-	if expected != actual {
-		t.Fatalf("ApplyToFile failed:\n%s", actual)
-	}
-
-	var b bytes.Buffer
-	time1 := time.Date(2013, time.June, 4, 0, 0, 0, 0, time.UTC)
-	time2 := time.Date(2014, time.July, 8, 13, 28, 43, 0, time.UTC)
-	err = patch.Write("from", "to", time1, time2, &b)
-	if err != nil {
-		t.Fatal(err)
-	}
-	expected = strings.Replace(`--- from  2013-06-04 00:00:00 +0000
-+++ to  2014-07-08 13:28:43 +0000
-@@ -1,3 +1,4 @@
-+Before line 1
- Line 1
- Line 2
- Line 3
-`, "\r\n", "\n", -1)
-	actual = strings.Replace(b.String(), "\r\n", "\n", -1)
-	if expected != actual {
-		t.Fatalf("patch.Write failed:\n%s", actual)
+func TestRandomDiffs(t *testing.T) {
+	seed := time.Now().Unix()
+	r := rand.New(rand.NewSource(seed))
+	for i := 0; i < 100; i++ {
+		s1 := makeLines(100, r)
+		s1s := strings.Join(s1, "")
+		s2 := makeLines(100, r)
+		s2s := strings.Join(s2, "")
+		edits := Diff(s1, s2)
+		result, err := ApplyToString(edits, s1s)
+		if err != nil || result != s2s {
+			t.Errorf("Random diff failed - seed %d, iteration %d",
+				seed, i)
+		}
 	}
 }
 
-func TestPatchOnMissingFile(t *testing.T) {
-	fileDNE := "this_file_does_not_exist_ZzZzZz.txt"
-
-	es := NewEditSet()
-	_, err := CreatePatchForFile(es, fileDNE)
-	if err == nil {
-		t.Fatalf("Should have failed attempting to patch %s", fileDNE)
+func BenchmarkDiff(b *testing.B) {
+	r := rand.New(rand.NewSource(time.Now().Unix()))
+	s1 := makeLines(5000, r)
+	s1s := strings.Join(s1, "\n")
+	s2 := makeLines(5000, r)
+	for i := 0; i < b.N; i++ {
+		Diff(s1, s2).CreatePatch(strings.NewReader(s1s))
 	}
+}
 
-	_, err = ApplyToFile(es, fileDNE)
-	if err == nil {
-		t.Fatalf("Should have failed attempting to patch %s", fileDNE)
+func makeLines(count int, r *rand.Rand) []string {
+	possibilities := []string{
+		"Lorem ipsum dolor sit amet, consectetur adipisicing elit,\n",
+		"sed do eiusmod tempor incididunt ut labore et dolore magna\n",
+		"aliqua. Ut enim ad minim veniam, quis nostrud exercitation\n",
+		"ullamco laboris nisi ut aliquip ex ea commodo consequat.\n",
+		"Duis aute irure dolor in reprehenderit in voluptate velit\n",
+		"esse cillum dolore eu fugiat nulla pariatur. Excepteur sint\n",
+		"occaecat cupidatat non proident, sunt in culpa qui officia\n",
+		"deserunt mollit anim id est laborum.\n"}
+	result := make([]string, 0, count)
+	for i := 0; i < count; i++ {
+		line := possibilities[r.Intn(len(possibilities))]
+		result = append(result, line)
 	}
+	return result
 }
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-

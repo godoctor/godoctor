@@ -96,6 +96,35 @@ func TestSizeChange(t *testing.T) {
 	}
 }
 
+func TestNewOldOffset(t *testing.T) {
+	es := NewEditSet()
+	es.Add(Extent{2, 5}, "x") // replace 5 bytes with 1 (-4)
+	es.Add(Extent{7, 0}, "6") // add 1 byte
+
+	// NewOffset  "--------" -> "--x6--"
+	offset := []int{0, 1, 2, 3, 4, 5, 6, 7, 8}
+	expect := []int{0, 1, 2, 2, 2, 2, 2, 3, 5}
+	for i := range offset {
+		actual := es.NewOffset(offset[i])
+		if actual != expect[i] {
+			t.Fatalf("NewOffset(%d): expected %d, got %d",
+				offset[i], expect[i], actual)
+		}
+	}
+
+	// OldOffset
+	offset = []int{0, 1, 2, 3, 4, 5}
+	expect = []int{0, 1, 2, 7, 7, 8}
+	for i := range offset {
+		actual := es.OldOffset(offset[i])
+		if actual != expect[i] {
+			t.Fatalf("OldOffset(%d): expected %d, got %d",
+				offset[i], expect[i], actual)
+		}
+	}
+
+}
+
 func TestEditString(t *testing.T) {
 	es := NewEditSet()
 	assertEquals("", es.String(), t)

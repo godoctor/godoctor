@@ -1,0 +1,15 @@
+package main // <<<<< godoc,1,1,1,1,pass
+
+type (
+	a int
+	// B TODO: NEEDS COMMENT INFO
+	B int
+	c int
+	// D TODO: NEEDS COMMENT INFO
+	D int
+	// E TODO: NEEDS COMMENT INFO
+	E struct{}
+)
+
+func main() {
+}

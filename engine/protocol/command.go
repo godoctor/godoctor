@@ -6,6 +6,7 @@ package protocol
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -55,9 +56,9 @@ func (a *About) Validate(state *State, input map[string]interface{}) (bool, erro
 // TODO add in implementation of fileselection and textselection keys
 
 type List struct {
-	Fileselection []string       `json:"fileselection"`
-	Textselection text.Selection `json:"textselection"`
-	Quality       string         `json:"quality" chk:"in_testing|in_development|production"`
+	Fileselection []string               `json:"fileselection"`
+	Textselection map[string]interface{} `json:"textselection"`
+	Quality       string                 `json:"quality" chk:"in_testing|in_development|production"`
 }
 
 func (l *List) Run(state *State, input map[string]interface{}) (Reply, error) {
@@ -92,6 +93,27 @@ func (l *List) Validate(state *State, input map[string]interface{}) (bool, error
 			return false, errors.New("Quality key must be \"in_testing|in_development|production\"")
 		}
 	}
+
+	// validate text/file selection
+	// TODO validate fileselection
+	textselection, tsfound := input["textselection"]
+	_, fsfound := input["fileselection"]
+
+	if tsfound && fsfound {
+		return false, errors.New("Both textseleciton and fileselection cannot be used together")
+	} else if tsfound {
+		if state.State < 2 {
+			return false, errors.New("File system not yet configured, cannot use textselection")
+		}
+		_, err := parseSelection(state, textselection.(map[string]interface{}))
+		if err != nil {
+			return false, err
+		}
+	} else if fsfound {
+		if state.State < 2 {
+			return false, errors.New("File system not yet configured, cannot use fileselection")
+		}
+	}
 	return true, nil
 }
 
@@ -117,9 +139,9 @@ func (o *Open) Validate(state *State, input map[string]interface{}) (bool, error
 // -=-= Params =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 type Params struct {
-	Transformation string         `json:"transformation"`
-	Fileselection  []string       `json:"fileselection"`
-	Textselection  text.Selection `json:"textselection"`
+	Transformation string                 `json:"transformation"`
+	Fileselection  []string               `json:"fileselection"`
+	Textselection  map[string]interface{} `json:"textselection"`
 }
 
 func (p *Params) Run(state *State, input map[string]interface{}) (Reply, error) {
@@ -129,7 +151,7 @@ func (p *Params) Run(state *State, input map[string]interface{}) (Reply, error) 
 		// since GetParams returns just a string, assume it as prompt and label
 		params := make([]map[string]interface{}, 0)
 		for _, param := range refactoring.Description().Params {
-			params = append(params, map[string]interface{}{"label": param.Label, "prompt": param.Prompt, "type": reflect.TypeOf(param.DefaultValue), "default": param.DefaultValue})
+			params = append(params, map[string]interface{}{"label": param.Label, "prompt": param.Prompt, "type": reflect.TypeOf(param.DefaultValue).String(), "default": param.DefaultValue})
 		}
 		return Reply{map[string]interface{}{"reply": "OK", "params": params}}, nil
 	} else {
@@ -144,6 +166,63 @@ func (p *Params) Validate(state *State, input map[string]interface{}) (bool, err
 	if _, found := input["transformation"]; !found {
 		return false, errors.New("Transformation key not found")
 	}
+	// validate text/file selection
+	// TODO validate fileselection
+	textselection, tsfound := input["textselection"]
+	_, fsfound := input["fileselection"]
+
+	if tsfound && fsfound {
+		return false, errors.New("Both textseleciton and fileselection cannot be used together")
+	} else if tsfound {
+		_, err := parseSelection(state, textselection.(map[string]interface{}))
+		if err != nil {
+			return false, err
+		}
+	} else if fsfound {
+
+	}
+	return true, nil
+}
+
+// -=-= Put -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+type Put struct { // FIXME: Robert -- make sure this is right
+	Filename string `json:"filename"`
+	Content  string `json:"content"`
+}
+
+func (p *Put) Run(state *State, input map[string]interface{}) (Reply, error) {
+	if valid, err := p.Validate(state, input); !valid {
+		return Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}}, err
+	}
+
+	var editedFS *filesystem.EditedFileSystem
+	var ok bool
+	if editedFS, ok = state.Filesystem.(*filesystem.EditedFileSystem); !ok {
+		return Reply{map[string]interface{}{"reply": "Error",
+				"message": "put can only be executed in Web mode"}},
+			nil // FIXME: Robert -- OK to return nil here?
+	}
+
+	if input["filename"] != filesystem.FakeStdinFilename {
+		return Reply{map[string]interface{}{"reply": "Error", "message": fmt.Sprintf("put filename must be \"%s\"", filesystem.FakeStdinFilename)}},
+			nil // FIXME: Robert -- OK to return nil here?
+	}
+
+	stdinPath, err := filesystem.FakeStdinPath()
+	if err != nil {
+		return Reply{map[string]interface{}{"reply": "Error",
+			"message": err.Error()}}, err
+	}
+
+	es := text.NewEditSet()
+	es.Add(text.Extent{0, 0}, input["content"].(string))
+	editedFS.Edits[stdinPath] = es
+	return Reply{map[string]interface{}{"reply": "OK"}}, nil
+}
+
+func (p *Put) Validate(state *State, input map[string]interface{}) (bool, error) {
+	//FIXME: Robert: implement Validate please
 	return true, nil
 }
 
@@ -166,10 +245,11 @@ func (s *Setdir) Run(state *State, input map[string]interface{}) (Reply, error) 
 			state.Filesystem = filesystem.NewLocalFileSystem()
 		}
 
-		// web mode? get that virtual filesystem
+		// web mode? use edited filesystem
 		if mode == "web" {
-			//state.Filesystem = filesystem.NewVirtualFileSystem()
-			return Reply{map[string]interface{}{"reply": "Error", "message": "Web mode not supported"}}, err
+			state.Dir = "."
+			state.Filesystem = filesystem.NewEditedFileSystem(
+				map[string]*text.EditSet{})
 		}
 
 		state.State = 2
@@ -212,7 +292,7 @@ func (s *Setdir) Validate(state *State, input map[string]interface{}) (bool, err
 	return true, nil
 }
 
-// -=-= Xrun =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// -=-= XRun =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 type XRun struct {
 	Transformation string                 `json:"transformation"`
@@ -228,14 +308,25 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 	if valid, err := x.Validate(state, input); !valid {
 		return Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}}, err
 	}
-	// setup TextSelection
+	// setup text selection
 	textselection := input["textselection"].(map[string]interface{})
-	ts := &text.LineColSelection{
-		Filename:  filepath.Join(state.Dir, textselection["filename"].(string)),
-		StartLine: int(textselection["startline"].(float64)),
-		StartCol:  int(textselection["startcol"].(float64)),
-		EndLine:   int(textselection["endline"].(float64)),
-		EndCol:    int(textselection["endcol"].(float64)),
+
+	ts, _ := parseSelection(state, textselection)
+
+	if ts.GetFilename() != filesystem.FakeStdinFilename {
+		return Reply{map[string]interface{}{"reply": "Error", "message": fmt.Sprintf("put filename must be \"%s\"", filesystem.FakeStdinFilename)}},
+			nil // FIXME: Robert -- OK to return nil here?
+	}
+	stdinPath, err := filesystem.FakeStdinPath()
+	if err != nil {
+		return Reply{map[string]interface{}{"reply": "Error",
+			"message": err.Error()}}, err
+	}
+	switch ts := ts.(type) {
+	case *text.OffsetLengthSelection:
+		ts.Filename = stdinPath
+	case *text.LineColSelection:
+		ts.Filename = stdinPath
 	}
 
 	// get refactoring
@@ -274,7 +365,7 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 		for f, e := range result.Edits {
 			var p *text.Patch
 			var err error
-			p, err = text.CreatePatchForFile(e, f)
+			p, err = filesystem.CreatePatch(e, state.Filesystem, f)
 			if err != nil {
 				return Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}}, err
 			}
@@ -287,7 +378,7 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 		}
 	} else {
 		for f, e := range result.Edits {
-			content, err := text.ApplyToFile(e, f)
+			content, err := filesystem.ApplyEdits(e, state.Filesystem, f)
 			if err != nil {
 				return Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}}, err
 			}
@@ -334,6 +425,22 @@ func (x *XRun) Validate(state *State, input map[string]interface{}) (bool, error
 		return false, errors.New("Transformation given is not a valid refactoring name")
 	}
 
+	// validate text/file selection
+	// TODO validate fileselection
+	textselection, tsfound := input["textselection"]
+	_, fsfound := input["fileselection"]
+
+	if tsfound && fsfound {
+		return false, errors.New("Both textseleciton and fileselection cannot be used together")
+	} else if tsfound {
+		_, err := parseSelection(state, textselection.(map[string]interface{}))
+		if err != nil {
+			return false, err
+		}
+	} else if fsfound {
+
+	}
+
 	// check limit is > 0 if exists
 	if limit, found := input["limit"]; found {
 		if limit.(int) < 0 {
@@ -353,4 +460,63 @@ func (x *XRun) Validate(state *State, input map[string]interface{}) (bool, error
 
 	// all good?
 	return true, nil
+}
+
+// -=-= Helpers =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+// takes a map for a text selection, either in line/col form or offset/length
+// and returns the appropriate type (LineColSelection or OffsetLengthSelection)
+// also can be used to simply validate the text selection given
+func parseSelection(state *State, input map[string]interface{}) (text.Selection, error) {
+	// validate filename
+	filename, filefound := input["filename"]
+	if !filefound {
+		return nil, fmt.Errorf("File is not given")
+	}
+	if reflect.TypeOf(input["filename"]).Kind() != reflect.String {
+		return nil, fmt.Errorf("Invalid type of value given for file: given %T", reflect.TypeOf(input["filename"]))
+	}
+	file := filepath.Join(state.Dir, filename.(string))
+
+	// determine if offset/length or line/col
+	offset, offsetFound := input["offset"]
+	length, lengthFound := input["length"]
+
+	if !offsetFound || !lengthFound {
+		return nil, fmt.Errorf("invalid offset/length combo: value(s) missing")
+	} else {
+		// validate
+		if reflect.TypeOf(offset).Kind() != reflect.Float64 ||
+			reflect.TypeOf(length).Kind() != reflect.Float64 {
+			return nil, fmt.Errorf("Invalid type(s) given for offset/length combo (%v, %v)", reflect.TypeOf(offset), reflect.TypeOf(length))
+		}
+
+		pos := fmt.Sprintf("%d,%d", int(offset.(float64)), int(length.(float64)))
+		ts, err := text.NewSelection(file, pos)
+		if err != nil {
+			return nil, err
+		}
+		return ts, nil
+	}
+
+	sl, slfound := input["startline"]
+	sc, scfound := input["startcol"]
+	el, elfound := input["endline"]
+	ec, ecfound := input["endcol"]
+
+	if !slfound || !scfound || !elfound || !ecfound {
+		return nil, fmt.Errorf("invalid line/col combo: value(s) missing")
+	} else {
+		// validate
+		if reflect.TypeOf(sl).Kind() != reflect.Int || reflect.TypeOf(sc).Kind() != reflect.Int || reflect.TypeOf(el).Kind() != reflect.Int || reflect.TypeOf(ec).Kind() != reflect.Int {
+			return nil, fmt.Errorf("invalid type(s) given for line/col combo")
+		}
+		pos := fmt.Sprintf("%d,%d:%d,%d", int(sl.(float64)), int(sc.(float64)), int(el.(float64)), int(ec.(float64)))
+		ts, err := text.NewSelection(file, pos)
+		if err != nil {
+			return nil, err
+		}
+		return ts, nil
+	}
+
 }

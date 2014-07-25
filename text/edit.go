@@ -13,9 +13,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"os"
 	"strings"
-	"syscall"
 )
 
 // -=-= Extent =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -26,9 +24,9 @@ import (
 // be specified by Extent{offset: 2, length: 3}.
 type Extent struct {
 	// Byte offset of the first character (0-based)
-	Offset int `json:"offset"`
+	Offset int
 	// Length in bytes (nonnegative)
-	Length int `json:"length"`
+	Length int
 }
 
 // OffsetPastEnd returns the offset of the first byte immediately beyond the
@@ -109,6 +107,11 @@ func (e *edit) overlaps(pos *Extent) bool {
 	return e.Extent.Intersect(pos) != nil
 }
 
+func (e *edit) String() string {
+	return "Replace " + e.Extent.String() +
+		" with \"" + e.replacement + "\""
+}
+
 // Add inserts an edit into this EditSet, returning an error if the edit has a
 // negative offset or overlaps an edit previously added to this EditSet.
 // FIXME(jeff): pos should be *Extent, not Extent
@@ -140,6 +143,48 @@ func (e *EditSet) Add(pos Extent, replacement string) error {
 	return nil
 }
 
+// NewOffset returns the offset that will contain the "same" byte as the
+// given offset after this edit has been applied.  If the given offset occurs
+// within a region of the text file that will be modified by this EditSet, a
+// "close enough" offset is returned (specifically, the offset corresponding to
+// the start of the first overlapping edit).  This is intended to be used to
+// position error messages.
+func (e *EditSet) NewOffset(offset int) int {
+	offsetExtent := &Extent{Offset: offset, Length: 1}
+	adjust := 0
+	// Iterate through edits in ascending order by offset
+	for _, edit := range e.edits {
+		if edit.overlaps(offsetExtent) {
+			// Return the offset at which this edit starts
+			adjust += edit.Offset - offset
+			break
+		}
+		if edit.Offset >= offset {
+			break
+		}
+		adjust += len(edit.replacement) - edit.Length
+	}
+	return offset + adjust
+}
+
+// OldOffset takes an offset in the string that would result if this EditSet
+// were applied and returns the corresponding offset in the unedited string.
+// If the given offset occurs within a region of the text file that will be
+// modified by this EditSet, a "close enough" offset is returned (specifically,
+// the offset corresponding to the start of the first overlapping edit).  This
+// is intended to be used to position error messages.
+func (e *EditSet) OldOffset(offset int) int {
+	adjust := 0
+	// Iterate through edits in ascending order by offset
+	for _, edit := range e.edits {
+		if edit.Offset >= offset-adjust {
+			break
+		}
+		adjust += len(edit.replacement) - edit.Length
+	}
+	return offset - adjust
+}
+
 // SizeChange returns the total number of bytes that will be added or removed
 // when this EditSet is applied.  A positive value indicates that bytes will be
 // added; negative, bytes will be removed.  A zero value indicates that the
@@ -152,9 +197,15 @@ func (e *EditSet) SizeChange() int64 {
 	return total
 }
 
-func (e *edit) String() string {
-	return "Replace " + e.Extent.String() +
-		" with \"" + e.replacement + "\""
+// Iterate executes the given callback on each of the edits in this EditSet,
+// traversing the edits in ascending order by offset.  Iteration stops
+// immediately after the callback returns false.
+func (e *EditSet) Iterate(callback func(Extent, string) bool) {
+	for _, edit := range e.edits {
+		if !callback(edit.Extent, edit.replacement) {
+			break
+		}
+	}
 }
 
 // String returns a human-readable description of this EditSet (for debugging).
@@ -220,32 +271,6 @@ func (e *EditSet) applyTo(in *bufio.Reader, out *bufio.Writer) error {
 // unified diff by invoking the Patch's Write method.
 func (e *EditSet) CreatePatch(in io.Reader) (result *Patch, err error) {
 	return createPatch(e, in)
-}
-
-// CreatePatchForFile reads bytes from a file, applying the edits in an EditSet
-// and returning a Patch.
-func CreatePatchForFile(es *EditSet, filename string) (*Patch, error) {
-	file, err := os.OpenFile(filename, syscall.O_RDWR, 0666)
-	if err != nil {
-		return nil, err
-	}
-
-	defer file.Close()
-
-	return es.CreatePatch(file)
-}
-
-// ApplyToFile reads bytes from a file, applying the edits in an EditSet and
-// returning the result as a slice of bytes.
-func ApplyToFile(es *EditSet, filename string) ([]byte, error) {
-	file, err := os.OpenFile(filename, syscall.O_RDWR, 0666)
-	if err != nil {
-		return nil, err
-	}
-
-	defer file.Close()
-
-	return ApplyToReader(es, file)
 }
 
 // ApplyToString reads bytes from a string, applying the edits in an EditSet

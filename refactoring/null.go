@@ -8,14 +8,17 @@
 
 package refactoring
 
-// A nullRefactoring makes no changes to a program.
+// A Null refactoring makes no changes to a program.
 type Null struct {
 	refactoringBase
 }
 
 func (r *Null) Description() *Description {
 	return &Description{
-		Name: "Null Refactoring",
+		Name:      "Null Refactoring",
+		Synopsis:  "Refactoring that makes no changes to a program",
+		Usage:     "<allow_errors?>",
+		Multifile: false,
 		Params: []Parameter{Parameter{
 			Label:        "Allow Errors",
 			Prompt:       "Allow Errors",
@@ -44,5 +47,6 @@ func (r *Null) Run(config *Config) *Result {
 		return &r.Result
 	}
 
+	r.updateLog(config, false)
 	return &r.Result
 }
