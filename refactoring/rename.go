@@ -188,7 +188,11 @@ func (r *Rename) addOccurrences(allOccurrences map[string][]text.Extent) {
 }
 
 func isInGoRoot(absPath string) bool {
-	return strings.HasPrefix(absPath, runtime.GOROOT())
+	goRoot := runtime.GOROOT()
+	if !strings.HasSuffix(goRoot, string(filepath.Separator)) {
+		goRoot += string(filepath.Separator)
+	}
+	return strings.HasPrefix(absPath, goRoot)
 }
 
 func (r *Rename) addFileSystemChanges(allOccurrences map[string][]text.Extent, identName string) {
