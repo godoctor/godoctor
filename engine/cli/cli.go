@@ -270,7 +270,12 @@ func Run(stdin io.Reader, stdout io.Writer, stderr io.Writer, args []string) int
 			fmt.Fprintf(stderr, "    %s\n", chg.String(cwd))
 		}
 	}
-	return 0
+
+	if result.Log.ContainsErrors() {
+		return 3
+	} else {
+		return 0
+	}
 }
 
 // writeDiff outputs a multi-file unified diff describing this refactoring's
