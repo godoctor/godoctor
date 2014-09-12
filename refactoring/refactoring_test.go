@@ -191,7 +191,7 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 	cwd, _ := os.Getwd()
 	absPath, _ := filepath.Abs(filename)
 	relativePath, _ := filepath.Rel(cwd, absPath)
-	fmt.Println(name, relativePath, selection.ShortString())
+	fmt.Println(name, relativePath)
 
 	mainFile := filepath.Join(directory, MAIN_DOT_GO)
 	if !exists(mainFile, t) {
@@ -206,7 +206,7 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 		t.Fatal(err)
 	}
 
-	args := refactoring.InterpretArgs(remainder, r.Description().Params)
+	args := refactoring.InterpretArgs(remainder, r)
 
 	fileSystem := &filesystem.LocalFileSystem{}
 	config := &refactoring.Config{
@@ -238,7 +238,7 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 				if !ok {
 					edits = text.NewEditSet()
 				}
-				output, err := text.ApplyToFile(edits, path)
+				output, err := filesystem.ApplyEdits(edits, fileSystem, path)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -373,7 +373,7 @@ func describe(s string) string {
 	return s
 }
 
-func splitMarker(filename string, marker string, t *testing.T) (refac string, selection *text.Selection, remainder []string, result string) {
+func splitMarker(filename string, marker string, t *testing.T) (refac string, selection text.Selection, remainder []string, result string) {
 	filename, err := filepath.Abs(filename)
 	if err != nil {
 		t.Fatal(err)
@@ -387,7 +387,7 @@ func splitMarker(filename string, marker string, t *testing.T) (refac string, se
 	startCol := parseInt(fields[2], t)
 	endLine := parseInt(fields[3], t)
 	endCol := parseInt(fields[4], t)
-	selection = &text.Selection{filename,
+	selection = &text.LineColSelection{filename,
 		startLine, startCol, endLine, endCol}
 	remainder = fields[5 : len(fields)-1]
 	result = fields[len(fields)-1]

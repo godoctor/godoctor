@@ -19,6 +19,23 @@ const (
 	END   = 100000000 // if there's this many statements, may god have mercy on your soul
 )
 
+func TestBlockStmt(t *testing.T) {
+	c := getWrapper(t, `
+package main
+
+func foo(i int) {
+  {
+    {
+      bar(i) //1
+    }
+  }
+}
+func bar(i int) {}`)
+
+	c.expectSuccs(t, START, 1)
+	c.expectSuccs(t, 1, END)
+}
+
 func TestIfElseIfGoto(t *testing.T) {
 	c := getWrapper(t, `
   package main
@@ -626,7 +643,13 @@ func TestPrintDot(t *testing.T) {
   }`)
 
 	var buf bytes.Buffer
-	c.cfg.PrintDot(&buf, c.fset, func(ast.Stmt) string { return "" })
+	c.cfg.PrintDot(&buf, c.fset, func(s ast.Stmt) string {
+		if _, ok := s.(*ast.AssignStmt); ok {
+			return "!"
+		} else {
+			return ""
+		}
+	})
 	dot := buf.String()
 
 	expected := []string{
@@ -635,10 +658,12 @@ mode="heir";
 splines="ortho";
 
 `,
-		"\"assignment - line 5\" -> \"increment statement - line 6\"\n",
-		"\"ENTRY\" -> \"assignment - line 5\"\n",
+		"\"assignment - line 5\\\\n!\" -> \"increment statement - line 6\"\n",
+		"\"ENTRY\" -> \"assignment - line 5\\\\n!\"\n",
 		"\"increment statement - line 6\" -> \"EXIT\"\n",
 	}
+	// The order of the three lines may vary (they're from a map), so
+	// just make sure all three lines appear somewhere
 	for _, re := range expected {
 		ok, _ := regexp.MatchString(re, dot)
 		if !ok {

@@ -8,9 +8,12 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 const diffTestDir = "testdata/diff/"
@@ -177,12 +180,109 @@ func testUnifiedDiff(a, b, expected, name string, t *testing.T) {
 
 	patch, _ := edits.CreatePatch(strings.NewReader(a))
 	var result bytes.Buffer
-	patch.Write("filename", "filename", &result)
+	patch.Write("filename", "filename", time.Time{}, time.Time{}, &result)
 	diff := strings.Replace(result.String(), "\r\n", "\n", -1)
 	expected = strings.Replace(expected, "\r\n", "\n", -1)
 
 	if diff != expected {
 		t.Fatalf("Diff test %s failed.  Expected:\n[%s]\nActual:\n[%s]\n",
 			name, expected, diff)
+	}
+}
+
+func TestRandomDiffs(t *testing.T) {
+	seed := time.Now().Unix()
+	r := rand.New(rand.NewSource(seed))
+	for i := 0; i < 100; i++ {
+		s1 := makeLines(100, r)
+		s1s := strings.Join(s1, "")
+		s2 := makeLines(100, r)
+		s2s := strings.Join(s2, "")
+		edits := Diff(s1, s2)
+		result, err := ApplyToString(edits, s1s)
+		if err != nil || result != s2s {
+			t.Errorf("Random diff failed - seed %d, iteration %d",
+				seed, i)
+		}
+	}
+}
+
+func BenchmarkDiff(b *testing.B) {
+	r := rand.New(rand.NewSource(time.Now().Unix()))
+	s1 := makeLines(5000, r)
+	s1s := strings.Join(s1, "\n")
+	s2 := makeLines(5000, r)
+	for i := 0; i < b.N; i++ {
+		Diff(s1, s2).CreatePatch(strings.NewReader(s1s))
+	}
+}
+
+func makeLines(count int, r *rand.Rand) []string {
+	possibilities := []string{
+		"Lorem ipsum dolor sit amet, consectetur adipisicing elit,\n",
+		"sed do eiusmod tempor incididunt ut labore et dolore magna\n",
+		"aliqua. Ut enim ad minim veniam, quis nostrud exercitation\n",
+		"ullamco laboris nisi ut aliquip ex ea commodo consequat.\n",
+		"Duis aute irure dolor in reprehenderit in voluptate velit\n",
+		"esse cillum dolore eu fugiat nulla pariatur. Excepteur sint\n",
+		"occaecat cupidatat non proident, sunt in culpa qui officia\n",
+		"deserunt mollit anim id est laborum.\n"}
+	result := make([]string, 0, count)
+	for i := 0; i < count; i++ {
+		line := possibilities[r.Intn(len(possibilities))]
+		result = append(result, line)
+	}
+	return result
+}
+
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+// These are utility methods used by other tests as well.  They need to be in
+// a file named something_test.go so that command line arguments used for
+// testing do not get compiled into the main driver (TODO maybe there's another
+// way around that?), and this seemed like a reasonable place for them...
+
+func fatalf(t *testing.T, format string, args ...interface{}) {
+	_, file, line, ok := runtime.Caller(2)
+	if ok {
+		var msg string
+		if len(args) == 0 {
+			msg = format
+		} else {
+			msg = fmt.Sprintf(format, args...)
+		}
+		t.Fatalf("from %s:%d: %s", filepath.Base(file), line, msg)
+	}
+}
+
+// assertEquals is a utility method for unit tests that marks a function as
+// having failed if expected != actual
+func assertEquals(expected string, actual string, t *testing.T) {
+	if expected != actual {
+		fatalf(t, "Expected: %s Actual: %s", expected, actual)
+	}
+}
+
+// assertError is a utility method for unit tests that marks a function as
+// having failed if the given string does not begin with "ERROR: "
+func assertError(result string, t *testing.T) {
+	if !strings.HasPrefix(result, "ERROR: ") {
+		fatalf(t, "Expected error; actual: \"%s\"", result)
+	}
+}
+
+// assertTrue is a utility method for unit tests that marks a function as
+// having succeeded iff the supplied value is true
+func assertTrue(value bool, t *testing.T) {
+	if value != true {
+		fatalf(t, "assertTrue failed")
+	}
+}
+
+// assertFalse is a utility method for unit tests that marks a function as
+// having succeeded iff the supplied value is true
+func assertFalse(value bool, t *testing.T) {
+	if value != false {
+		fatalf(t, "assertFalse failed")
 	}
 }

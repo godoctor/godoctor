@@ -11,24 +11,28 @@ import (
 	"golang-refactoring.org/go-doctor/refactoring"
 )
 
-// All available refactorings, keyed by a unique, one-short, all-lowercase name
+// All available refactorings, keyed by a unique, one-word, all-lowercase name
 var refactorings map[string]refactoring.Refactoring
 
+// All available refactorings' keys, in the order the refactorings should be
+// displayed in a menu presented to the end user
+var refactoringsInOrder []string
+
 func init() {
-	refactorings = map[string]refactoring.Refactoring{
-		"rename":        new(refactoring.Rename),
-		"reverseassign": new(refactoring.ReverseAssign),
-		"shortassign":   new(refactoring.ShortAssign),
-		"debug":         new(refactoring.Debug),
-		"null":          new(refactoring.Null),
-	}
+	refactorings = map[string]refactoring.Refactoring{}
+	refactoringsInOrder = []string{}
+
+	AddRefactoring("rename", new(refactoring.Rename))
+	AddRefactoring("toggle", new(refactoring.ToggleVar))
+	AddRefactoring("godoc", new(refactoring.AddGoDoc))
+	AddRefactoring("debug", new(refactoring.Debug))
+	AddRefactoring("null", new(refactoring.Null))
 }
 
-// AllRefactorings returns all of the transformations that can be performed.
-// The keys of the returned map are short, single-word, all-lowercase names
-// (rename, fiximports, etc.); the values implement the Refactoring interface.
-func AllRefactorings() map[string]refactoring.Refactoring {
-	return refactorings
+// AllRefactoringNames returns the short names of all refactorings in an
+// order suitable for display in a menu.
+func AllRefactoringNames() []string {
+	return refactoringsInOrder
 }
 
 // GetRefactoring returns a Refactoring keyed by the given short name.  The
@@ -48,5 +52,6 @@ func AddRefactoring(shortName string, newRefac refactoring.Refactoring) error {
 			r.Description().Name)
 	}
 	refactorings[shortName] = newRefac
+	refactoringsInOrder = append(refactoringsInOrder, shortName)
 	return nil
 }

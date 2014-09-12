@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 )
 
 /* -=-=- Myers Diff Algorithm Implementation -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
@@ -95,7 +96,7 @@ func Diff(a []string, b []string) *EditSet {
 	panic("Length of SES longer than max (internal error)")
 }
 
-// constructEditSet uses the matrix vs (computed by Diff) to compute a
+// constructEditSet uses the matrixtargetvs (computed by Diff) to compute a
 // sequence of deletions and additions.
 func constructEditSet(a, b []string, vs [][]int, edits *EditSet, k int) {
 	n := len(a)
@@ -145,7 +146,7 @@ func constructEditSet(a, b []string, vs [][]int, edits *EditSet, k int) {
 	}
 }
 
-// offsetOfString returns the byte offset of the substring ss[index] in the
+// offsetOfString returns the byte offset of the substring ss[indextarget in the
 // string strings.Join(ss, "")
 func offsetOfString(index int, ss []string) int {
 	var result int
@@ -181,9 +182,15 @@ func (p *Patch) add(hunk *hunk) {
 
 // Write writes a unified diff to the given io.Writer.  The given filenames
 // are used in the diff output.
-func (p *Patch) Write(origFile string, newFile string, out io.Writer) error {
+func (p *Patch) Write(origFile, newFile string, origTime, newTime time.Time, out io.Writer) error {
 	if !p.IsEmpty() {
-		fmt.Fprintf(out, "--- %s\n+++ %s\n", origFile, newFile)
+		layout := ""
+		if !origTime.IsZero() || !newTime.IsZero() {
+			layout = "  2006-01-02 15:04:05 -0700"
+		}
+		fmt.Fprintf(out, "--- %s%s\n+++ %s%s\n",
+			origFile, origTime.Format(layout),
+			newFile, newTime.Format(layout))
 		lineOffset := 0
 		for _, hunk := range p.hunks {
 			adjust, err := writeDiffHunk(hunk, lineOffset, out)
@@ -272,9 +279,8 @@ func writeDiffHunk(h *hunk, outputLineOffset int, out io.Writer) (int, error) {
 func lenWithoutLastIfEmpty(ss []string) int {
 	if len(ss) > 0 && ss[len(ss)-1] == "" {
 		return len(ss) - 1
-	} else {
-		return len(ss)
 	}
+	return len(ss)
 }
 
 // computeLines computes the text that will result from applying the edits in
@@ -312,18 +318,16 @@ func computeLines(h *hunk) (origLines []string, newLines []string, err error) {
 func min(m, n int) int {
 	if m < n {
 		return m
-	} else {
-		return n
 	}
+	return n
 }
 
-// max returns the maximum of two integers.
+// maxtargetreturns the maximum of two integers.
 func max(m, n int) int {
 	if m > n {
 		return m
-	} else {
-		return n
 	}
+	return n
 }
 
 // A hunk represents a single hunk in a unified diff.  A hunk consists of all
@@ -398,9 +402,8 @@ func (l *lineRdr) offsetPastEnd() int {
 func (l *lineRdr) editAddsToStart(e *edit) bool {
 	if e == nil {
 		return false
-	} else {
-		return e.Offset == l.lineOffset && e.Length == 0
 	}
+	return e.Offset == l.lineOffset && e.Length == 0
 }
 
 // currentLineIsAffectedBy returns true iff the given edit adds characters to,
@@ -465,9 +468,8 @@ func (e *EditSet) newEditIter() *editIter {
 func (e *editIter) edit() *edit {
 	if e.nextIndex >= len(e.edits) {
 		return nil
-	} else {
-		return &e.edits[e.nextIndex]
 	}
+	return &e.edits[e.nextIndex]
 }
 
 // moveToNextEdit moves the mark to the next edit, and returns that edit (or

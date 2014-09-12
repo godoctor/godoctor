@@ -57,6 +57,10 @@ type FileSystem interface {
 	// OpenFile opens a file (not a directory) for reading.
 	OpenFile(path string) (io.ReadCloser, error)
 
+	// OverwriteFile opens a file for writing.  It is an error if the
+	// file does not already exist.
+	OverwriteFile(path string) (io.WriteCloser, error)
+
 	// CreateFile creates a text file with the given contents and default
 	// permissions.
 	CreateFile(path, contents string) error
@@ -90,6 +94,10 @@ func (fs *LocalFileSystem) OpenFile(path string) (io.ReadCloser, error) {
 		return nil, err
 	}
 	return f, nil
+}
+
+func (fs *LocalFileSystem) OverwriteFile(path string) (io.WriteCloser, error) {
+	return os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0666)
 }
 
 func (fs *LocalFileSystem) CreateFile(path, contents string) error {
@@ -146,12 +154,12 @@ func (fi *fileInfo) Sys() interface{}   { return nil }
 // program after refactoring, without actually changing the program on disk.
 // File/directory creation, renaming, and deletion are not currently supported.
 type EditedFileSystem struct {
-	LocalFileSystem
-	Edits map[string]*text.EditSet
+	BaseFS FileSystem
+	Edits  map[string]*text.EditSet
 }
 
-func NewEditedFileSystem(edits map[string]*text.EditSet) *EditedFileSystem {
-	return &EditedFileSystem{Edits: edits}
+func NewEditedFileSystem(base FileSystem, edits map[string]*text.EditSet) *EditedFileSystem {
+	return &EditedFileSystem{BaseFS: base, Edits: edits}
 }
 
 func NewSingleEditedFileSystem(filename, contents string) (*EditedFileSystem, error) {
@@ -161,7 +169,7 @@ func NewSingleEditedFileSystem(filename, contents string) (*EditedFileSystem, er
 	}
 	es := text.NewEditSet()
 	es.Add(text.Extent{0, size}, contents)
-	return NewEditedFileSystem(map[string]*text.EditSet{filename: es}), nil
+	return NewEditedFileSystem(NewLocalFileSystem(), map[string]*text.EditSet{filename: es}), nil
 }
 
 func sizeOf(filename string) (int, error) {
@@ -199,12 +207,11 @@ func (fs *EditedFileSystem) OpenFile(path string) (io.ReadCloser, error) {
 	stdin, err := FakeStdinPath()
 	if err != nil {
 		return nil, err
-	}
-	if path == stdin {
-		localReader = ioutil.NopCloser(strings.NewReader(""))
 	} else {
-		localReader, err = fs.LocalFileSystem.OpenFile(path)
-		if err != nil {
+		localReader, err = fs.BaseFS.OpenFile(path)
+		if err != nil && os.IsNotExist(err) && path == stdin {
+			localReader = ioutil.NopCloser(strings.NewReader(""))
+		} else if err != nil {
 			return nil, err
 		}
 	}
@@ -221,6 +228,18 @@ func (fs *EditedFileSystem) OpenFile(path string) (io.ReadCloser, error) {
 		return nil, err
 	}
 	return ioutil.NopCloser(bytes.NewReader(contents)), nil
+}
+
+func (fs *EditedFileSystem) OverwriteFile(path string) (io.WriteCloser, error) {
+	stdin, err := FakeStdinPath()
+	if err != nil {
+		return nil, err
+	}
+	if path == stdin {
+		return os.Stdout, nil
+	}
+
+	return nil, fmt.Errorf("Cannot overwrite %s (EditedFileSystem)", path)
 }
 
 func (fs *EditedFileSystem) ReadDir(dirPath string) ([]os.FileInfo, error) {
@@ -291,4 +310,32 @@ func (fs *EditedFileSystem) Rename(path, newName string) error {
 
 func (fs *EditedFileSystem) Remove(path string) error {
 	panic("Remove unsupported")
+}
+
+/* -=-=- Utility Functions -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
+
+// CreatePatch reads bytes from a file, applying the edits in an EditSet and
+// returning a Patch.
+func CreatePatch(es *text.EditSet, fs FileSystem, filename string) (*text.Patch, error) {
+	file, err := fs.OpenFile(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	defer file.Close()
+
+	return es.CreatePatch(file)
+}
+
+// ApplyEdits reads bytes from a file, applying the edits in an EditSet and
+// returning the result as a slice of bytes.
+func ApplyEdits(es *text.EditSet, fs FileSystem, filename string) ([]byte, error) {
+	file, err := fs.OpenFile(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	defer file.Close()
+
+	return text.ApplyToReader(es, file)
 }
