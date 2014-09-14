@@ -134,7 +134,6 @@ func (r *Rename) rename(ident *ast.Ident) {
 
 //IdentifierExists checks if there already exists an Identifier with the newName,with in the scope of the oldname.
 func (r *Rename) identExists(ident *ast.Ident) bool {
-
 	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
 	search := names.NewSearchEngine(r.program)
 
@@ -151,7 +150,7 @@ func (r *Rename) identExists(ident *ast.Ident) bool {
 	identscope := obj.Parent()
 
 	if names.IsMethod(obj) {
-		objfound, _, pointerindirections := types.LookupFieldOrMethod(names.MethodReceiver(obj).Type(), obj.Pkg(), r.newName)
+		objfound, _, pointerindirections := types.LookupFieldOrMethod(names.MethodReceiver(obj).Type(), true, obj.Pkg(), r.newName)
 		if names.IsMethod(objfound) && pointerindirections {
 			r.Log.Error("newname already exists in scope,please select other value for the newname")
 			r.Log.AssociateNode(ident)
