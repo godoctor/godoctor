@@ -12,12 +12,10 @@ import (
 	"regexp"
 	"runtime"
 	//"fmt"
-	"go/ast"
 	"go/parser"
 	"go/token"
 	"io/ioutil"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"code.google.com/p/go.tools/go/types"
@@ -163,7 +161,8 @@ func (r *Rename) identExists(ident *ast.Ident) bool {
 	}	
 
 	if names.IsMethod(obj) {
-		objfound, _, pointerindirections := types.LookupFieldOrMethod(names.MethodReceiver(obj).Type(), obj.Pkg(), r.newName)
+		//objfound, _, pointerindirections := types.LookupFieldOrMethod(names.MethodReceiver(obj).Type(), obj.Pkg(), r.newName)
+		objfound, _, pointerindirections := types.LookupFieldOrMethod(names.MethodReceiver(obj).Type(), true, obj.Pkg(), r.newName)
 		if names.IsMethod(objfound) && pointerindirections {
 			r.Log.Error("newname already exists in scope,please select other value for the newname")
 			r.Log.AssociateNode(ident)
@@ -186,7 +185,7 @@ func (r *Rename) identExistsInChildScope(ident *ast.Ident, identScope *types.Sco
 	//fmt.Println("child scope",  identScope.String(), identScope.Names(), identScope.NumChildren())
 	if identScope.Lookup(r.newName) != nil {
 		r.Log.Error("newname already exists in child scope,please select other value for the newname")
-		r.Log.AssociateNode(r.program, ident)
+		r.Log.AssociateNode(ident)
 		return true
 	}
 
