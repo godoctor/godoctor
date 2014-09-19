@@ -194,8 +194,15 @@ type refactoringBase struct {
 	selectionStart token.Pos
 	// The position immediately following the user's selection
 	selectionEnd token.Pos
+	// AST nodes from the root to selectedNode (from PathEnclosingInterval)
+	pathEnclosingSelection []ast.Node
+	// Whether the user's selection exactly encloses the selectedNode (from
+	// PathEnclosingInterval)
+	selectionIsExact bool
 	// The deepest ast.Node enclosing the user's selection
 	selectedNode ast.Node
+	// The package containing the selectedNode
+	selectedNodePkg *loader.PackageInfo
 	// The Result of this refactoring, returned to the client invoking it
 	Result
 }
@@ -260,8 +267,9 @@ func (r *refactoringBase) Run(config *Config) *Result {
 		return &r.Result
 	}
 
-	pkgInfo, nodes, _ := r.program.PathEnclosingInterval(r.selectionStart, r.selectionEnd)
-	if pkgInfo == nil || len(nodes) < 1 {
+	r.selectedNodePkg, r.pathEnclosingSelection, r.selectionIsExact =
+		r.program.PathEnclosingInterval(r.selectionStart, r.selectionEnd)
+	if r.selectedNodePkg == nil || len(r.pathEnclosingSelection) < 1 {
 		r.Log.Errorf("The selected file, %s, was not found in the "+
 			"provided scope: %s",
 			config.Selection.GetFilename(),
@@ -269,8 +277,8 @@ func (r *refactoringBase) Run(config *Config) *Result {
 		// This can happen on files containing +build
 		return &r.Result
 	}
-	r.selectedNode = nodes[0]
-	r.file = nodes[len(nodes)-1].(*ast.File)
+	r.selectedNode = r.pathEnclosingSelection[0]
+	r.file = r.pathEnclosingSelection[len(r.pathEnclosingSelection)-1].(*ast.File)
 
 	reader, err := config.FileSystem.OpenFile(r.filename(r.file))
 	if err != nil {

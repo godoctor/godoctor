@@ -81,8 +81,8 @@ func equals(a, b []string) bool {
 
 func findOccurrences(pkgName, identName string, t *testing.T) []string {
 	prog := setup(t)
-	ident := findFirstIdent(prog, pkgName, identName, t)
-	searchResult, err := names.NewFinder(prog).FindOccurrences(ident)
+	ident, pkg := findFirstIdent(prog, pkgName, identName, t)
+	searchResult, err := names.FindOccurrences(ident, pkg, prog)
 
 	result := []string{}
 	if err != nil {
@@ -96,9 +96,10 @@ func findOccurrences(pkgName, identName string, t *testing.T) []string {
 	return result
 }
 
-func findFirstIdent(p *loader.Program, pkgName, ident string, t *testing.T) *ast.Ident {
+func findFirstIdent(p *loader.Program, pkgName, ident string, t *testing.T) (*ast.Ident, *loader.PackageInfo) {
+	pkgInfo := findPackage(p, pkgName, t)
 	var result *ast.Ident
-	ast.Inspect(findPackage(p, pkgName, t).Files[0],
+	ast.Inspect(pkgInfo.Files[0],
 		func(n ast.Node) bool {
 			switch id := n.(type) {
 			case *ast.Ident:
@@ -111,7 +112,7 @@ func findFirstIdent(p *loader.Program, pkgName, ident string, t *testing.T) *ast
 	if result == nil {
 		t.Fatal("No identifiers found")
 	}
-	return result
+	return result, pkgInfo
 }
 
 func sortKeys(m map[string][]text.Extent) []string {

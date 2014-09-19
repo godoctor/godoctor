@@ -159,8 +159,7 @@ func (r *Debug) showAffected(out io.Writer) {
 	switch id := r.selectedNode.(type) {
 	case *ast.Ident:
 		fmt.Fprintf(out, "Affected Declarations:\n")
-		search := names.NewFinder(r.program)
-		searchResult, err := search.FindDeclarationsAcrossInterfaces(id)
+		searchResult, err := names.FindDeclarationsAcrossInterfaces(id, r.selectedNodePkg, r.program)
 		if err != nil {
 			r.Log.Error(err)
 			return
@@ -275,8 +274,7 @@ func (r *Debug) showReferences(out io.Writer) {
 	switch id := r.selectedNode.(type) {
 	case *ast.Ident:
 		fmt.Fprintf(out, "References to %s:\n", id.Name)
-		search := names.NewFinder(r.program)
-		searchResult, err := search.FindOccurrences(id)
+		searchResult, err := names.FindOccurrences(id, r.selectedNodePkg, r.program)
 		if err != nil {
 			r.Log.Error(err)
 			return

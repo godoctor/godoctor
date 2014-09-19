@@ -7,6 +7,7 @@ package names
 import (
 	"go/ast"
 
+	"code.google.com/p/go.tools/go/loader"
 	"code.google.com/p/go.tools/go/types"
 )
 
@@ -15,19 +16,19 @@ import (
 // FindConflict determines if there already exists an identifier with the given
 // newName such that the given ident cannot be renamed to newName.  It returns
 // the first such conflicting declaration, if one exists, and nil otherwise.
-func (r *Finder) FindConflict(ident *ast.Ident, newName string) *ast.Ident {
-	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
+func FindConflict(ident *ast.Ident, pkgInfo *loader.PackageInfo, newName string) *ast.Ident {
+	obj := pkgInfo.ObjectOf(ident)
 
-	if obj == nil && !r.IsPackageName(ident) && !r.isSwitchVar(ident) {
+	if obj == nil && !IsPackageName(ident, pkgInfo) && !isSwitchVar(ident, pkgInfo) {
 		return ident
 	}
 
-	if r.IsPackageName(ident) || r.isSwitchVar(ident) {
+	if IsPackageName(ident, pkgInfo) || isSwitchVar(ident, pkgInfo) {
 		return nil
 	}
 
 	if obj.Parent() != nil {
-		if result := r.findConflictInChildScope(ident, obj.Parent(), newName); result != nil {
+		if result := findConflictInChildScope(ident, obj.Parent(), newName); result != nil {
 			return result
 		}
 	}
@@ -48,14 +49,13 @@ func (r *Finder) FindConflict(ident *ast.Ident, newName string) *ast.Ident {
 	return nil
 }
 
-func (r *Finder) findConflictInChildScope(ident *ast.Ident, identScope *types.Scope, newName string) *ast.Ident {
-	//fmt.Println("child scope",  identScope.String(), identScope.Names(), identScope.NumChildren())
+func findConflictInChildScope(ident *ast.Ident, identScope *types.Scope, newName string) *ast.Ident {
 	if identScope.Lookup(newName) != nil {
 		return ident
 	}
 
 	for i := 0; i < identScope.NumChildren(); i++ {
-		if result := r.findConflictInChildScope(ident, identScope.Child(i), newName); result != nil {
+		if result := findConflictInChildScope(ident, identScope.Child(i), newName); result != nil {
 			return result
 		}
 	}

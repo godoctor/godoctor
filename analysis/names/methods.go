@@ -28,11 +28,10 @@ import (
 // signature to be renamed in Interface1, Interface2, Type2, and Type3.  This
 // method returns a set containing the reflexive, transitive closure of objects
 // that must be renamed if the given identifier is renamed.
-func (r *Finder) FindDeclarationsAcrossInterfaces(ident *ast.Ident) (map[types.Object]bool, error) {
-	pkgInfo := r.pkgInfo(r.fileContaining(ident))
+func FindDeclarationsAcrossInterfaces(ident *ast.Ident, pkgInfo *loader.PackageInfo, program *loader.Program) (map[types.Object]bool, error) {
 	obj := pkgInfo.ObjectOf(ident)
 
-	if obj == nil && !r.IsPackageName(ident) && !r.isSwitchVar(ident) {
+	if obj == nil && !IsPackageName(ident, pkgInfo) && !isSwitchVar(ident, pkgInfo) {
 		return nil, fmt.Errorf("Unable to find declaration of %s", ident.Name)
 	}
 
@@ -40,7 +39,7 @@ func (r *Finder) FindDeclarationsAcrossInterfaces(ident *ast.Ident) (map[types.O
 		// If obj is a method, search across interfaces: there may be
 		// many other methods that need to change to ensure that all
 		// types continue to implement the same interfaces
-		return r.reachableMethods(ident, obj.(*types.Func), r.program.AllPackages[obj.Pkg()]), nil
+		return reachableMethods(ident, obj.(*types.Func), program.AllPackages[obj.Pkg()]), nil
 	} else {
 		// If obj is not a method, then only one object needs to
 		// change.  When this is called from inside the analysis/names
@@ -68,11 +67,11 @@ func MethodReceiver(obj types.Object) *types.Var {
 // reachableMethods receives an object for a method (i.e., a types.Func with
 // a non-nil receiver) and the PackageInfo in which it was declared and returns
 // a set of objects that must be renamed if that method is renamed.
-func (r *Finder) reachableMethods(ident *ast.Ident, obj *types.Func, pkgInfo *loader.PackageInfo) map[types.Object]bool {
+func reachableMethods(ident *ast.Ident, obj *types.Func, pkgInfo *loader.PackageInfo) map[types.Object]bool {
 	// Find methods and interfaces defined in the given package that have
 	// the same signature as the argument method (obj)
 	sig := obj.Type().(*types.Signature)
-	methods, interfaces := r.methodDeclsMatchingSig(ident, sig, pkgInfo)
+	methods, interfaces := methodDeclsMatchingSig(ident, sig, pkgInfo)
 
 	// Map methods to interfaces their receivers implement and vice versa
 	methodInterfaces := map[types.Object]map[*types.Interface]bool{}
@@ -134,7 +133,7 @@ func (r *Finder) reachableMethods(ident *ast.Ident, obj *types.Func, pkgInfo *lo
 // important corner case to bear in mind if you're building Go tools. It means
 // you can have a legal struct or interface with two fields/methods both named
 // "f", if they come from different packages.
-func (r *Finder) methodDeclsMatchingSig(ident *ast.Ident, sig *types.Signature, pkgInfo *loader.PackageInfo) (methods map[types.Object]bool, interfaces map[*types.Interface]bool) {
+func methodDeclsMatchingSig(ident *ast.Ident, sig *types.Signature, pkgInfo *loader.PackageInfo) (methods map[types.Object]bool, interfaces map[*types.Interface]bool) {
 	methods = map[types.Object]bool{}
 	interfaces = map[*types.Interface]bool{}
 	for _, file := range pkgInfo.Files {

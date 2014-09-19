@@ -17,6 +17,8 @@ import (
 	"runtime"
 	"strings"
 
+	"code.google.com/p/go.tools/go/loader"
+
 	"golang-refactoring.org/go-doctor/analysis/names"
 	"golang-refactoring.org/go-doctor/filesystem"
 	"golang-refactoring.org/go-doctor/text"
@@ -89,7 +91,7 @@ func (r *Rename) Run(config *Config) *Result {
 			r.Log.Warn("Renaming an exported name to an unexported name will introduce errors outside the package in which it is declared.")
 		}
 
-		r.rename(ident)
+		r.rename(ident, r.selectedNodePkg)
 		r.updateLog(config, false)
 		return &r.Result
 
@@ -97,8 +99,7 @@ func (r *Rename) Run(config *Config) *Result {
 		// FIXME: This seems too broad?  -JO
 		for pkg, _ := range r.program.AllPackages {
 			if pkg.Name() == strings.Replace(ident.Value, "\"", "", 2) {
-				search := names.NewFinder(r.program)
-				searchResult := search.PackageRename(pkg.Name())
+				searchResult := names.PackageRename(pkg.Name(), r.program)
 				r.addOccurrences(searchResult)
 				r.addFileSystemChanges(searchResult, pkg.Name())
 			}
@@ -123,22 +124,20 @@ func isReservedWord(newName string) bool {
 	return b
 }
 
-func (r *Rename) rename(ident *ast.Ident) {
-	search := names.NewFinder(r.program)
-
-	if id := search.FindConflict(ident, r.newName); id != nil {
+func (r *Rename) rename(ident *ast.Ident, pkgInfo *loader.PackageInfo) {
+	if conflict := names.FindConflict(ident, pkgInfo, r.newName); conflict != nil {
 		r.Log.Errorf("Renaming %s to %s may cause conflicts with an existing declaration", ident.Name, r.newName)
-		r.Log.AssociateNode(id)
+		r.Log.AssociateNode(conflict)
 	}
 
-	searchResult, err := search.FindOccurrences(ident)
+	searchResult, err := names.FindOccurrences(ident, pkgInfo, r.program)
 	if err != nil {
 		r.Log.Error(err)
 		return
 	}
 
 	r.addOccurrences(searchResult)
-	if search.IsPackageName(ident) {
+	if names.IsPackageName(ident, pkgInfo) {
 		r.addFileSystemChanges(searchResult, ident.Name)
 	}
 	//TODO: r.checkForErrors()

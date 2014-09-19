@@ -17,20 +17,18 @@ import (
 
 /* -=-=- Search by Identifier  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 
-func (r *Finder) IsPackageName(ident *ast.Ident) bool {
-	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
-	if r.pkgInfo(r.fileContaining(ident)).Pkg.Name() == ident.Name && obj == nil {
+func IsPackageName(ident *ast.Ident, pkgInfo *loader.PackageInfo) bool {
+	obj := pkgInfo.ObjectOf(ident)
+	if pkgInfo.Pkg.Name() == ident.Name && obj == nil {
 		return true
 	}
 
 	return false
 }
 
-func (r *Finder) isSwitchVar(ident *ast.Ident) bool {
-	//pkginfo := r.pkgInfo(r.fileContaining(ident))
-	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
-
-	if _, ok := obj.(*types.Var); !ok && obj == nil && !r.IsPackageName(ident) {
+func isSwitchVar(ident *ast.Ident, pkgInfo *loader.PackageInfo) bool {
+	obj := pkgInfo.ObjectOf(ident)
+	if _, ok := obj.(*types.Var); !ok && obj == nil && !IsPackageName(ident, pkgInfo) {
 		//fmt.Println("types.var of ident",v)
 		//fmt.Println("selected var in switch  clasue of type switch ")
 		// fmt.Println("slected  switch var and types.var is",obj.(*types.Var))
@@ -53,33 +51,41 @@ func (r *Finder) isSwitchVar(ident *ast.Ident) bool {
 // indirect references to the same object as given identifier.  The returned
 // map maps filenames to a slice of (offset, length) pairs describing locations
 // at which the given identifier is referenced.
-func (r *Finder) FindOccurrences(ident *ast.Ident) (map[string][]text.Extent, error) {
+func FindOccurrences(ident *ast.Ident, pkgInfo *loader.PackageInfo, program *loader.Program) (map[string][]text.Extent, error) {
+	f := &finder{program}
+	return f.FindOccurrences(ident, pkgInfo)
+}
+
+type finder struct {
+	program *loader.Program
+}
+
+func (r *finder) FindOccurrences(ident *ast.Ident, pkgInfo *loader.PackageInfo) (map[string][]text.Extent, error) {
 
 	var pkgs map[*loader.PackageInfo]bool
 	var result map[string][]text.Extent
 
-	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
-
-	if obj == nil && !r.IsPackageName(ident) && !r.isSwitchVar(ident) {
+	obj := pkgInfo.ObjectOf(ident)
+	if obj == nil && !IsPackageName(ident, pkgInfo) && !isSwitchVar(ident, pkgInfo) {
 
 		return nil, fmt.Errorf("Unable to find declaration of %s", ident.Name)
 	}
 
-	if r.isSwitchVar(ident) {
+	if isSwitchVar(ident, pkgInfo) {
 
 		//fmt.Println("selected switch var inside the names")
 		return r.switchRename(ident), nil
 	}
 
-	if r.IsPackageName(ident) {
+	if IsPackageName(ident, pkgInfo) {
 
-		return r.PackageRename(ident.Name), nil
+		return PackageRename(ident.Name, r.program), nil
 	} else {
 
 		var decls map[types.Object]bool
 		if IsMethod(obj) {
 			var err error
-			decls, err = r.FindDeclarationsAcrossInterfaces(ident)
+			decls, err = FindDeclarationsAcrossInterfaces(ident, pkgInfo, r.program)
 			if err != nil {
 				return nil, err
 			}
@@ -91,28 +97,28 @@ func (r *Finder) FindOccurrences(ident *ast.Ident) (map[string][]text.Extent, er
 		pkgs = r.packages(decls)
 	}
 
-	return r.FindInComments(ident.Name, pkgs, result), nil
+	return FindInComments(ident.Name, r.program, pkgs, result), nil
 }
 
-func (r *Finder) switchRename(ident *ast.Ident) map[string][]text.Extent {
+func (r *finder) switchRename(ident *ast.Ident) map[string][]text.Extent {
 	//TODO change to perform switch and case variable rename
 	result := r.occurrencesofCaseVar(ident.Name)
 	pkgs := allPackages(r.program)
-	return r.FindInComments(ident.Name, pkgs, result)
+	return FindInComments(ident.Name, r.program, pkgs, result)
 
 }
 
-func (r *Finder) PackageRename(identName string) map[string][]text.Extent {
-
+func PackageRename(identName string, program *loader.Program) map[string][]text.Extent {
+	r := &finder{program}
 	result := r.occurrencesofpkg(identName)
-	pkgs := allPackages(r.program)
-	return r.FindInComments(identName, pkgs, result)
+	pkgs := allPackages(program)
+	return FindInComments(identName, program, pkgs, result)
 
 }
 
 // occurrences returns the source locations of all identifiers that resolve
 // to one of the given objects.
-func (r *Finder) occurrences(decls map[types.Object]bool) map[string][]text.Extent {
+func (r *finder) occurrences(decls map[types.Object]bool) map[string][]text.Extent {
 	result := make(map[string][]text.Extent)
 	for pkgInfo := range r.packages(decls) {
 		for id, obj := range pkgInfo.Defs {
@@ -135,7 +141,7 @@ func (r *Finder) occurrences(decls map[types.Object]bool) map[string][]text.Exte
 }
 
 //TODO : Make the search robust for packagenames in importspec
-func (r *Finder) occurrencesofpkg(identName string) map[string][]text.Extent {
+func (r *finder) occurrencesofpkg(identName string) map[string][]text.Extent {
 
 	result := make(map[string][]text.Extent)
 	for pkgInfo := range allPackages(r.program) {
@@ -192,7 +198,7 @@ func (r *Finder) occurrencesofpkg(identName string) map[string][]text.Extent {
 }
 
 //TODO : Make the search robust
-func (r *Finder) occurrencesofCaseVar(identName string) map[string][]text.Extent {
+func (r *finder) occurrencesofCaseVar(identName string) map[string][]text.Extent {
 
 	result := make(map[string][]text.Extent)
 	for pkgInfo := range allPackages(r.program) {
@@ -224,24 +230,24 @@ func (r *Finder) occurrencesofCaseVar(identName string) map[string][]text.Extent
 	return result
 }
 
-func (r *Finder) position(id *ast.Ident) token.Position {
+func (r *finder) position(id *ast.Ident) token.Position {
 	return r.program.Fset.Position(id.NamePos)
 }
-func (r *Finder) positionofObject(pkgObject types.Object) token.Position {
+func (r *finder) positionofObject(pkgObject types.Object) token.Position {
 	return r.program.Fset.Position(pkgObject.Pos())
 }
-func (r *Finder) positionofPkg(id *ast.BasicLit) token.Position {
+func (r *finder) positionofPkg(id *ast.BasicLit) token.Position {
 	return r.program.Fset.Position(id.ValuePos)
 }
 
-func (r *Finder) offsetLength(id *ast.Ident) text.Extent {
+func (r *finder) offsetLength(id *ast.Ident) text.Extent {
 	position := r.position(id)
 	offset := position.Offset
 	length := len(id.Name)
 	return text.Extent{offset, length}
 }
 
-func (r *Finder) offsetLengthofObject(node ast.Node, obj types.Object) text.Extent {
+func (r *finder) offsetLengthofObject(node ast.Node, obj types.Object) text.Extent {
 
 	var offset int
 	position := r.positionofObject(obj)
@@ -264,7 +270,7 @@ func (r *Finder) offsetLengthofObject(node ast.Node, obj types.Object) text.Exte
 	return text.Extent{offset, length}
 }
 
-func (r *Finder) offsetLengthofPkg(id *ast.BasicLit) text.Extent {
+func (r *finder) offsetLengthofPkg(id *ast.BasicLit) text.Extent {
 
 	var offset int
 	position := r.positionofPkg(id)
@@ -292,7 +298,7 @@ func (r *Finder) offsetLengthofPkg(id *ast.BasicLit) text.Extent {
 // TODO(review D7); If performance is a concern, you could return only the
 // packages in the reverse transitive closure of the package import graph,
 // rather than all the packages.
-func (r *Finder) packages(decls map[types.Object]bool) map[*loader.PackageInfo]bool {
+func (r *finder) packages(decls map[types.Object]bool) map[*loader.PackageInfo]bool {
 	pkgs := make(map[*loader.PackageInfo]bool)
 	for decl := range decls {
 		if decl.Exported() {
@@ -304,7 +310,7 @@ func (r *Finder) packages(decls map[types.Object]bool) map[*loader.PackageInfo]b
 	return pkgs
 }
 
-func (r *Finder) pkgInfoForPkg(pkg *types.Package) *loader.PackageInfo {
+func (r *finder) pkgInfoForPkg(pkg *types.Package) *loader.PackageInfo {
 	return r.program.AllPackages[pkg]
 }
 
