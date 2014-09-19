@@ -11,5 +11,5 @@ func main() {
 
 	fmt.Println("value is", mystructvar.Mymethod())
 
-	fmt.Println(mypackage.Dummy) // <<<<< rename,14,24,14,24,renamed,pass
+	fmt.Println(mypackage.renamed) // <<<<< rename,14,24,14,24,renamed,pass
 }

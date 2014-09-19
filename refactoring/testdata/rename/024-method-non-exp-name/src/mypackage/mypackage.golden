@@ -4,7 +4,7 @@ type Mystruct struct {
 	Myvar string
 }
 
-func (mystructvar *Mystruct) Mymethod() string {
+func (mystructvar *Mystruct) renamed() string {
 
 	return mystructvar.Myvar
 

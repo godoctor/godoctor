@@ -7,13 +7,8 @@ import "mypackage"
 
 func main() {
 
-mystructvar := mypackage.Mystruct {"helloo" }
+	mystructvar := mypackage.Mystruct{"helloo"}
 
-fmt.Println("value is",mystructvar.Mymethod())	// <<<<< rename,12,36,12,36,renamed,fail
-
+	fmt.Println("value is", mystructvar.Mymethod()) // <<<<< rename,12,38,12,38,renamed,pass
 
 }
-
-
-
-

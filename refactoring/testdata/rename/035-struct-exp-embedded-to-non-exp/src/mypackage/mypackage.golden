@@ -1,14 +1,14 @@
 package mypackage
 
-type Mystruct struct {
+type renamed struct {
 	Myvar string
 }
 
 type Parent struct {
-	Mystruct
+	renamed
 	Myfiled string
 }
 
-func (mystructvar *Mystruct) Mymethod() string {
+func (mystructvar *renamed) Mymethod() string {
 	return mystructvar.Myvar
 }

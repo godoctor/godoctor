@@ -9,7 +9,6 @@ func main() {
 
 	mystructvar := mypackage.Mystruct{"helloo"}
 
-	fmt.Println("value is", mystructvar.Mymethod())
+	fmt.Println("value is", mystructvar.renamed()) // <<<<< rename,12,38,12,38,renamed,pass
 
-	fmt.Println(mypackage.Dummy) // <<<<< rename,14,24,14,24,renamed,pass
 }

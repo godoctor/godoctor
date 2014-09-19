@@ -75,15 +75,14 @@ func (r *Rename) Run(config *Config) *Result {
 
 	switch ident := r.selectedNode.(type) {
 	case *ast.Ident:
-		//fmt.Println("selected idnent",ident.Name)
-		if ast.IsExported(ident.Name) && !ast.IsExported(r.newName) {
-			r.Log.Error("newName cannot be non Exportable if selected identifier name is Exportable")
-			return &r.Result
-		}
 		if ident.Name == "main" && r.pkgInfo(r.fileContaining(ident)).Pkg.Name() == "main" {
 			r.Log.Error("cannot rename main function inside main package ,it eliminates the program entry 							point")
 			r.Log.AssociateNode(ident)
 			return &r.Result
+		}
+
+		if ast.IsExported(ident.Name) && !ast.IsExported(r.newName) {
+			r.Log.Warn("Renaming an exported name to an unexported name will introduce errors outside the package in which it is declared.")
 		}
 
 		r.rename(ident)
