@@ -47,7 +47,7 @@ func (r *SearchEngine) FindDeclarationsAcrossInterfaces(ident *ast.Ident) (map[t
 	pkgInfo := r.pkgInfo(r.fileContaining(ident))
 	obj := pkgInfo.ObjectOf(ident)
 
-	if obj == nil && !r.IsPackageName(ident) && !r.IsSwitchVar(ident){
+	if obj == nil && !r.IsPackageName(ident) && !r.IsSwitchVar(ident) {
 		return nil, fmt.Errorf("Unable to find declaration of %s", ident.Name)
 	}
 
@@ -196,16 +196,16 @@ func (r *SearchEngine) FindOccurrences(ident *ast.Ident) (map[string][]text.Exte
 
 	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
 
-	if obj == nil && !r.IsPackageName(ident) &&  !r.IsSwitchVar(ident){
+	if obj == nil && !r.IsPackageName(ident) && !r.IsSwitchVar(ident) {
 
 		return nil, fmt.Errorf("Unable to find declaration of %s", ident.Name)
 	}
 
-        if r.IsSwitchVar(ident) {
-       
-            //fmt.Println("selected switch var inside the names")
-            return r.SwitchRename(ident),nil  
-         } 
+	if r.IsSwitchVar(ident) {
+
+		//fmt.Println("selected switch var inside the names")
+		return r.SwitchRename(ident), nil
+	}
 
 	if r.IsPackageName(ident) {
 
@@ -230,10 +230,8 @@ func (r *SearchEngine) FindOccurrences(ident *ast.Ident) (map[string][]text.Exte
 	return r.occurrencesInComments(ident.Name, pkgs, result), nil
 }
 
-
-
 func (r *SearchEngine) SwitchRename(ident *ast.Ident) map[string][]text.Extent {
-  //TODO change to perform switch and case variable rename
+	//TODO change to perform switch and case variable rename
 	result := r.occurrencesofCaseVar(ident.Name)
 	pkgs := allPackages(r.program)
 	return r.occurrencesInComments(ident.Name, pkgs, result)
@@ -303,37 +301,24 @@ func (r *SearchEngine) occurrencesofpkg(identName string) map[string][]text.Exte
 					r.offsetLengthofObject(node, pkgObject))
 			}
 
+			for _, file := range pkgInfo.Files {
 
+				ast.Inspect(file, func(node ast.Node) bool {
+					switch n := node.(type) {
+					case *ast.ImportSpec:
+						if n.Name != nil && strings.Replace(n.Path.Value, "\"", "", 2) == identName {
+							//fmt.Println("pkg name with local rename")
+							filename := r.positionofPkg(n.Path).Filename
 
-                       for _, file := range pkgInfo.Files {
+							result[filename] = append(result[filename],
+								r.offsetLengthofPkg(n.Path))
 
-			ast.Inspect(file, func(node ast.Node) bool {
-				switch n := node.(type) {
-	                            case  *ast.ImportSpec:
-                                   if n.Name != nil && strings.Replace(n.Path.Value, "\"", "", 2) == identName {
-                                         //fmt.Println("pkg name with local rename")
-                                           filename := r.positionofPkg(n.Path).Filename
+						}
 
-				result[filename] = append(result[filename],
-					r.offsetLengthofPkg(n.Path))
-
-
-   
-                                 }
-
-                        }
-                     return true
-                 })
-          } 
-
-
-
-
-
-
- 
-
-
+					}
+					return true
+				})
+			}
 
 		}
 
@@ -342,18 +327,15 @@ func (r *SearchEngine) occurrencesofpkg(identName string) map[string][]text.Exte
 	return result
 }
 
-
-
-
-//TODO : Make the search robust 
+//TODO : Make the search robust
 func (r *SearchEngine) occurrencesofCaseVar(identName string) map[string][]text.Extent {
 
 	result := make(map[string][]text.Extent)
 	for pkgInfo := range allPackages(r.program) {
-		
+
 		for id, obj := range pkgInfo.Uses {
 			if (obj == nil || obj.Name() == identName) && id.Name == identName {
-			//fmt.Println("slected  case var and types.var is",obj.(*types.Var))
+				//fmt.Println("slected  case var and types.var is",obj.(*types.Var))
 				filename := r.position(id).Filename
 				result[filename] = append(result[filename],
 					r.offsetLength(id))
@@ -361,28 +343,22 @@ func (r *SearchEngine) occurrencesofCaseVar(identName string) map[string][]text.
 		}
 
 		for node, pkgObject := range pkgInfo.Implicits {
-                        
+
 			if pkgObject.Name() == identName {
-                                  
-                               //fmt.Println("slected  case var and types.var is",obj.(*types.Var)) 
+
+				//fmt.Println("slected  case var and types.var is",obj.(*types.Var))
 				filename := r.positionofObject(pkgObject).Filename
 
 				result[filename] = append(result[filename],
 					r.offsetLengthofObject(node, pkgObject))
 			}
-      
-  
+
 		}
 
 	}
 
 	return result
 }
-
-
-
-
-
 
 func (r *SearchEngine) position(id *ast.Ident) token.Position {
 	return r.program.Fset.Position(id.NamePos)
@@ -416,24 +392,22 @@ func (r *SearchEngine) offsetLengthofObject(node ast.Node, obj types.Object) tex
 			offset = position.Offset + len(strings.Replace(ident.Path.Value, "\"", "", 2)) - len(obj.Name()) + 1
 		}
 
-        case *ast.CaseClause:
-           
-             offset = offset-1   
+	case *ast.CaseClause:
+
+		offset = offset - 1
 	}
 
 	return text.Extent{offset, length}
 }
-
-
 
 func (r *SearchEngine) offsetLengthofPkg(id *ast.BasicLit) text.Extent {
 
 	var offset int
 	position := r.positionofPkg(id)
 	offset = position.Offset + 1
-	length := len(id.Value)-2
+	length := len(id.Value) - 2
 
-       //fmt.Println("offset , length ", offset, length)
+	//fmt.Println("offset , length ", offset, length)
 
 	/*switch ident := node.(type) {
 	case *ast.ImportSpec:
@@ -446,16 +420,6 @@ func (r *SearchEngine) offsetLengthofPkg(id *ast.BasicLit) text.Extent {
 
 	return text.Extent{offset, length}
 }
-
-
-
-
-
-
-
-
-
-
 
 // packages returns a set of PackageInfos that may reference the given
 // Objects.  If at least one of the given declarations is exported, the method
@@ -540,16 +504,16 @@ func (r *SearchEngine) IsPackageName(ident *ast.Ident) bool {
 func (r *SearchEngine) IsSwitchVar(ident *ast.Ident) bool {
 	//pkginfo := r.pkgInfo(r.fileContaining(ident))
 	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
-	          
-         if   _, ok := obj.(*types.Var); !ok  && obj == nil && !r.IsPackageName(ident) {
-			//fmt.Println("types.var of ident",v)
-                          //fmt.Println("selected var in switch  clasue of type switch ")    
-                   // fmt.Println("slected  switch var and types.var is",obj.(*types.Var))
-                        return true
-		}
 
-    //fmt.Println(" var is not swithvar") 
-   return false
+	if _, ok := obj.(*types.Var); !ok && obj == nil && !r.IsPackageName(ident) {
+		//fmt.Println("types.var of ident",v)
+		//fmt.Println("selected var in switch  clasue of type switch ")
+		// fmt.Println("slected  switch var and types.var is",obj.(*types.Var))
+		return true
+	}
+
+	//fmt.Println(" var is not swithvar")
+	return false
 }
 
 // TODO: These are duplicated from refactoring.go
