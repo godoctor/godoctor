@@ -60,7 +60,7 @@ func lookup(p *loader.Program, pkgName, name string, t *testing.T) types.Object 
 
 func lookupFieldOrMethod(p *loader.Program, pkgName, container, name string, t *testing.T) types.Object {
 	typ := lookup(p, pkgName, container, t).Type()
-	obj, _, _ := types.LookupFieldOrMethod(typ, findPackage(p, pkgName, t).Pkg, name)
+	obj, _, _ := types.LookupFieldOrMethod(typ, true, findPackage(p, pkgName, t).Pkg, name)
 	if obj == nil {
 		t.Fatalf("%s not found for %s.%s", name, pkgName, container)
 	}
