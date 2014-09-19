@@ -165,7 +165,7 @@ func TestRefactoringUsage(t *testing.T) {
 func TestRenameDiff(t *testing.T) {
 	exit, stdout, stderr := runCLI(hello, "-scope=-", pos, "rename", "renamedネーム")
 	if exit != 0 {
-		t.Fatal("Rename expected clean exit")
+		t.Fatalf("Rename expected exit code 0; got %d", exit)
 	}
 	if stdout != diff {
 		t.Fatalf("Output did not match expected diff:\n%s\n%s",
@@ -176,7 +176,7 @@ func TestRenameDiff(t *testing.T) {
 func TestRenameComplete(t *testing.T) {
 	exit, stdout, stderr := runCLI(hello, "-scope=-", pos, "-complete", "rename", "renamedネーム")
 	if exit != 0 {
-		t.Fatal("Rename expected clean exit")
+		t.Fatalf("Rename expected exit code 0; got %d", exit)
 	}
 	if stdout != complete {
 		t.Fatalf("Output did not match expected output:\n%s\n%s",
@@ -196,8 +196,8 @@ func TestRenameInvalidPos(t *testing.T) {
 
 func TestRenamePosOutOfRange(t *testing.T) {
 	exit, stdout, stderr := runCLI(hello, "-pos=1000,1:1000,1", "rename", "x")
-	if exit != 0 || stderr == "" {
-		t.Fatal("Rename position out of range expected clean exit")
+	if exit != 3 || stderr == "" {
+		t.Fatalf("Rename position out of range expected exit code 3; got %d", exit)
 	}
 	if stdout != "" {
 		t.Fatalf("Rename position out of range should not have output")
@@ -206,8 +206,8 @@ func TestRenamePosOutOfRange(t *testing.T) {
 
 func TestRenameInvalidScope(t *testing.T) {
 	exit, stdout, stderr := runCLI(hello, "-scope=invalidScope", "null", "false")
-	if exit != 0 || stderr == "" {
-		t.Fatal("Rename with invalid scope should produce clean exit")
+	if exit != 3 || stderr == "" {
+		t.Fatalf("Rename with invalid scope should produce exit code 3; got %d", exit)
 	}
 	if stdout != "" {
 		t.Fatalf("Rename with invalid scope should not have output")
