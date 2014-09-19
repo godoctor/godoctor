@@ -15,8 +15,11 @@ import (
 )
 
 // FindInComments searches the comments of the given packages' source files for
-// occurrences of the given name (as a word) and returns their source locations.
+// occurrences of the given name (as a word, not a subword) and returns their
+// source locations.  Position information is obtained from the given FileSet.
 func FindInComments(name string, f *ast.File, fset *token.FileSet) []text.Extent {
+	// FIXME: Where did the KMP stuff go?  Are the Go identifier rules
+	// safe for substition in a regex (below)?  -JO
 	result := []text.Extent{}
 	for _, comment := range f.Comments {
 		slashIdx := fset.Position(comment.List[0].Slash).Offset

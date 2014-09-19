@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"code.google.com/p/go.tools/go/loader"
+	"code.google.com/p/go.tools/go/types"
 
 	"golang-refactoring.org/go-doctor/analysis/names"
 	"golang-refactoring.org/go-doctor/filesystem"
@@ -99,7 +100,7 @@ func (r *Rename) Run(config *Config) *Result {
 		// FIXME: This seems too broad?  -JO
 		for pkg, _ := range r.program.AllPackages {
 			if pkg.Name() == strings.Replace(ident.Value, "\"", "", 2) {
-				searchResult := names.PackageRename(pkg.Name(), r.program)
+				searchResult := names.FindReferencesToPackage(pkg.Name(), r.program)
 				r.addOccurrences(searchResult)
 				r.addFileSystemChanges(searchResult, pkg.Name())
 			}
@@ -125,15 +126,24 @@ func isReservedWord(newName string) bool {
 }
 
 func (r *Rename) rename(ident *ast.Ident, pkgInfo *loader.PackageInfo) {
-	if conflict := names.FindConflict(ident, pkgInfo, r.newName); conflict != nil {
+	if conflict := names.FindConflict(pkgInfo.ObjectOf(ident), r.newName); conflict != nil {
 		r.Log.Errorf("Renaming %s to %s may cause conflicts with an existing declaration", ident.Name, r.newName)
-		r.Log.AssociateNode(conflict)
+		r.Log.AssociatePos(conflict.Pos(), conflict.Pos())
 	}
 
-	searchResult, err := names.FindOccurrences(ident, pkgInfo, r.program)
-	if err != nil {
-		r.Log.Error(err)
-		return
+	var searchResult map[string][]text.Extent
+	var err error
+	if isPackageName(ident, pkgInfo) {
+		searchResult = names.FindReferencesToPackage(ident.Name, r.program)
+	} else if isSwitchVar(ident, pkgInfo) {
+		//TODO change to perform switch and case variable rename
+		searchResult = names.FindOccurrencesOfCaseVar(ident.Name, r.program)
+	} else {
+		searchResult, err = names.FindOccurrences(ident, pkgInfo, r.program)
+		if err != nil {
+			r.Log.Error(err)
+			return
+		}
 	}
 
 	for fname, _ := range searchResult {
@@ -143,11 +153,33 @@ func (r *Rename) rename(ident *ast.Ident, pkgInfo *loader.PackageInfo) {
 	}
 
 	r.addOccurrences(searchResult)
-	if names.IsPackageName(ident, pkgInfo) {
+	if isPackageName(ident, pkgInfo) {
 		r.addFileSystemChanges(searchResult, ident.Name)
 	}
-	//TODO: r.checkForErrors()
+
 	return
+}
+
+func isPackageName(ident *ast.Ident, pkgInfo *loader.PackageInfo) bool {
+	obj := pkgInfo.ObjectOf(ident)
+	if pkgInfo.Pkg.Name() == ident.Name && obj == nil {
+		return true
+	}
+
+	return false
+}
+
+func isSwitchVar(ident *ast.Ident, pkgInfo *loader.PackageInfo) bool {
+	obj := pkgInfo.ObjectOf(ident)
+	if _, ok := obj.(*types.Var); !ok && obj == nil && !isPackageName(ident, pkgInfo) {
+		//fmt.Println("types.var of ident",v)
+		//fmt.Println("selected var in switch  clasue of type switch ")
+		// fmt.Println("slected  switch var and types.var is",obj.(*types.Var))
+		return true
+	}
+
+	//fmt.Println(" var is not swithvar")
+	return false
 }
 
 func (r *Rename) addOccurrences(allOccurrences map[string][]text.Extent) {

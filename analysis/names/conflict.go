@@ -4,59 +4,53 @@
 
 package names
 
-import (
-	"go/ast"
-
-	"code.google.com/p/go.tools/go/loader"
-	"code.google.com/p/go.tools/go/types"
-)
-
-/* -=-=- Search for Conflicting Declarations -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
+import "code.google.com/p/go.tools/go/types"
 
 // FindConflict determines if there already exists an identifier with the given
-// newName such that the given ident cannot be renamed to newName.  It returns
-// the first such conflicting declaration, if one exists, and nil otherwise.
-func FindConflict(ident *ast.Ident, pkgInfo *loader.PackageInfo, newName string) *ast.Ident {
-	obj := pkgInfo.ObjectOf(ident)
+// newName such that the given ident cannot be renamed to name.  It returns
+// one such conflicting declaration, if possible, and nil if there are none.
+func FindConflict(obj types.Object, name string) types.Object {
+	// XXX: The checks here are unnecessarily conservative.  This looks for
+	// any declaration with the same name in any related scope; it does not
+	// consider *references*, which really determine whether a conflict
+	// exists.
 
-	if obj == nil && !IsPackageName(ident, pkgInfo) && !isSwitchVar(ident, pkgInfo) {
-		return ident
-	}
-
-	if IsPackageName(ident, pkgInfo) || isSwitchVar(ident, pkgInfo) {
+	if obj == nil { // Probably package or switch variable
 		return nil
 	}
 
+	// Check for conflicts in the current scope or any child scope
 	if obj.Parent() != nil {
-		if result := findConflictInChildScope(ident, obj.Parent(), newName); result != nil {
+		if result := findConflictInChildScope(obj.Parent(), name); result != nil {
 			return result
 		}
 	}
 
-	if IsMethod(obj) {
-		objfound, _, pointerindirections := types.LookupFieldOrMethod(MethodReceiver(obj).Type(), true, obj.Pkg(), newName)
-		if IsMethod(objfound) && pointerindirections {
-			return ident
-		} else {
-			return nil
+	// Check for conflicting methods on the receiver type, if applicable
+	if isMethod(obj) {
+		objfound, _, pointerindirections := types.LookupFieldOrMethod(
+			methodReceiver(obj).Type(), true, obj.Pkg(), name)
+		if isMethod(objfound) && pointerindirections {
+			return objfound
 		}
 	}
 
-	if obj.Parent().LookupParent(newName) != nil {
-		return ident
+	// Check for possible conflicts from a parent scope
+	if obj := obj.Parent().LookupParent(name); obj != nil {
+		return obj
 	}
 
 	return nil
 }
 
-func findConflictInChildScope(ident *ast.Ident, identScope *types.Scope, newName string) *ast.Ident {
-	if identScope.Lookup(newName) != nil {
-		return ident
+func findConflictInChildScope(scope *types.Scope, name string) types.Object {
+	if obj := scope.Lookup(name); obj != nil {
+		return obj
 	}
 
-	for i := 0; i < identScope.NumChildren(); i++ {
-		if result := findConflictInChildScope(ident, identScope.Child(i), newName); result != nil {
-			return result
+	for i := 0; i < scope.NumChildren(); i++ {
+		if obj := findConflictInChildScope(scope.Child(i), name); obj != nil {
+			return obj
 		}
 	}
 	return nil

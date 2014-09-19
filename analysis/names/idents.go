@@ -17,28 +17,6 @@ import (
 
 /* -=-=- Search by Identifier  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 
-func IsPackageName(ident *ast.Ident, pkgInfo *loader.PackageInfo) bool {
-	obj := pkgInfo.ObjectOf(ident)
-	if pkgInfo.Pkg.Name() == ident.Name && obj == nil {
-		return true
-	}
-
-	return false
-}
-
-func isSwitchVar(ident *ast.Ident, pkgInfo *loader.PackageInfo) bool {
-	obj := pkgInfo.ObjectOf(ident)
-	if _, ok := obj.(*types.Var); !ok && obj == nil && !IsPackageName(ident, pkgInfo) {
-		//fmt.Println("types.var of ident",v)
-		//fmt.Println("selected var in switch  clasue of type switch ")
-		// fmt.Println("slected  switch var and types.var is",obj.(*types.Var))
-		return true
-	}
-
-	//fmt.Println(" var is not swithvar")
-	return false
-}
-
 // TODO(review D7): I think I mentioned this before but this function has a
 // strange signature: it mixes objects from two non-adjacent layers of the
 // design abstraction: semantic objects (e.g. types.Object) and concrete syntax
@@ -62,40 +40,18 @@ type finder struct {
 
 func (r *finder) FindOccurrences(ident *ast.Ident, pkgInfo *loader.PackageInfo) (map[string][]text.Extent, error) {
 	obj := pkgInfo.ObjectOf(ident)
-	if obj == nil && !IsPackageName(ident, pkgInfo) && !isSwitchVar(ident, pkgInfo) {
-
+	if obj == nil {
 		return nil, fmt.Errorf("Unable to find declaration of %s", ident.Name)
-	}
-
-	if isSwitchVar(ident, pkgInfo) {
-
-		//fmt.Println("selected switch var inside the names")
-		return r.switchRename(ident), nil
-	}
-
-	if IsPackageName(ident, pkgInfo) {
-
-		return PackageRename(ident.Name, r.program), nil
 	}
 
 	var decls map[types.Object]bool
 	var err error
-	decls, err = FindDeclarationsAcrossInterfaces(ident, pkgInfo, r.program)
+	decls, err = FindDeclarationsAcrossInterfaces(obj, r.program)
 	if err != nil {
 		return nil, err
 	}
 
 	return r.occurrences(decls), nil
-}
-
-func (r *finder) switchRename(ident *ast.Ident) map[string][]text.Extent {
-	//TODO change to perform switch and case variable rename
-	return r.occurrencesofCaseVar(ident.Name)
-}
-
-func PackageRename(identName string, program *loader.Program) map[string][]text.Extent {
-	r := &finder{program}
-	return r.occurrencesofpkg(identName)
 }
 
 // occurrences returns the source locations of all identifiers that resolve
@@ -123,8 +79,11 @@ func (r *finder) occurrences(decls map[types.Object]bool) map[string][]text.Exte
 }
 
 //TODO : Make the search robust for packagenames in importspec
-func (r *finder) occurrencesofpkg(identName string) map[string][]text.Extent {
+func FindReferencesToPackage(identName string, program *loader.Program) map[string][]text.Extent {
+	return (&finder{program}).findReferencesToPackage(identName)
+}
 
+func (r *finder) findReferencesToPackage(identName string) map[string][]text.Extent {
 	result := make(map[string][]text.Extent)
 	for pkgInfo := range allPackages(r.program) {
 		for id, obj := range pkgInfo.Defs {
@@ -177,6 +136,10 @@ func (r *finder) occurrencesofpkg(identName string) map[string][]text.Extent {
 	}
 
 	return result
+}
+
+func FindOccurrencesOfCaseVar(identName string, program *loader.Program) map[string][]text.Extent {
+	return (&finder{program}).occurrencesofCaseVar(identName)
 }
 
 //TODO : Make the search robust
@@ -290,10 +253,6 @@ func (r *finder) packages(decls map[types.Object]bool) map[*loader.PackageInfo]b
 		pkgs[pkgInfo] = true
 	}
 	return pkgs
-}
-
-func (r *finder) pkgInfoForPkg(pkg *types.Package) *loader.PackageInfo {
-	return r.program.AllPackages[pkg]
 }
 
 func allPackages(prog *loader.Program) map[*loader.PackageInfo]bool {

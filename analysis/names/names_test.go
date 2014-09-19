@@ -136,26 +136,27 @@ func sortKeys(m map[string][]text.Extent) []string {
 }
 
 // -=- Tests -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-
+/*
 func TestIsMethod(t *testing.T) {
 	prog := setup(t)
-	if names.IsMethod(lookup(prog, "bar", "Exported", t)) == true {
+	if names.isMethod(lookup(prog, "bar", "Exported", t)) == true {
 		t.Fatal("bar.Exported is not a method")
 	}
-	if names.IsMethod(lookupFieldOrMethod(prog, "bar", "t", "Method", t)) == false {
+	if names.isMethod(lookupFieldOrMethod(prog, "bar", "t", "Method", t)) == false {
 		t.Fatal("(t) Method in bar is a method")
 	}
 }
 
 func TestMethodReceiver(t *testing.T) {
 	prog := setup(t)
-	if names.MethodReceiver(lookup(prog, "bar", "Exported", t)) != nil {
+	if names.methodReceiver(lookup(prog, "bar", "Exported", t)) != nil {
 		t.Fatal("bar.Exported should not have a receiver")
 	}
-	if names.MethodReceiver(lookupFieldOrMethod(prog, "bar", "t", "Method", t)) == nil {
+	if names.methodReceiver(lookupFieldOrMethod(prog, "bar", "t", "Method", t)) == nil {
 		t.Fatal("Receiver of (t) Method in bar should not be nil")
 	}
 }
+*/
 
 func TestFindOccurrences(t *testing.T) {
 	check(findOccurrences("foo", "Exported", t),
@@ -193,4 +194,3 @@ func check(actual, expect []string, t *testing.T) {
 
 // (r *Finder) FindDeclarationsAcrossInterfaces(ident *ast.Ident) (map[types.Object]bool, error)
 // (r *Finder) FindOccurrences(ident *ast.Ident) (map[string][]text.Extent, error)
-// (r *Finder) IsPackageName(ident *ast.Ident)

@@ -5,14 +5,11 @@
 package names
 
 import (
-	"fmt"
 	"go/ast"
 
 	"code.google.com/p/go.tools/go/loader"
 	"code.google.com/p/go.tools/go/types"
 )
-
-/* -=-=- Search Across Interfaces =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 
 // FindDeclarationsAcrossInterfaces finds all objects that might need to be
 // renamed if the given identifier is renamed.  In the case of a method, there
@@ -28,18 +25,12 @@ import (
 // signature to be renamed in Interface1, Interface2, Type2, and Type3.  This
 // method returns a set containing the reflexive, transitive closure of objects
 // that must be renamed if the given identifier is renamed.
-func FindDeclarationsAcrossInterfaces(ident *ast.Ident, pkgInfo *loader.PackageInfo, program *loader.Program) (map[types.Object]bool, error) {
-	obj := pkgInfo.ObjectOf(ident)
-
-	if obj == nil && !IsPackageName(ident, pkgInfo) && !isSwitchVar(ident, pkgInfo) {
-		return nil, fmt.Errorf("Unable to find declaration of %s", ident.Name)
-	}
-
-	if IsMethod(obj) {
+func FindDeclarationsAcrossInterfaces(obj types.Object, program *loader.Program) (map[types.Object]bool, error) {
+	if isMethod(obj) {
 		// If obj is a method, search across interfaces: there may be
 		// many other methods that need to change to ensure that all
 		// types continue to implement the same interfaces
-		return reachableMethods(ident, obj.(*types.Func), program.AllPackages[obj.Pkg()]), nil
+		return reachableMethods(obj.Name(), obj.(*types.Func), program.AllPackages[obj.Pkg()]), nil
 	} else {
 		// If obj is not a method, then only one object needs to
 		// change.  When this is called from inside the analysis/names
@@ -50,13 +41,13 @@ func FindDeclarationsAcrossInterfaces(ident *ast.Ident, pkgInfo *loader.PackageI
 
 }
 
-// IsMethod reports whether obj is a method.
-func IsMethod(obj types.Object) bool {
-	return MethodReceiver(obj) != nil
+// isMethod reports whether obj is a method.
+func isMethod(obj types.Object) bool {
+	return methodReceiver(obj) != nil
 }
 
-// MethodReceiver returns the receiver if obj is a method and nil otherwise.
-func MethodReceiver(obj types.Object) *types.Var {
+// methodReceiver returns the receiver if obj is a method and nil otherwise.
+func methodReceiver(obj types.Object) *types.Var {
 	if obj, ok := obj.(*types.Func); ok {
 		return obj.Type().(*types.Signature).Recv()
 	}
@@ -67,11 +58,11 @@ func MethodReceiver(obj types.Object) *types.Var {
 // reachableMethods receives an object for a method (i.e., a types.Func with
 // a non-nil receiver) and the PackageInfo in which it was declared and returns
 // a set of objects that must be renamed if that method is renamed.
-func reachableMethods(ident *ast.Ident, obj *types.Func, pkgInfo *loader.PackageInfo) map[types.Object]bool {
+func reachableMethods(name string, obj *types.Func, pkgInfo *loader.PackageInfo) map[types.Object]bool {
 	// Find methods and interfaces defined in the given package that have
 	// the same signature as the argument method (obj)
 	sig := obj.Type().(*types.Signature)
-	methods, interfaces := methodDeclsMatchingSig(ident, sig, pkgInfo)
+	methods, interfaces := methodDeclsMatchingSig(name, sig, pkgInfo)
 
 	// Map methods to interfaces their receivers implement and vice versa
 	methodInterfaces := map[types.Object]map[*types.Interface]bool{}
@@ -81,7 +72,7 @@ func reachableMethods(ident *ast.Ident, obj *types.Func, pkgInfo *loader.Package
 	}
 	for method := range methods {
 		methodInterfaces[method] = map[*types.Interface]bool{}
-		recv := MethodReceiver(method).Type()
+		recv := methodReceiver(method).Type()
 		for iface := range interfaces {
 			if types.Implements(recv, iface) {
 				methodInterfaces[method][iface] = true
@@ -133,7 +124,7 @@ func reachableMethods(ident *ast.Ident, obj *types.Func, pkgInfo *loader.Package
 // important corner case to bear in mind if you're building Go tools. It means
 // you can have a legal struct or interface with two fields/methods both named
 // "f", if they come from different packages.
-func methodDeclsMatchingSig(ident *ast.Ident, sig *types.Signature, pkgInfo *loader.PackageInfo) (methods map[types.Object]bool, interfaces map[*types.Interface]bool) {
+func methodDeclsMatchingSig(name string, sig *types.Signature, pkgInfo *loader.PackageInfo) (methods map[types.Object]bool, interfaces map[*types.Interface]bool) {
 	methods = map[types.Object]bool{}
 	interfaces = map[*types.Interface]bool{}
 	for _, file := range pkgInfo.Files {
@@ -145,14 +136,14 @@ func methodDeclsMatchingSig(ident *ast.Ident, sig *types.Signature, pkgInfo *loa
 				for i := 0; i < iface.NumExplicitMethods(); i++ {
 					method := iface.ExplicitMethod(i)
 					methodSig := method.Type().(*types.Signature)
-					if method.Name() == ident.Name && types.Identical(sig, methodSig) {
+					if method.Name() == name && types.Identical(sig, methodSig) {
 						methods[method] = true
 					}
 				}
 			case *ast.FuncDecl:
 				obj := pkgInfo.ObjectOf(n.Name)
 				fnSig := obj.Type().Underlying().(*types.Signature)
-				if fnSig.Recv() != nil && n.Name.Name == ident.Name && types.Identical(sig, fnSig) {
+				if fnSig.Recv() != nil && n.Name.Name == name && types.Identical(sig, fnSig) {
 					methods[obj] = true
 				}
 			}

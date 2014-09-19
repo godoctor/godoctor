@@ -159,7 +159,8 @@ func (r *Debug) showAffected(out io.Writer) {
 	switch id := r.selectedNode.(type) {
 	case *ast.Ident:
 		fmt.Fprintf(out, "Affected Declarations:\n")
-		searchResult, err := names.FindDeclarationsAcrossInterfaces(id, r.selectedNodePkg, r.program)
+		obj := r.selectedNodePkg.ObjectOf(id)
+		searchResult, err := names.FindDeclarationsAcrossInterfaces(obj, r.program)
 		if err != nil {
 			r.Log.Error(err)
 			return
