@@ -244,21 +244,21 @@ func (r *finder) offsetLengthofPkg(id *ast.BasicLit) text.Extent {
 // packages in the reverse transitive closure of the package import graph,
 // rather than all the packages.
 func (r *finder) packages(decls map[types.Object]bool) map[*loader.PackageInfo]bool {
-	pkgs := make(map[*loader.PackageInfo]bool)
+	result := make(map[*loader.PackageInfo]bool)
 	for decl := range decls {
 		if decl.Exported() {
 			return allPackages(r.program)
 		}
 		pkgInfo := r.program.AllPackages[decl.Pkg()]
-		pkgs[pkgInfo] = true
+		result[pkgInfo] = true
 	}
-	return pkgs
+	return result
 }
 
 func allPackages(prog *loader.Program) map[*loader.PackageInfo]bool {
-	pkgs := map[*loader.PackageInfo]bool{}
+	result := map[*loader.PackageInfo]bool{}
 	for _, pkgInfo := range prog.AllPackages {
-		pkgs[pkgInfo] = true
+		result[pkgInfo] = true
 	}
-	return pkgs
+	return result
 }
