@@ -18,11 +18,11 @@ import (
 func (r *Finder) FindConflict(ident *ast.Ident, newName string) *ast.Ident {
 	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
 
-	if obj == nil && !r.IsPackageName(ident) && !r.IsSwitchVar(ident) {
+	if obj == nil && !r.IsPackageName(ident) && !r.isSwitchVar(ident) {
 		return ident
 	}
 
-	if r.IsPackageName(ident) || r.IsSwitchVar(ident) {
+	if r.IsPackageName(ident) || r.isSwitchVar(ident) {
 		return nil
 	}
 

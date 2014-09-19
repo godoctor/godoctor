@@ -32,7 +32,7 @@ func (r *Finder) FindDeclarationsAcrossInterfaces(ident *ast.Ident) (map[types.O
 	pkgInfo := r.pkgInfo(r.fileContaining(ident))
 	obj := pkgInfo.ObjectOf(ident)
 
-	if obj == nil && !r.IsPackageName(ident) && !r.IsSwitchVar(ident) {
+	if obj == nil && !r.IsPackageName(ident) && !r.isSwitchVar(ident) {
 		return nil, fmt.Errorf("Unable to find declaration of %s", ident.Name)
 	}
 

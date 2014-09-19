@@ -10,7 +10,6 @@ import (
 	"go/ast"
 
 	"code.google.com/p/go.tools/go/loader"
-	"code.google.com/p/go.tools/go/types"
 )
 
 type Finder struct {
@@ -26,30 +25,6 @@ func NewFinder(program *loader.Program) *Finder {
  */
 
 /* -=-=- Utility Methods -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
-
-func (r *Finder) IsPackageName(ident *ast.Ident) bool {
-	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
-	if r.pkgInfo(r.fileContaining(ident)).Pkg.Name() == ident.Name && obj == nil {
-		return true
-	}
-
-	return false
-}
-
-func (r *Finder) IsSwitchVar(ident *ast.Ident) bool {
-	//pkginfo := r.pkgInfo(r.fileContaining(ident))
-	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
-
-	if _, ok := obj.(*types.Var); !ok && obj == nil && !r.IsPackageName(ident) {
-		//fmt.Println("types.var of ident",v)
-		//fmt.Println("selected var in switch  clasue of type switch ")
-		// fmt.Println("slected  switch var and types.var is",obj.(*types.Var))
-		return true
-	}
-
-	//fmt.Println(" var is not swithvar")
-	return false
-}
 
 // TODO: These are duplicated from refactoring.go
 func (r *Finder) fileContaining(node ast.Node) *ast.File {

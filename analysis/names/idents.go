@@ -17,6 +17,30 @@ import (
 
 /* -=-=- Search by Identifier  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 
+func (r *Finder) IsPackageName(ident *ast.Ident) bool {
+	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
+	if r.pkgInfo(r.fileContaining(ident)).Pkg.Name() == ident.Name && obj == nil {
+		return true
+	}
+
+	return false
+}
+
+func (r *Finder) isSwitchVar(ident *ast.Ident) bool {
+	//pkginfo := r.pkgInfo(r.fileContaining(ident))
+	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
+
+	if _, ok := obj.(*types.Var); !ok && obj == nil && !r.IsPackageName(ident) {
+		//fmt.Println("types.var of ident",v)
+		//fmt.Println("selected var in switch  clasue of type switch ")
+		// fmt.Println("slected  switch var and types.var is",obj.(*types.Var))
+		return true
+	}
+
+	//fmt.Println(" var is not swithvar")
+	return false
+}
+
 // TODO(review D7): I think I mentioned this before but this function has a
 // strange signature: it mixes objects from two non-adjacent layers of the
 // design abstraction: semantic objects (e.g. types.Object) and concrete syntax
@@ -36,15 +60,15 @@ func (r *Finder) FindOccurrences(ident *ast.Ident) (map[string][]text.Extent, er
 
 	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
 
-	if obj == nil && !r.IsPackageName(ident) && !r.IsSwitchVar(ident) {
+	if obj == nil && !r.IsPackageName(ident) && !r.isSwitchVar(ident) {
 
 		return nil, fmt.Errorf("Unable to find declaration of %s", ident.Name)
 	}
 
-	if r.IsSwitchVar(ident) {
+	if r.isSwitchVar(ident) {
 
 		//fmt.Println("selected switch var inside the names")
-		return r.SwitchRename(ident), nil
+		return r.switchRename(ident), nil
 	}
 
 	if r.IsPackageName(ident) {
@@ -70,7 +94,7 @@ func (r *Finder) FindOccurrences(ident *ast.Ident) (map[string][]text.Extent, er
 	return r.FindInComments(ident.Name, pkgs, result), nil
 }
 
-func (r *Finder) SwitchRename(ident *ast.Ident) map[string][]text.Extent {
+func (r *Finder) switchRename(ident *ast.Ident) map[string][]text.Extent {
 	//TODO change to perform switch and case variable rename
 	result := r.occurrencesofCaseVar(ident.Name)
 	pkgs := allPackages(r.program)
