@@ -24,6 +24,8 @@ import (
 
 	"go/ast"
 	"go/token"
+
+	"golang-refactoring.org/go-doctor/filesystem"
 )
 
 // A Severity indicates whether a log entry describes an informational message,
@@ -195,6 +197,11 @@ func (log *Log) Write(out io.Writer, cwd string) {
 // current directory.  If a relative path cannot be determined, file is
 // returned as-is.  This is intended for use in displaying error messages.
 func displayablePath(file, cwd string) string {
+	stdin, _ := filesystem.FakeStdinPath()
+	if file == stdin {
+		return "<stdin>"
+	}
+
 	if cwd == "" {
 		return file
 	}

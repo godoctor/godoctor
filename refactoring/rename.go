@@ -42,7 +42,7 @@ func (r *Rename) Description() *Description {
 			Prompt:       "What to rename this identifier to.",
 			DefaultValue: "",
 		}},
-		Quality: Development,
+		Quality: Testing,
 	}
 }
 
@@ -75,6 +75,7 @@ func (r *Rename) Run(config *Config) *Result {
 
 	switch ident := r.selectedNode.(type) {
 	case *ast.Ident:
+		//fmt.Println("selected idnent",ident.Name)
 		if ast.IsExported(ident.Name) && !ast.IsExported(r.newName) {
 			r.Log.Error("newName cannot be non Exportable if selected identifier name is Exportable")
 			return &r.Result
@@ -88,7 +89,9 @@ func (r *Rename) Run(config *Config) *Result {
 		r.rename(ident)
 		r.updateLog(config, false)
 	case *ast.BasicLit:
+		// fmt.Println("selected basiclit",ident.Value)
 		for pkg, _ := range r.program.AllPackages {
+
 			if pkg.Name() == strings.Replace(ident.Value, "\"", "", 2) {
 				search := names.NewSearchEngine(r.program)
 				searchResult := search.PackageRename(pkg.Name())
@@ -134,24 +137,30 @@ func (r *Rename) rename(ident *ast.Ident) {
 
 //IdentifierExists checks if there already exists an Identifier with the newName,with in the scope of the oldname.
 func (r *Rename) identExists(ident *ast.Ident) bool {
-
 	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
 	search := names.NewSearchEngine(r.program)
 
-	if obj == nil && !search.IsPackageName(ident) {
+	//fmt.Println("object of", ident.Name, obj)
+
+	if obj == nil && !search.IsPackageName(ident) && !search.IsSwitchVar(ident) {
 
 		r.Log.Error("unable to find declaration of selected identifier")
 		r.Log.AssociateNode(ident)
 		return true
 	}
 
-	if search.IsPackageName(ident) {
+	if search.IsPackageName(ident) || search.IsSwitchVar(ident) {
 		return false
 	}
-	identscope := obj.Parent()
+
+	if obj.Parent() != nil {
+		if r.identExistsInChildScope(ident, obj.Parent()) {
+			return true
+		}
+	}
 
 	if names.IsMethod(obj) {
-		objfound, _, pointerindirections := types.LookupFieldOrMethod(names.MethodReceiver(obj).Type(), obj.Pkg(), r.newName)
+		objfound, _, pointerindirections := types.LookupFieldOrMethod(names.MethodReceiver(obj).Type(), true, obj.Pkg(), r.newName)
 		if names.IsMethod(objfound) && pointerindirections {
 			r.Log.Error("newname already exists in scope,please select other value for the newname")
 			r.Log.AssociateNode(ident)
@@ -161,12 +170,28 @@ func (r *Rename) identExists(ident *ast.Ident) bool {
 		}
 	}
 
-	if identscope.LookupParent(r.newName) != nil {
+	if obj.Parent().LookupParent(r.newName) != nil {
 		r.Log.Error("newname already exists in scope,please select other value for the newname")
 		r.Log.AssociateNode(ident)
 		return true
 	}
 
+	return false
+}
+
+func (r *Rename) identExistsInChildScope(ident *ast.Ident, identScope *types.Scope) bool {
+	//fmt.Println("child scope",  identScope.String(), identScope.Names(), identScope.NumChildren())
+	if identScope.Lookup(r.newName) != nil {
+		r.Log.Error("newname already exists in child scope,please select other value for the newname")
+		r.Log.AssociateNode(ident)
+		return true
+	}
+
+	for i := 0; i < identScope.NumChildren(); i++ {
+		if r.identExistsInChildScope(ident, identScope.Child(i)) {
+			return true
+		}
+	}
 	return false
 }
 
@@ -188,7 +213,11 @@ func (r *Rename) addOccurrences(allOccurrences map[string][]text.Extent) {
 }
 
 func isInGoRoot(absPath string) bool {
-	return strings.HasPrefix(absPath, runtime.GOROOT())
+	goRoot := runtime.GOROOT()
+	if !strings.HasSuffix(goRoot, string(filepath.Separator)) {
+		goRoot += string(filepath.Separator)
+	}
+	return strings.HasPrefix(absPath, goRoot)
 }
 
 func (r *Rename) addFileSystemChanges(allOccurrences map[string][]text.Extent, identName string) {

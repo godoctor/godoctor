@@ -1,4 +1,3 @@
-// Copyright 2014 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -223,10 +222,12 @@ func (r *refactoringBase) Run(config *Config) *Result {
 		r.Log.Infof("Scope is %s", strings.Join(config.Scope, " "))
 	}
 
+	stdin, _ := filesystem.FakeStdinPath()
+
 	var err error
 	mutex := &sync.Mutex{}
 	r.program, err = createLoader(config, func(err error) {
-		message := err.Error()
+		message := strings.Replace(err.Error(), stdin+":", "<stdin>:", -1)
 		// TODO: This is temporary until go/loader handles cgo
 		if !strings.Contains(message, cgoError1) &&
 			!strings.HasSuffix(message, cgoError2) &&
@@ -517,11 +518,13 @@ func (r *refactoringBase) updateLog(config *Config, checkForErrors bool) {
 
 	oldFS := config.FileSystem
 	defer func() { config.FileSystem = oldFS }()
-	config.FileSystem = filesystem.NewEditedFileSystem(r.Edits)
+	config.FileSystem = filesystem.NewEditedFileSystem(oldFS, r.Edits)
 
 	newLogOldPos := NewLog()
 	newLogOldPos.Fset = r.program.Fset
 	newLogNewPos := NewLog()
+
+	stdin, _ := filesystem.FakeStdinPath()
 
 	mutex := &sync.Mutex{}
 	errors := 0
@@ -529,7 +532,7 @@ func (r *refactoringBase) updateLog(config *Config, checkForErrors bool) {
 		if !checkForErrors {
 			return
 		}
-		message := err.Error()
+		message := strings.Replace(err.Error(), stdin+":", "<stdin>:", -1)
 		// TODO: This is temporary until go/loader handles cgo
 		if !strings.Contains(message, cgoError1) &&
 			!strings.HasSuffix(message, cgoError2) &&
@@ -709,23 +712,4 @@ func (r *refactoringBase) forEachInitialFile(f func(ast *ast.File)) {
 
 func (r *refactoringBase) offsetLength(node ast.Node) (int, int) {
 	return r.program.Fset.Position(node.Pos()).Offset, (r.program.Fset.Position(node.End()).Offset - r.program.Fset.Position(node.Pos()).Offset)
-}
-
-func (r *refactoringBase) lhsNames(assign *ast.AssignStmt) []bytes.Buffer {
-	var lhsbuf bytes.Buffer
-	buf := make([]bytes.Buffer, len(assign.Lhs))
-	for i, lhs := range assign.Lhs {
-		offset, length := r.offsetLength(lhs)
-		lhsText := r.fileContents[offset : offset+length]
-		if len(assign.Lhs) == len(assign.Rhs) {
-			buf[i].Write(lhsText)
-		} else {
-			lhsbuf.Write(lhsText)
-			if i < len(assign.Lhs)-1 {
-				lhsbuf.WriteString(", ")
-			}
-			buf[0] = lhsbuf
-		}
-	}
-	return buf
 }

@@ -33,11 +33,11 @@ func (*customRefactoring) Run(config *refactoring.Config) *refactoring.Result {
 
 func TestEngine(t *testing.T) {
 	first := ""
-	for shortName, refac := range engine.AllRefactorings() {
+	for _, shortName := range engine.AllRefactoringNames() {
 		if first == "" {
 			first = shortName
 		}
-		if engine.GetRefactoring(shortName) != refac {
+		if engine.GetRefactoring(shortName) == nil {
 			t.Fatalf("GetRefactoring return incorrect")
 		}
 	}

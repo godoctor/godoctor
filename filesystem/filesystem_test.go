@@ -108,7 +108,8 @@ func TestEditedFileSystem(t *testing.T) {
 	es := text.NewEditSet()
 	es.Add(text.Extent{3, 5}, "xyz")
 	expected := "123xyz9\nABCDEFGHIJ"
-	fs := NewEditedFileSystem(map[string]*text.EditSet{testFile: es})
+	fs := NewEditedFileSystem(NewLocalFileSystem(),
+		map[string]*text.EditSet{testFile: es})
 	editedFile, err := fs.OpenFile(testFile)
 	if err != nil {
 		os.Remove(testFile)

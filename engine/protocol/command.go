@@ -62,12 +62,22 @@ type List struct {
 }
 
 func (l *List) Run(state *State, input map[string]interface{}) (Reply, error) {
-
 	if valid, err := l.Validate(state, input); valid {
+		minQuality := refactoring.Development
+		switch input["quality"].(string) {
+		case "in_testing":
+			minQuality = refactoring.Testing
+		case "production":
+			minQuality = refactoring.Production
+		}
+
 		// get all of the refactoring names
 		namesList := make([]map[string]string, 0)
-		for shortName, refactoring := range engine.AllRefactorings() {
-			namesList = append(namesList, map[string]string{"shortName": shortName, "name": refactoring.Description().Name})
+		for _, shortName := range engine.AllRefactoringNames() {
+			refactoring := engine.GetRefactoring(shortName)
+			if refactoring.Description().Quality >= minQuality {
+				namesList = append(namesList, map[string]string{"shortName": shortName, "name": refactoring.Description().Name})
+			}
 		}
 		return Reply{map[string]interface{}{"reply": "OK", "transformations": namesList}}, nil
 	} else {
@@ -186,7 +196,7 @@ func (p *Params) Validate(state *State, input map[string]interface{}) (bool, err
 
 // -=-= Put -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-type Put struct { // FIXME: Robert -- make sure this is right
+type Put struct {
 	Filename string `json:"filename"`
 	Content  string `json:"content"`
 }
@@ -197,17 +207,7 @@ func (p *Put) Run(state *State, input map[string]interface{}) (Reply, error) {
 	}
 
 	var editedFS *filesystem.EditedFileSystem
-	var ok bool
-	if editedFS, ok = state.Filesystem.(*filesystem.EditedFileSystem); !ok {
-		return Reply{map[string]interface{}{"reply": "Error",
-				"message": "put can only be executed in Web mode"}},
-			nil // FIXME: Robert -- OK to return nil here?
-	}
-
-	if input["filename"] != filesystem.FakeStdinFilename {
-		return Reply{map[string]interface{}{"reply": "Error", "message": fmt.Sprintf("put filename must be \"%s\"", filesystem.FakeStdinFilename)}},
-			nil // FIXME: Robert -- OK to return nil here?
-	}
+	editedFS = state.Filesystem.(*filesystem.EditedFileSystem)
 
 	stdinPath, err := filesystem.FakeStdinPath()
 	if err != nil {
@@ -222,7 +222,32 @@ func (p *Put) Run(state *State, input map[string]interface{}) (Reply, error) {
 }
 
 func (p *Put) Validate(state *State, input map[string]interface{}) (bool, error) {
-	//FIXME: Robert: implement Validate please
+	// validate state
+	if state.State < 2 {
+		return false, fmt.Errorf("put requires state of 2 (file system configured)")
+	}
+	if state.Mode != "web" {
+		return false, fmt.Errorf("put can only be executed in Web mode")
+	}
+
+	// validate input
+	if _, found := input["filename"]; !found {
+		return false, fmt.Errorf("filename is required")
+	}
+	if _, found := input["content"]; !found {
+		return false, fmt.Errorf("content is required")
+	}
+
+	// validate filesystem
+	if _, ok := state.Filesystem.(*filesystem.EditedFileSystem); !ok {
+		return false, fmt.Errorf("put can only be executed in Web mode")
+	}
+
+	if input["filename"] != filesystem.FakeStdinFilename {
+		//return Reply{map[string]interface{}{"reply": "Error", "message": fmt.Sprintf("put filename must be \"%s\"", filesystem.FakeStdinFilename)}},
+		return false, fmt.Errorf("put filename must be \"%s\"", filesystem.FakeStdinFilename)
+	}
+
 	return true, nil
 }
 
@@ -249,6 +274,7 @@ func (s *Setdir) Run(state *State, input map[string]interface{}) (Reply, error) 
 		if mode == "web" {
 			state.Dir = "."
 			state.Filesystem = filesystem.NewEditedFileSystem(
+				filesystem.NewLocalFileSystem(),
 				map[string]*text.EditSet{})
 		}
 
@@ -313,20 +339,18 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 
 	ts, _ := parseSelection(state, textselection)
 
-	if ts.GetFilename() != filesystem.FakeStdinFilename {
-		return Reply{map[string]interface{}{"reply": "Error", "message": fmt.Sprintf("put filename must be \"%s\"", filesystem.FakeStdinFilename)}},
-			nil // FIXME: Robert -- OK to return nil here?
-	}
-	stdinPath, err := filesystem.FakeStdinPath()
-	if err != nil {
-		return Reply{map[string]interface{}{"reply": "Error",
-			"message": err.Error()}}, err
-	}
-	switch ts := ts.(type) {
-	case *text.OffsetLengthSelection:
-		ts.Filename = stdinPath
-	case *text.LineColSelection:
-		ts.Filename = stdinPath
+	if ts.GetFilename() == filesystem.FakeStdinFilename {
+		stdinPath, err := filesystem.FakeStdinPath()
+		if err != nil {
+			return Reply{map[string]interface{}{"reply": "Error",
+				"message": err.Error()}}, err
+		}
+		switch ts := ts.(type) {
+		case *text.OffsetLengthSelection:
+			ts.Filename = stdinPath
+		case *text.LineColSelection:
+			ts.Filename = stdinPath
+		}
 	}
 
 	// get refactoring
@@ -415,13 +439,7 @@ func (x *XRun) Validate(state *State, input map[string]interface{}) (bool, error
 	}
 
 	// check transformation is valid
-	var valid bool
-	for shortName, _ := range engine.AllRefactorings() {
-		if shortName == input["transformation"].(string) {
-			valid = true
-		}
-	}
-	if !valid {
+	if engine.GetRefactoring(input["transformation"].(string)) == nil {
 		return false, errors.New("Transformation given is not a valid refactoring name")
 	}
 

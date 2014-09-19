@@ -35,11 +35,12 @@ Each <flag> must be one of the following:`)
 	fmt.Fprintln(stderr, `
 
 The <refactoring> argument determines the refactoring to perform:`)
-	for key, r := range engine.AllRefactorings() {
-		//if r.Description().Quality == refactoring.Production {
-		fmt.Fprintf(stderr, "    %-15s %s\n",
-			key, r.Description().Synopsis)
-		//}
+	for _, key := range engine.AllRefactoringNames() {
+		r := engine.GetRefactoring(key)
+		if r.Description().Quality >= refactoring.Testing {
+			fmt.Fprintf(stderr, "    %-15s %s\n",
+				key, r.Description().Synopsis)
+		}
 	}
 	fmt.Fprintln(stderr, `
 The <args> following the refactoring name vary depending on the refactoring.
@@ -116,12 +117,13 @@ func Run(stdin io.Reader, stdout io.Writer, stderr io.Writer, args []string) int
 		fmt.Fprintf(stderr, "%-15s\t%-47s\t%s\n",
 			"Refactoring", "Description", "     Multifile?")
 		fmt.Fprintf(stderr, "--------------------------------------------------------------------------------\n")
-		for key, r := range engine.AllRefactorings() {
+		for _, key := range engine.AllRefactoringNames() {
+			r := engine.GetRefactoring(key)
 			d := r.Description()
-			//if r.Description().Quality == refactoring.Production {
-			fmt.Fprintf(stderr, "%-15s\t%-50s\t%v\n",
-				key, d.Synopsis, d.Multifile)
-			//}
+			if r.Description().Quality >= refactoring.Testing {
+				fmt.Fprintf(stderr, "%-15s\t%-50s\t%v\n",
+					key, d.Synopsis, d.Multifile)
+			}
 		}
 		return 0
 	}
@@ -268,7 +270,12 @@ func Run(stdin io.Reader, stdout io.Writer, stderr io.Writer, args []string) int
 			fmt.Fprintf(stderr, "    %s\n", chg.String(cwd))
 		}
 	}
-	return 0
+
+	if result.Log.ContainsErrors() {
+		return 3
+	} else {
+		return 0
+	}
 }
 
 // writeDiff outputs a multi-file unified diff describing this refactoring's
