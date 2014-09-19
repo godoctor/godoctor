@@ -174,16 +174,18 @@ func TestFindOccurrences(t *testing.T) {
 		[]string{
 			"testdata/src/bar/bar.go:74",
 			"testdata/src/bar/bar.go:174",
-			"testdata/src/foo/foo.go:246"}, t)
+			"testdata/src/foo/foo.go:247"}, t)
 	check(findOccurrences("foo", "q", t),
 		[]string{
-			"testdata/src/foo/foo.go:136"}, t)
+			"testdata/src/foo/foo.go:137"}, t)
 	check(findInComments("foo", "q", t),
 		[]string{
-			"testdata/src/foo/foo.go:144",
-			"testdata/src/foo/foo.go:151",
-			"testdata/src/foo/foo.go:163",
-			"testdata/src/foo/foo.go:210"}, t)
+			"testdata/src/foo/foo.go:145",
+			"testdata/src/foo/foo.go:152",
+			"testdata/src/foo/foo.go:164",
+			"testdata/src/foo/foo.go:211",
+			"testdata/src/foo/foo.go:262",
+			"testdata/src/foo/foo.go:285"}, t)
 }
 
 func check(actual, expect []string, t *testing.T) {

@@ -79,15 +79,15 @@ func (r *finder) occurrences(decls map[types.Object]bool) map[string][]text.Exte
 }
 
 //TODO : Make the search robust for packagenames in importspec
-func FindReferencesToPackage(identName string, program *loader.Program) map[string][]text.Extent {
-	return (&finder{program}).findReferencesToPackage(identName)
+func FindReferencesToPackage(pkgName string, program *loader.Program) map[string][]text.Extent {
+	return (&finder{program}).findReferencesToPackage(pkgName)
 }
 
-func (r *finder) findReferencesToPackage(identName string) map[string][]text.Extent {
+func (r *finder) findReferencesToPackage(pkgName string) map[string][]text.Extent {
 	result := make(map[string][]text.Extent)
 	for pkgInfo := range allPackages(r.program) {
 		for id, obj := range pkgInfo.Defs {
-			if obj == nil && id.Name == identName {
+			if obj == nil && id.Name == pkgName {
 
 				filename := r.position(id).Filename
 				result[filename] = append(result[filename],
@@ -95,7 +95,7 @@ func (r *finder) findReferencesToPackage(identName string) map[string][]text.Ext
 			}
 		}
 		for id, obj := range pkgInfo.Uses {
-			if (obj == nil || obj.Name() == identName) && id.Name == identName {
+			if (obj == nil || obj.Name() == pkgName) && id.Name == pkgName {
 
 				filename := r.position(id).Filename
 				result[filename] = append(result[filename],
@@ -104,7 +104,7 @@ func (r *finder) findReferencesToPackage(identName string) map[string][]text.Ext
 		}
 
 		for node, pkgObject := range pkgInfo.Implicits {
-			if pkgObject.Name() == identName {
+			if pkgObject.Name() == pkgName {
 
 				filename := r.positionofObject(pkgObject).Filename
 
@@ -117,7 +117,7 @@ func (r *finder) findReferencesToPackage(identName string) map[string][]text.Ext
 				ast.Inspect(file, func(node ast.Node) bool {
 					switch n := node.(type) {
 					case *ast.ImportSpec:
-						if n.Name != nil && strings.Replace(n.Path.Value, "\"", "", 2) == identName {
+						if n.Name != nil && strings.Replace(n.Path.Value, "\"", "", 2) == pkgName {
 							//fmt.Println("pkg name with local rename")
 							filename := r.positionofPkg(n.Path).Filename
 
