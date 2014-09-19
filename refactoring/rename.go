@@ -75,7 +75,7 @@ func (r *Rename) Run(config *Config) *Result {
 
 	switch ident := r.selectedNode.(type) {
 	case *ast.Ident:
-		 //fmt.Println("selected idnent",ident.Name)
+		//fmt.Println("selected idnent",ident.Name)
 		if ast.IsExported(ident.Name) && !ast.IsExported(r.newName) {
 			r.Log.Error("newName cannot be non Exportable if selected identifier name is Exportable")
 			return &r.Result
@@ -137,7 +137,6 @@ func (r *Rename) rename(ident *ast.Ident) {
 
 //IdentifierExists checks if there already exists an Identifier with the newName,with in the scope of the oldname.
 func (r *Rename) identExists(ident *ast.Ident) bool {
-
 	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
 	search := names.NewSearchEngine(r.program)
 
@@ -154,14 +153,13 @@ func (r *Rename) identExists(ident *ast.Ident) bool {
 		return false
 	}
 
-       if obj.Parent() != nil {
+	if obj.Parent() != nil {
 		if r.identExistsInChildScope(ident, obj.Parent()) {
 			return true
 		}
-	}	
+	}
 
 	if names.IsMethod(obj) {
-		//objfound, _, pointerindirections := types.LookupFieldOrMethod(names.MethodReceiver(obj).Type(), obj.Pkg(), r.newName)
 		objfound, _, pointerindirections := types.LookupFieldOrMethod(names.MethodReceiver(obj).Type(), true, obj.Pkg(), r.newName)
 		if names.IsMethod(objfound) && pointerindirections {
 			r.Log.Error("newname already exists in scope,please select other value for the newname")
