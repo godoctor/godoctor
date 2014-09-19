@@ -18,12 +18,64 @@ import (
 	"golang-refactoring.org/go-doctor/text"
 )
 
-type SearchEngine struct {
+type Finder struct {
 	program *loader.Program
 }
 
-func NewSearchEngine(program *loader.Program) *SearchEngine {
-	return &SearchEngine{program}
+func NewFinder(program *loader.Program) *Finder {
+	return &Finder{program}
+}
+
+/* -=-=- Search for Conflicting Declarations -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
+
+// FindConflict determines if there already exists an identifier with the given
+// newName such that the given ident cannot be renamed to newName.  It returns
+// the first such conflicting declaration, if one exists, and nil otherwise.
+func (r *Finder) FindConflict(ident *ast.Ident, newName string) *ast.Ident {
+	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
+
+	if obj == nil && !r.IsPackageName(ident) && !r.IsSwitchVar(ident) {
+		return ident
+	}
+
+	if r.IsPackageName(ident) || r.IsSwitchVar(ident) {
+		return nil
+	}
+
+	if obj.Parent() != nil {
+		if result := r.findConflictInChildScope(ident, obj.Parent(), newName); result != nil {
+			return result
+		}
+	}
+
+	if IsMethod(obj) {
+		objfound, _, pointerindirections := types.LookupFieldOrMethod(MethodReceiver(obj).Type(), true, obj.Pkg(), newName)
+		if IsMethod(objfound) && pointerindirections {
+			return ident
+		} else {
+			return nil
+		}
+	}
+
+	if obj.Parent().LookupParent(newName) != nil {
+		return ident
+	}
+
+	return nil
+}
+
+func (r *Finder) findConflictInChildScope(ident *ast.Ident, identScope *types.Scope, newName string) *ast.Ident {
+	//fmt.Println("child scope",  identScope.String(), identScope.Names(), identScope.NumChildren())
+	if identScope.Lookup(newName) != nil {
+		return ident
+	}
+
+	for i := 0; i < identScope.NumChildren(); i++ {
+		if result := r.findConflictInChildScope(ident, identScope.Child(i), newName); result != nil {
+			return result
+		}
+	}
+	return nil
 }
 
 /* -=-=- Search Across Interfaces =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
@@ -42,8 +94,7 @@ func NewSearchEngine(program *loader.Program) *SearchEngine {
 // signature to be renamed in Interface1, Interface2, Type2, and Type3.  This
 // method returns a set containing the reflexive, transitive closure of objects
 // that must be renamed if the given identifier is renamed.
-// TODO: Does this need to be API?  If not, no need to explicitly check if ident is a method
-func (r *SearchEngine) FindDeclarationsAcrossInterfaces(ident *ast.Ident) (map[types.Object]bool, error) {
+func (r *Finder) FindDeclarationsAcrossInterfaces(ident *ast.Ident) (map[types.Object]bool, error) {
 	pkgInfo := r.pkgInfo(r.fileContaining(ident))
 	obj := pkgInfo.ObjectOf(ident)
 
@@ -57,7 +108,10 @@ func (r *SearchEngine) FindDeclarationsAcrossInterfaces(ident *ast.Ident) (map[t
 		// types continue to implement the same interfaces
 		return r.reachableMethods(ident, obj.(*types.Func), r.program.AllPackages[obj.Pkg()]), nil
 	} else {
-		// If obj is not a method, then only one object needs to change
+		// If obj is not a method, then only one object needs to
+		// change.  When this is called from inside the analysis/names
+		// package, this will never occur, but it may when this method
+		// is invoked as API.
 		return map[types.Object]bool{obj: true}, nil
 	}
 
@@ -80,7 +134,7 @@ func MethodReceiver(obj types.Object) *types.Var {
 // reachableMethods receives an object for a method (i.e., a types.Func with
 // a non-nil receiver) and the PackageInfo in which it was declared and returns
 // a set of objects that must be renamed if that method is renamed.
-func (r *SearchEngine) reachableMethods(ident *ast.Ident, obj *types.Func, pkgInfo *loader.PackageInfo) map[types.Object]bool {
+func (r *Finder) reachableMethods(ident *ast.Ident, obj *types.Func, pkgInfo *loader.PackageInfo) map[types.Object]bool {
 	// Find methods and interfaces defined in the given package that have
 	// the same signature as the argument method (obj)
 	sig := obj.Type().(*types.Signature)
@@ -146,7 +200,7 @@ func (r *SearchEngine) reachableMethods(ident *ast.Ident, obj *types.Func, pkgIn
 // important corner case to bear in mind if you're building Go tools. It means
 // you can have a legal struct or interface with two fields/methods both named
 // "f", if they come from different packages.
-func (r *SearchEngine) methodDeclsMatchingSig(ident *ast.Ident, sig *types.Signature, pkgInfo *loader.PackageInfo) (methods map[types.Object]bool, interfaces map[*types.Interface]bool) {
+func (r *Finder) methodDeclsMatchingSig(ident *ast.Ident, sig *types.Signature, pkgInfo *loader.PackageInfo) (methods map[types.Object]bool, interfaces map[*types.Interface]bool) {
 	methods = map[types.Object]bool{}
 	interfaces = map[*types.Interface]bool{}
 	for _, file := range pkgInfo.Files {
@@ -189,7 +243,7 @@ func (r *SearchEngine) methodDeclsMatchingSig(ident *ast.Ident, sig *types.Signa
 // indirect references to the same object as given identifier.  The returned
 // map maps filenames to a slice of (offset, length) pairs describing locations
 // at which the given identifier is referenced.
-func (r *SearchEngine) FindOccurrences(ident *ast.Ident) (map[string][]text.Extent, error) {
+func (r *Finder) FindOccurrences(ident *ast.Ident) (map[string][]text.Extent, error) {
 
 	var pkgs map[*loader.PackageInfo]bool
 	var result map[string][]text.Extent
@@ -230,7 +284,7 @@ func (r *SearchEngine) FindOccurrences(ident *ast.Ident) (map[string][]text.Exte
 	return r.occurrencesInComments(ident.Name, pkgs, result), nil
 }
 
-func (r *SearchEngine) SwitchRename(ident *ast.Ident) map[string][]text.Extent {
+func (r *Finder) SwitchRename(ident *ast.Ident) map[string][]text.Extent {
 	//TODO change to perform switch and case variable rename
 	result := r.occurrencesofCaseVar(ident.Name)
 	pkgs := allPackages(r.program)
@@ -238,7 +292,7 @@ func (r *SearchEngine) SwitchRename(ident *ast.Ident) map[string][]text.Extent {
 
 }
 
-func (r *SearchEngine) PackageRename(identName string) map[string][]text.Extent {
+func (r *Finder) PackageRename(identName string) map[string][]text.Extent {
 
 	result := r.occurrencesofpkg(identName)
 	pkgs := allPackages(r.program)
@@ -248,7 +302,7 @@ func (r *SearchEngine) PackageRename(identName string) map[string][]text.Extent 
 
 // occurrences returns the source locations of all identifiers that resolve
 // to one of the given objects.
-func (r *SearchEngine) occurrences(decls map[types.Object]bool) map[string][]text.Extent {
+func (r *Finder) occurrences(decls map[types.Object]bool) map[string][]text.Extent {
 	result := make(map[string][]text.Extent)
 	for pkgInfo := range r.packages(decls) {
 		for id, obj := range pkgInfo.Defs {
@@ -271,7 +325,7 @@ func (r *SearchEngine) occurrences(decls map[types.Object]bool) map[string][]tex
 }
 
 //TODO : Make the search robust for packagenames in importspec
-func (r *SearchEngine) occurrencesofpkg(identName string) map[string][]text.Extent {
+func (r *Finder) occurrencesofpkg(identName string) map[string][]text.Extent {
 
 	result := make(map[string][]text.Extent)
 	for pkgInfo := range allPackages(r.program) {
@@ -328,7 +382,7 @@ func (r *SearchEngine) occurrencesofpkg(identName string) map[string][]text.Exte
 }
 
 //TODO : Make the search robust
-func (r *SearchEngine) occurrencesofCaseVar(identName string) map[string][]text.Extent {
+func (r *Finder) occurrencesofCaseVar(identName string) map[string][]text.Extent {
 
 	result := make(map[string][]text.Extent)
 	for pkgInfo := range allPackages(r.program) {
@@ -360,24 +414,24 @@ func (r *SearchEngine) occurrencesofCaseVar(identName string) map[string][]text.
 	return result
 }
 
-func (r *SearchEngine) position(id *ast.Ident) token.Position {
+func (r *Finder) position(id *ast.Ident) token.Position {
 	return r.program.Fset.Position(id.NamePos)
 }
-func (r *SearchEngine) positionofObject(pkgObject types.Object) token.Position {
+func (r *Finder) positionofObject(pkgObject types.Object) token.Position {
 	return r.program.Fset.Position(pkgObject.Pos())
 }
-func (r *SearchEngine) positionofPkg(id *ast.BasicLit) token.Position {
+func (r *Finder) positionofPkg(id *ast.BasicLit) token.Position {
 	return r.program.Fset.Position(id.ValuePos)
 }
 
-func (r *SearchEngine) offsetLength(id *ast.Ident) text.Extent {
+func (r *Finder) offsetLength(id *ast.Ident) text.Extent {
 	position := r.position(id)
 	offset := position.Offset
 	length := len(id.Name)
 	return text.Extent{offset, length}
 }
 
-func (r *SearchEngine) offsetLengthofObject(node ast.Node, obj types.Object) text.Extent {
+func (r *Finder) offsetLengthofObject(node ast.Node, obj types.Object) text.Extent {
 
 	var offset int
 	position := r.positionofObject(obj)
@@ -400,7 +454,7 @@ func (r *SearchEngine) offsetLengthofObject(node ast.Node, obj types.Object) tex
 	return text.Extent{offset, length}
 }
 
-func (r *SearchEngine) offsetLengthofPkg(id *ast.BasicLit) text.Extent {
+func (r *Finder) offsetLengthofPkg(id *ast.BasicLit) text.Extent {
 
 	var offset int
 	position := r.positionofPkg(id)
@@ -428,7 +482,7 @@ func (r *SearchEngine) offsetLengthofPkg(id *ast.BasicLit) text.Extent {
 // TODO(review D7); If performance is a concern, you could return only the
 // packages in the reverse transitive closure of the package import graph,
 // rather than all the packages.
-func (r *SearchEngine) packages(decls map[types.Object]bool) map[*loader.PackageInfo]bool {
+func (r *Finder) packages(decls map[types.Object]bool) map[*loader.PackageInfo]bool {
 	pkgs := make(map[*loader.PackageInfo]bool)
 	for decl := range decls {
 		if decl.Exported() {
@@ -440,7 +494,7 @@ func (r *SearchEngine) packages(decls map[types.Object]bool) map[*loader.Package
 	return pkgs
 }
 
-func (r *SearchEngine) pkgInfoForPkg(pkg *types.Package) *loader.PackageInfo {
+func (r *Finder) pkgInfoForPkg(pkg *types.Package) *loader.PackageInfo {
 	return r.program.AllPackages[pkg]
 }
 
@@ -454,7 +508,7 @@ func allPackages(prog *loader.Program) map[*loader.PackageInfo]bool {
 
 // occurrencesincomments checks if the name of the selected identifier occurs as a word in comments,if true then
 // all the source locations of name in comments are returned.
-func (r *SearchEngine) occurrencesInComments(name string, pkgs map[*loader.PackageInfo]bool, result map[string][]text.Extent) map[string][]text.Extent {
+func (r *Finder) occurrencesInComments(name string, pkgs map[*loader.PackageInfo]bool, result map[string][]text.Extent) map[string][]text.Extent {
 	for pkgInfo := range pkgs {
 		for _, f := range pkgInfo.Files {
 			for _, comment := range f.Comments {
@@ -470,7 +524,7 @@ func (r *SearchEngine) occurrencesInComments(name string, pkgs map[*loader.Packa
 // occurrencesInFileComments finds the source location of  selected identifier names in
 // comments, appends them to the already found source locations of
 // selected identifier objects (result), and returns the result.
-func (r *SearchEngine) occurrencesInFileComments(f *ast.File, comment *ast.CommentGroup, name string, result map[string][]text.Extent, prog *loader.Program) map[string][]text.Extent {
+func (r *Finder) occurrencesInFileComments(f *ast.File, comment *ast.CommentGroup, name string, result map[string][]text.Extent, prog *loader.Program) map[string][]text.Extent {
 	var whitespaceindex int = 1
 	var offset int
 	//regexpstring := fmt.Sprintf("[\\PL]%s[\\PL]|//%s[\\PL]|/*%s[\\PL]|[\\PL]%s$", name, name, name, name)
@@ -492,7 +546,7 @@ func (r *SearchEngine) occurrencesInFileComments(f *ast.File, comment *ast.Comme
 
 /* -=-=- Utility Methods -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 
-func (r *SearchEngine) IsPackageName(ident *ast.Ident) bool {
+func (r *Finder) IsPackageName(ident *ast.Ident) bool {
 	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
 	if r.pkgInfo(r.fileContaining(ident)).Pkg.Name() == ident.Name && obj == nil {
 		return true
@@ -501,7 +555,7 @@ func (r *SearchEngine) IsPackageName(ident *ast.Ident) bool {
 	return false
 }
 
-func (r *SearchEngine) IsSwitchVar(ident *ast.Ident) bool {
+func (r *Finder) IsSwitchVar(ident *ast.Ident) bool {
 	//pkginfo := r.pkgInfo(r.fileContaining(ident))
 	obj := r.pkgInfo(r.fileContaining(ident)).ObjectOf(ident)
 
@@ -517,7 +571,7 @@ func (r *SearchEngine) IsSwitchVar(ident *ast.Ident) bool {
 }
 
 // TODO: These are duplicated from refactoring.go
-func (r *SearchEngine) fileContaining(node ast.Node) *ast.File {
+func (r *Finder) fileContaining(node ast.Node) *ast.File {
 	tfile := r.program.Fset.File(node.Pos())
 	for _, pkgInfo := range r.program.AllPackages {
 		for _, thisFile := range pkgInfo.Files {
@@ -529,7 +583,7 @@ func (r *SearchEngine) fileContaining(node ast.Node) *ast.File {
 	panic("No ast.File for node")
 }
 
-func (r *SearchEngine) pkgInfo(file *ast.File) *loader.PackageInfo {
+func (r *Finder) pkgInfo(file *ast.File) *loader.PackageInfo {
 	for _, pkgInfo := range r.program.AllPackages {
 		for _, thisFile := range pkgInfo.Files {
 			if thisFile == file {

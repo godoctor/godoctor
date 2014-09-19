@@ -82,7 +82,7 @@ func equals(a, b []string) bool {
 func findOccurrences(pkgName, identName string, t *testing.T) []string {
 	prog := setup(t)
 	ident := findFirstIdent(prog, pkgName, identName, t)
-	searchResult, err := names.NewSearchEngine(prog).FindOccurrences(ident)
+	searchResult, err := names.NewFinder(prog).FindOccurrences(ident)
 
 	result := []string{}
 	if err != nil {
@@ -177,6 +177,6 @@ func check(actual, expect []string, t *testing.T) {
 	}
 }
 
-// (r *SearchEngine) FindDeclarationsAcrossInterfaces(ident *ast.Ident) (map[types.Object]bool, error)
-// (r *SearchEngine) FindOccurrences(ident *ast.Ident) (map[string][]text.Extent, error)
-// (r *SearchEngine) IsPackageName(ident *ast.Ident)
+// (r *Finder) FindDeclarationsAcrossInterfaces(ident *ast.Ident) (map[types.Object]bool, error)
+// (r *Finder) FindOccurrences(ident *ast.Ident) (map[string][]text.Extent, error)
+// (r *Finder) IsPackageName(ident *ast.Ident)
