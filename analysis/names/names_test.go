@@ -83,11 +83,22 @@ func findOccurrences(pkgName, identName string, t *testing.T) []string {
 	prog := setup(t)
 	ident, pkg := findFirstIdent(prog, pkgName, identName, t)
 	searchResult, err := names.FindOccurrences(ident, pkg, prog)
-
-	result := []string{}
 	if err != nil {
 		t.Fatal(err)
 	}
+	return createResult(searchResult)
+}
+
+func findInComments(pkgName, identName string, t *testing.T) []string {
+	prog := setup(t)
+	file := findPackage(prog, pkgName, t).Files[0]
+	fname := prog.Fset.Position(file.Pos()).Filename
+	return createResult(map[string][]text.Extent{
+		fname: names.FindInComments(identName, file, prog.Fset)})
+}
+
+func createResult(searchResult map[string][]text.Extent) []string {
+	result := []string{}
 	for _, filename := range sortKeys(searchResult) {
 		for _, extent := range searchResult[filename] {
 			result = append(result, fmt.Sprintf("%s:%d", filename, extent.Offset))
@@ -165,7 +176,9 @@ func TestFindOccurrences(t *testing.T) {
 			"testdata/src/foo/foo.go:246"}, t)
 	check(findOccurrences("foo", "q", t),
 		[]string{
-			"testdata/src/foo/foo.go:136",
+			"testdata/src/foo/foo.go:136"}, t)
+	check(findInComments("foo", "q", t),
+		[]string{
 			"testdata/src/foo/foo.go:144",
 			"testdata/src/foo/foo.go:151",
 			"testdata/src/foo/foo.go:163",

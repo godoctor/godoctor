@@ -61,10 +61,6 @@ type finder struct {
 }
 
 func (r *finder) FindOccurrences(ident *ast.Ident, pkgInfo *loader.PackageInfo) (map[string][]text.Extent, error) {
-
-	var pkgs map[*loader.PackageInfo]bool
-	var result map[string][]text.Extent
-
 	obj := pkgInfo.ObjectOf(ident)
 	if obj == nil && !IsPackageName(ident, pkgInfo) && !isSwitchVar(ident, pkgInfo) {
 
@@ -80,40 +76,26 @@ func (r *finder) FindOccurrences(ident *ast.Ident, pkgInfo *loader.PackageInfo) 
 	if IsPackageName(ident, pkgInfo) {
 
 		return PackageRename(ident.Name, r.program), nil
-	} else {
-
-		var decls map[types.Object]bool
-		if IsMethod(obj) {
-			var err error
-			decls, err = FindDeclarationsAcrossInterfaces(ident, pkgInfo, r.program)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			decls = map[types.Object]bool{obj: true}
-		}
-
-		result = r.occurrences(decls)
-		pkgs = r.packages(decls)
 	}
 
-	return FindInComments(ident.Name, r.program, pkgs, result), nil
+	var decls map[types.Object]bool
+	var err error
+	decls, err = FindDeclarationsAcrossInterfaces(ident, pkgInfo, r.program)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.occurrences(decls), nil
 }
 
 func (r *finder) switchRename(ident *ast.Ident) map[string][]text.Extent {
 	//TODO change to perform switch and case variable rename
-	result := r.occurrencesofCaseVar(ident.Name)
-	pkgs := allPackages(r.program)
-	return FindInComments(ident.Name, r.program, pkgs, result)
-
+	return r.occurrencesofCaseVar(ident.Name)
 }
 
 func PackageRename(identName string, program *loader.Program) map[string][]text.Extent {
 	r := &finder{program}
-	result := r.occurrencesofpkg(identName)
-	pkgs := allPackages(program)
-	return FindInComments(identName, program, pkgs, result)
-
+	return r.occurrencesofpkg(identName)
 }
 
 // occurrences returns the source locations of all identifiers that resolve

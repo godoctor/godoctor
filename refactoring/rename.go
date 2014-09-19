@@ -136,6 +136,12 @@ func (r *Rename) rename(ident *ast.Ident, pkgInfo *loader.PackageInfo) {
 		return
 	}
 
+	for fname, _ := range searchResult {
+		_, file := r.fileNamed(fname)
+		occs := names.FindInComments(ident.Name, file, r.program.Fset)
+		searchResult[fname] = append(searchResult[fname], occs...)
+	}
+
 	r.addOccurrences(searchResult)
 	if names.IsPackageName(ident, pkgInfo) {
 		r.addFileSystemChanges(searchResult, ident.Name)

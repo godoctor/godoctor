@@ -7,46 +7,41 @@ package names
 import (
 	"fmt"
 	"go/ast"
+	"go/token"
 	"regexp"
 	"strings"
 
-	"code.google.com/p/go.tools/go/loader"
 	"golang-refactoring.org/go-doctor/text"
 )
 
 // FindInComments searches the comments of the given packages' source files for
 // occurrences of the given name (as a word) and returns their source locations.
-func FindInComments(name string, program *loader.Program, pkgs map[*loader.PackageInfo]bool, result map[string][]text.Extent) map[string][]text.Extent {
-	for pkgInfo := range pkgs {
-		for _, f := range pkgInfo.Files {
-			fname := program.Fset.Position(f.Pos()).Filename
-			for _, comment := range f.Comments {
-				if strings.Contains(comment.List[0].Text, name) {
-					result = addOccurrences(fname, program, comment, name, result)
-				}
-			}
+func FindInComments(name string, f *ast.File, fset *token.FileSet) []text.Extent {
+	result := []text.Extent{}
+	for _, comment := range f.Comments {
+		if strings.Contains(comment.List[0].Text, name) {
+			result = append(result, occurrences(name, comment, fset)...)
 		}
 	}
 	return result
 }
 
-// findInFileComments returns the source location of  selected identifier names in
-// comments, appends them to the already found source locations of
-// selected identifier objects (result), and returns the result.
-func addOccurrences(filename string, program *loader.Program, comment *ast.CommentGroup, name string, result map[string][]text.Extent) map[string][]text.Extent {
-	var whitespaceindex int = 1
-	var offset int
-	//regexpstring := fmt.Sprintf("[\\PL]%s[\\PL]|//%s[\\PL]|/*%s[\\PL]|[\\PL]%s$", name, name, name, name)
+// occurrences returns the source location of the given name in the given
+// CommentGroup.
+func occurrences(name string, comment *ast.CommentGroup, fset *token.FileSet) []text.Extent {
+	var result []text.Extent
+	whitespaceindex := 1
 	regexpstring := fmt.Sprintf("[\\PL]%s[\\PL]|//%s[\\PL]|/\\*%s[\\PL]|[\\PL]%s$", name, name, name, name)
 	re := regexp.MustCompile(regexpstring)
 	matchcount := strings.Count(comment.List[0].Text, name)
 	for _, matchindex := range re.FindAllStringIndex(comment.List[0].Text, matchcount) {
+		var offset int
 		if matchindex[0] == 0 {
-			offset = program.Fset.Position(comment.List[0].Slash).Offset + matchindex[0] + whitespaceindex + 1
+			offset = fset.Position(comment.List[0].Slash).Offset + matchindex[0] + whitespaceindex + 1
 		} else {
-			offset = program.Fset.Position(comment.List[0].Slash).Offset + matchindex[0] + whitespaceindex
+			offset = fset.Position(comment.List[0].Slash).Offset + matchindex[0] + whitespaceindex
 		}
-		result[filename] = append(result[filename], text.Extent{offset, len(name)})
+		result = append(result, text.Extent{offset, len(name)})
 	}
 	return result
 }
