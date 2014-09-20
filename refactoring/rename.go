@@ -9,9 +9,7 @@ package refactoring
 
 import (
 	"go/ast"
-	"go/parser"
 	"go/token"
-	"io/ioutil"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -20,7 +18,6 @@ import (
 	"code.google.com/p/go.tools/go/loader"
 
 	"golang-refactoring.org/go-doctor/analysis/names"
-	"golang-refactoring.org/go-doctor/filesystem"
 	"golang-refactoring.org/go-doctor/text"
 )
 
@@ -95,19 +92,6 @@ func (r *Rename) Run(config *Config) *Result {
 		r.updateLog(config, false)
 		return &r.Result
 
-	case *ast.BasicLit:
-		// FIXME: This seems too broad?  -JO
-		for pkg, _ := range r.program.AllPackages {
-			if pkg.Name() == strings.Replace(ident.Value, "\"", "", 2) {
-				idents, imports := names.FindReferencesToPackage(pkg.Name(), r.program)
-				extents := r.pkgExtents(pkg.Name(), idents, imports, r.program.Fset)
-				r.addOccurrences(extents)
-				r.addFileSystemChanges(extents, pkg.Name())
-			}
-		}
-		r.updateLog(config, false)
-		return &r.Result
-
 	default:
 		r.Log.Error("Please select an identifier to rename.")
 		r.Log.AssociatePos(r.selectionStart, r.selectionEnd)
@@ -126,16 +110,19 @@ func isReservedWord(newName string) bool {
 }
 
 func (r *Rename) rename(ident *ast.Ident, pkgInfo *loader.PackageInfo) {
+	if pkgInfo.ObjectOf(ident) == nil && r.selectedTypeSwitchVar() == nil {
+		r.Log.Errorf("Package renaming is not supported")
+		r.Log.AssociateNode(ident)
+		return
+	}
+
 	if conflict := names.FindConflict(pkgInfo.ObjectOf(ident), r.newName); conflict != nil {
 		r.Log.Errorf("Renaming %s to %s may cause conflicts with an existing declaration", ident.Name, r.newName)
 		r.Log.AssociatePos(conflict.Pos(), conflict.Pos())
 	}
 
 	var extents map[string][]text.Extent
-	if isPackageName(ident, pkgInfo) {
-		idents, imports := names.FindReferencesToPackage(ident.Name, r.program)
-		extents = r.pkgExtents(ident.Name, idents, imports, r.program.Fset)
-	} else if ts := r.selectedTypeSwitchVar(); ts != nil {
+	if ts := r.selectedTypeSwitchVar(); ts != nil {
 		extents = r.extents(names.FindTypeSwitchVarOccurrences(ts, r.selectedNodePkg, r.program), r.program.Fset)
 	} else {
 		extents = r.extents(names.FindOccurrences(pkgInfo.ObjectOf(ident), r.program), r.program.Fset)
@@ -148,11 +135,6 @@ func (r *Rename) rename(ident *ast.Ident, pkgInfo *loader.PackageInfo) {
 	}
 
 	r.addOccurrences(extents)
-	if isPackageName(ident, pkgInfo) {
-		r.addFileSystemChanges(extents, ident.Name)
-	}
-
-	return
 }
 
 func (r *Rename) extents(ids map[*ast.Ident]bool, fset *token.FileSet) map[string][]text.Extent {
@@ -171,53 +153,6 @@ func (r *Rename) extents(ids map[*ast.Ident]bool, fset *token.FileSet) map[strin
 		sorted[fname] = text.Sort(extents)
 	}
 	return sorted
-}
-
-func (r *Rename) pkgExtents(pkgName string, idents map[*ast.Ident]bool, imports map[*ast.ImportSpec]bool, fset *token.FileSet) map[string][]text.Extent {
-	result := map[string][]text.Extent{}
-
-	for id, _ := range idents {
-		pos := fset.Position(id.Pos())
-		if _, ok := result[pos.Filename]; !ok {
-			result[pos.Filename] = []text.Extent{}
-		}
-		result[pos.Filename] = append(result[pos.Filename],
-			text.Extent{Offset: pos.Offset, Length: len(id.Name)})
-	}
-
-	for imp, _ := range imports {
-		pos := fset.Position(imp.Path.Pos())
-		if _, ok := result[pos.Filename]; !ok {
-			result[pos.Filename] = []text.Extent{}
-		}
-		result[pos.Filename] = append(result[pos.Filename],
-			substringExtent(imp.Path.Value, pkgName, pos.Offset))
-	}
-
-	sorted := map[string][]text.Extent{}
-	for fname, extents := range result {
-		sorted[fname] = text.Sort(extents)
-	}
-	return sorted
-}
-
-func substringExtent(s, pkgName string, baseOffset int) text.Extent {
-	idx := strings.Index(s, pkgName)
-	if idx < 1 {
-		panic("substringExtent: idx < 1")
-	}
-	return text.Extent{
-		Offset: baseOffset + idx,
-		Length: len(pkgName)}
-}
-
-func isPackageName(ident *ast.Ident, pkgInfo *loader.PackageInfo) bool {
-	obj := pkgInfo.ObjectOf(ident)
-	if pkgInfo.Pkg.Name() == ident.Name && obj == nil {
-		return true
-	}
-
-	return false
 }
 
 func (r *Rename) selectedTypeSwitchVar() *ast.TypeSwitchStmt {
@@ -268,35 +203,4 @@ func isInGoRoot(absPath string) bool {
 		goRoot += string(filepath.Separator)
 	}
 	return strings.HasPrefix(absPath, goRoot)
-}
-
-func (r *Rename) addFileSystemChanges(allOccurrences map[string][]text.Extent, identName string) {
-	for filename, _ := range allOccurrences {
-
-		if filepath.Base(filepath.Dir(filename)) == identName && allFilesinDirectoryhaveSamePkg(filepath.Dir(filename), identName) {
-			chg := &filesystem.Rename{filepath.Dir(filename), r.newName}
-			r.FSChanges = append(r.FSChanges, chg)
-		}
-	}
-}
-
-func allFilesinDirectoryhaveSamePkg(directorypath string, identName string) bool {
-	var renamefile bool = false
-	fileInfos, _ := ioutil.ReadDir(directorypath)
-
-	// FIXME: This seems expensive -- is it really necessary?  -JO
-	for _, file := range fileInfos {
-		if strings.HasSuffix(file.Name(), ".go") {
-			fset := token.NewFileSet()
-			f, err := parser.ParseFile(fset, filepath.Join(directorypath, file.Name()), nil, 0)
-			if err != nil {
-				panic(err)
-			}
-			if f.Name.Name == identName {
-				renamefile = true
-			}
-		}
-	}
-
-	return renamefile
 }

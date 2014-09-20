@@ -246,10 +246,6 @@ func Run(stdin io.Reader, stdout io.Writer, stderr io.Writer, args []string) int
 				return 1
 			}
 		}
-		if len(result.FSChanges) > 0 {
-			fmt.Fprintf(stderr, "Error: When source code is given on standard input, refactorings are prohibited from changing any other files.  This refactoring would require a change to the file system (%s).\n", result.FSChanges[0])
-			return 1
-		}
 	}
 
 	if *writeFlag {
@@ -262,13 +258,6 @@ func Run(stdin io.Reader, stdout io.Writer, stderr io.Writer, args []string) int
 	if err != nil {
 		fmt.Fprintf(stderr, "Error: %s.\n", err)
 		return 1
-	}
-
-	if !*writeFlag && len(result.FSChanges) > 0 {
-		fmt.Fprintln(stderr, "After applying the patch, the following file system changes must be made:")
-		for _, chg := range result.FSChanges {
-			fmt.Fprintf(stderr, "    %s\n", chg.String(cwd))
-		}
 	}
 
 	if result.Log.ContainsErrors() {
@@ -356,11 +345,6 @@ func writeToDisk(result *refactoring.Result, fs filesystem.FileSystem) error {
 			err = err1
 		}
 		if err != nil {
-			return err
-		}
-	}
-	for _, change := range result.FSChanges {
-		if err := change.ExecuteUsing(fs); err != nil {
 			return err
 		}
 	}

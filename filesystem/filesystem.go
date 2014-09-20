@@ -127,6 +127,11 @@ func (fs *LocalFileSystem) Rename(oldPath, newName string) error {
 	return os.Rename(oldPath, newPath)
 }
 
+func isBareFilename(filePath string) bool {
+	dir, _ := filepath.Split(filePath)
+	return dir == ""
+}
+
 func (fs *LocalFileSystem) Remove(path string) error {
 	return os.Remove(path)
 }

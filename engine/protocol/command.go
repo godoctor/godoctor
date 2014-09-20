@@ -410,24 +410,6 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 		}
 	}
 
-	// filesystem changes
-	var fschanges []map[string]string
-	if len(result.FSChanges) > 0 {
-		fschanges = make([]map[string]string, len(result.FSChanges))
-		for i, change := range result.FSChanges {
-			switch change := change.(type) {
-			case *filesystem.CreateFile:
-				fschanges[i] = map[string]string{"change": "create", "file": change.Path, "content": change.Contents}
-			case *filesystem.Remove:
-				fschanges[i] = map[string]string{"change": "delete", "path": change.Path}
-			case *filesystem.Rename:
-				fschanges[i] = map[string]string{"change": "rename", "from": change.Path, "to": change.NewName}
-			}
-		}
-		// return with filesystem changes
-		return Reply{map[string]interface{}{"reply": "OK", "description": refac.Description().Name, "log": logs, "files": changes, "fsChanges": fschanges}}, nil
-	}
-
 	// return without filesystem changes
 	return Reply{map[string]interface{}{"reply": "OK", "description": refac.Description().Name, "log": logs, "files": changes}}, nil
 }

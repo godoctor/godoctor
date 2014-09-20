@@ -156,8 +156,8 @@ type Config struct {
 //        open in the text editor and the selected region/caret position.
 //     3. Invoke Run, which returns a Result.
 //     4. If Result.Log is not empty, display the log to the user.
-//     5. If Result.Edits or Result.FSChanges are non-nil, they may be applied
-//        to complete the transformation.
+//     5. If Result.Edits is non-nil, the edits may be applied to complete the
+//        transformation.
 type Refactoring interface {
 	Description() *Description
 	Run(*Config) *Result
@@ -165,19 +165,13 @@ type Refactoring interface {
 
 type Result struct {
 	// A list of informational messages, errors, and warnings to display to
-	// the user.  If the Log.ContainsErrors() is true, the Edits and
-	// FSChanges may be empty or incomplete, since it may not be possible
-	// to perform the refactoring.
+	// the user.  If the Log.ContainsErrors() is true, the Edits may be
+	// empty or incomplete, since it may not be possible to perform the
+	// refactoring.
 	Log *Log
 	// Maps filenames to the text edits that should be applied to those
 	// files.
 	Edits map[string]*text.EditSet
-	// File system changes: files and directories to rename, create, or
-	// delete after the Edits have been applied.  These changes should be
-	// applied in order, since changes later in the list may depend on the
-	// successful completion of changes earlier in the list (e.g., a path
-	// to a file may be invalid after its containing directory is renamed).
-	FSChanges []filesystem.Change
 }
 
 const cgoError1 = "could not import C (cannot"
@@ -214,7 +208,6 @@ type refactoringBase struct {
 func (r *refactoringBase) Run(config *Config) *Result {
 	r.Log = NewLog()
 	r.Edits = map[string]*text.EditSet{}
-	r.FSChanges = []filesystem.Change{}
 
 	if config.FileSystem == nil {
 		r.Log.Error("INTERNAL ERROR: null Config.FileSystem")

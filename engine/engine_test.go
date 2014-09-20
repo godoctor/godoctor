@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"golang-refactoring.org/go-doctor/engine"
-	"golang-refactoring.org/go-doctor/filesystem"
 	"golang-refactoring.org/go-doctor/refactoring"
 	"golang-refactoring.org/go-doctor/text"
 )
@@ -25,9 +24,8 @@ func (*customRefactoring) Description() *refactoring.Description {
 
 func (*customRefactoring) Run(config *refactoring.Config) *refactoring.Result {
 	return &refactoring.Result{
-		Log:       refactoring.NewLog(),
-		Edits:     map[string]*text.EditSet{},
-		FSChanges: []filesystem.Change{},
+		Log:   refactoring.NewLog(),
+		Edits: map[string]*text.EditSet{},
 	}
 }
 

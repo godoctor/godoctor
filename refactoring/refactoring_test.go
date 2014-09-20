@@ -77,8 +77,6 @@ const FAIL = "fail"
 
 const MAIN_DOT_GO = "main.go"
 
-const FSCHANGES_TXT = "fschanges.txt"
-
 var filterFlag = flag.String("filter", "",
 	"Only tests from directories containing this substring will be run")
 
@@ -251,40 +249,6 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	fsChangesFile := filepath.Join(directory, FSCHANGES_TXT)
-	if !exists(fsChangesFile, t) {
-		if len(result.FSChanges) > 0 {
-			t.Fatalf("Refactoring returned file system changes, "+
-				"but %s does not exist", fsChangesFile)
-		}
-	} else {
-		bytes, err := ioutil.ReadFile(fsChangesFile)
-		if err != nil {
-			t.Fatal(err)
-		}
-		fschanges := removeEmptyLines(strings.Split(string(bytes), "\n"))
-		if len(fschanges) != len(result.FSChanges) {
-			t.Fatalf("Expected %d file system changes but got %d",
-				len(fschanges), len(result.FSChanges))
-		} else {
-			for i, chg := range result.FSChanges {
-				if chg.String(directory) != strings.TrimSpace(fschanges[i]) {
-					t.Fatalf("FSChanges[%d]\nExpected: %s\nActual: %s", i, fschanges[i], chg.String(directory))
-				}
-			}
-		}
-	}
-}
-
-func removeEmptyLines(lines []string) []string {
-	result := []string{}
-	for _, line := range lines {
-		if line != "" {
-			result = append(result, line)
-		}
-	}
-	return result
 }
 
 func exists(filename string, t *testing.T) bool {
