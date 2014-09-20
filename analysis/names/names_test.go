@@ -82,27 +82,35 @@ func equals(a, b []string) bool {
 func findOccurrences(pkgName, identName string, t *testing.T) []string {
 	prog := setup(t)
 	ident, pkg := findFirstIdent(prog, pkgName, identName, t)
-	searchResult, err := names.FindOccurrences(ident, pkg, prog)
-	if err != nil {
-		t.Fatal(err)
+	occs := names.FindOccurrences(pkg.ObjectOf(ident), prog)
+
+	result := []string{}
+	for id, _ := range occs {
+		pos := prog.Fset.Position(id.Pos())
+		result = append(result, fmt.Sprintf("%s:%d",
+			pos.Filename, pos.Offset))
 	}
-	return createResult(searchResult)
+	sort.Strings(result)
+	return result
+}
+
+func sortKeys(m map[string][]text.Extent) []string {
+	result := []string{}
+	for k, _ := range m {
+		result = append(result, k)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func findInComments(pkgName, identName string, t *testing.T) []string {
 	prog := setup(t)
 	file := findPackage(prog, pkgName, t).Files[0]
-	fname := prog.Fset.Position(file.Pos()).Filename
-	return createResult(map[string][]text.Extent{
-		fname: names.FindInComments(identName, file, prog.Fset)})
-}
+	filename := prog.Fset.Position(file.Pos()).Filename
 
-func createResult(searchResult map[string][]text.Extent) []string {
 	result := []string{}
-	for _, filename := range sortKeys(searchResult) {
-		for _, extent := range searchResult[filename] {
-			result = append(result, fmt.Sprintf("%s:%d", filename, extent.Offset))
-		}
+	for _, extent := range names.FindInComments(identName, file, prog.Fset) {
+		result = append(result, fmt.Sprintf("%s:%d", filename, extent.Offset))
 	}
 	return result
 }
@@ -124,15 +132,6 @@ func findFirstIdent(p *loader.Program, pkgName, ident string, t *testing.T) (*as
 		t.Fatal("No identifiers found")
 	}
 	return result, pkgInfo
-}
-
-func sortKeys(m map[string][]text.Extent) []string {
-	result := []string{}
-	for k, _ := range m {
-		result = append(result, k)
-	}
-	sort.Strings(result)
-	return result
 }
 
 // -=- Tests -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -168,12 +167,12 @@ func TestFindOccurrences(t *testing.T) {
 			"testdata/src/foo/foo.go:71"}, t)
 	check(findOccurrences("bar", "t", t),
 		[]string{
-			"testdata/src/bar/bar.go:95",
-			"testdata/src/bar/bar.go:107"}, t)
+			"testdata/src/bar/bar.go:107",
+			"testdata/src/bar/bar.go:95"}, t)
 	check(findOccurrences("bar", "Method", t),
 		[]string{
-			"testdata/src/bar/bar.go:74",
 			"testdata/src/bar/bar.go:174",
+			"testdata/src/bar/bar.go:74",
 			"testdata/src/foo/foo.go:247"}, t)
 	check(findOccurrences("foo", "q", t),
 		[]string{

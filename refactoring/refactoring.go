@@ -119,7 +119,7 @@ type Description struct {
 type Config struct {
 	// The file system on which the refactoring will operate.
 	FileSystem filesystem.FileSystem
-	// A set of initial packages to load.  This slice will be passed as-is
+	// A set of initial packages to load.  This extents will be passed as-is
 	// to the Config.FromArgs method of go.tools/go/loader.  Typically, the
 	// scope will consist of a package name or a file containing the
 	// program entrypoint (main function), which may be different from the
@@ -720,4 +720,20 @@ func (r *refactoringBase) forEachInitialFile(f func(ast *ast.File)) {
 
 func (r *refactoringBase) offsetLength(node ast.Node) (int, int) {
 	return r.program.Fset.Position(node.Pos()).Offset, (r.program.Fset.Position(node.End()).Offset - r.program.Fset.Position(node.Pos()).Offset)
+}
+
+func (r *refactoringBase) extents(ids map[*ast.Ident]bool, fset *token.FileSet) map[string][]text.Extent {
+	result := map[string][]text.Extent{}
+	for id, _ := range ids {
+		pos := fset.Position(id.Pos())
+		if _, ok := result[pos.Filename]; !ok {
+			result[pos.Filename] = []text.Extent{}
+		}
+		result[pos.Filename] = append(result[pos.Filename],
+			text.Extent{Offset: pos.Offset, Length: len(id.Name)})
+	}
+	for _, extents := range result {
+		text.Sort(extents)
+	}
+	return result
 }

@@ -160,11 +160,7 @@ func (r *Debug) showAffected(out io.Writer) {
 	case *ast.Ident:
 		fmt.Fprintf(out, "Affected Declarations:\n")
 		obj := r.selectedNodePkg.ObjectOf(id)
-		searchResult, err := names.FindDeclarationsAcrossInterfaces(obj, r.program)
-		if err != nil {
-			r.Log.Error(err)
-			return
-		}
+		searchResult := names.FindDeclarationsAcrossInterfaces(obj, r.program)
 		result := []string{}
 		for obj := range searchResult {
 			p := r.program.Fset.Position(obj.Pos())
@@ -275,11 +271,7 @@ func (r *Debug) showReferences(out io.Writer) {
 	switch id := r.selectedNode.(type) {
 	case *ast.Ident:
 		fmt.Fprintf(out, "References to %s:\n", id.Name)
-		searchResult, err := names.FindOccurrences(id, r.selectedNodePkg, r.program)
-		if err != nil {
-			r.Log.Error(err)
-			return
-		}
+		searchResult := r.extents(names.FindOccurrences(r.selectedNodePkg.ObjectOf(id), r.program), r.program.Fset)
 		for filename, occs := range searchResult {
 			fmt.Fprintf(out, "  in %s:\n", filename)
 			strs := []string{}

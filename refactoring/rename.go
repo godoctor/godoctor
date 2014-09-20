@@ -132,18 +132,13 @@ func (r *Rename) rename(ident *ast.Ident, pkgInfo *loader.PackageInfo) {
 	}
 
 	var searchResult map[string][]text.Extent
-	var err error
 	if isPackageName(ident, pkgInfo) {
 		searchResult = names.FindReferencesToPackage(ident.Name, r.program)
 	} else if isSwitchVar(ident, pkgInfo) {
 		//TODO change to perform switch and case variable rename
 		searchResult = names.FindOccurrencesOfCaseVar(ident.Name, r.program)
 	} else {
-		searchResult, err = names.FindOccurrences(ident, pkgInfo, r.program)
-		if err != nil {
-			r.Log.Error(err)
-			return
-		}
+		searchResult = r.extents(names.FindOccurrences(pkgInfo.ObjectOf(ident), r.program), r.program.Fset)
 	}
 
 	for fname, _ := range searchResult {

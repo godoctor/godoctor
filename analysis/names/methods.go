@@ -25,20 +25,19 @@ import (
 // signature to be renamed in Interface1, Interface2, Type2, and Type3.  This
 // method returns a set containing the reflexive, transitive closure of objects
 // that must be renamed if the given identifier is renamed.
-func FindDeclarationsAcrossInterfaces(obj types.Object, program *loader.Program) (map[types.Object]bool, error) {
+func FindDeclarationsAcrossInterfaces(obj types.Object, program *loader.Program) map[types.Object]bool {
 	if isMethod(obj) {
 		// If obj is a method, search across interfaces: there may be
 		// many other methods that need to change to ensure that all
 		// types continue to implement the same interfaces
-		return reachableMethods(obj.Name(), obj.(*types.Func), program.AllPackages[obj.Pkg()]), nil
+		return reachableMethods(obj.Name(), obj.(*types.Func), program.AllPackages[obj.Pkg()])
 	} else {
 		// If obj is not a method, then only one object needs to
 		// change.  When this is called from inside the analysis/names
 		// package, this will never occur, but it may when this method
 		// is invoked as API.
-		return map[types.Object]bool{obj: true}, nil
+		return map[types.Object]bool{obj: true}
 	}
-
 }
 
 // isMethod reports whether obj is a method.

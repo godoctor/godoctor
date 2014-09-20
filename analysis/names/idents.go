@@ -5,7 +5,6 @@
 package names
 
 import (
-	"fmt"
 	"go/ast"
 	"go/token"
 	"strings"
@@ -25,57 +24,53 @@ import (
 // should just be returning a set of *ast.Idents for a later function to map
 // down to concrete syntax.
 
-// FindOccurrences finds the location of all identifiers that are direct or
-// indirect references to the same object as given identifier.  The returned
-// map maps filenames to a slice of (offset, length) pairs describing locations
-// at which the given identifier is referenced.
-func FindOccurrences(ident *ast.Ident, pkgInfo *loader.PackageInfo, program *loader.Program) (map[string][]text.Extent, error) {
-	f := &finder{program}
-	return f.FindOccurrences(ident, pkgInfo)
-}
-
-type finder struct {
-	program *loader.Program
-}
-
-func (r *finder) FindOccurrences(ident *ast.Ident, pkgInfo *loader.PackageInfo) (map[string][]text.Extent, error) {
-	obj := pkgInfo.ObjectOf(ident)
-	if obj == nil {
-		return nil, fmt.Errorf("Unable to find declaration of %s", ident.Name)
+// FindOccurrences receives an identifier and returns the set of all
+// identically named identifiers that refer to the same object as that
+// identifier.
+func FindOccurrences(obj types.Object, prog *loader.Program) map[*ast.Ident]bool {
+	decls := map[types.Object]bool{obj: true}
+	if isMethod(obj) {
+		decls = FindDeclarationsAcrossInterfaces(obj, prog)
 	}
 
-	var decls map[types.Object]bool
-	var err error
-	decls, err = FindDeclarationsAcrossInterfaces(obj, r.program)
-	if err != nil {
-		return nil, err
-	}
-
-	return r.occurrences(decls), nil
-}
-
-// occurrences returns the source locations of all identifiers that resolve
-// to one of the given objects.
-func (r *finder) occurrences(decls map[types.Object]bool) map[string][]text.Extent {
-	result := make(map[string][]text.Extent)
-	for pkgInfo := range r.packages(decls) {
+	result := make(map[*ast.Ident]bool)
+	for pkgInfo := range packages(decls, prog) {
 		for id, obj := range pkgInfo.Defs {
 			if decls[obj] {
-				filename := r.position(id).Filename
-				result[filename] = append(result[filename],
-					r.offsetLength(id))
+				result[id] = true
 			}
 		}
 		for id, obj := range pkgInfo.Uses {
 			if decls[obj] {
-				filename := r.position(id).Filename
-				result[filename] = append(result[filename],
-					r.offsetLength(id))
+				result[id] = true
 			}
 		}
 	}
-
 	return result
+}
+
+// packages returns a set of PackageInfos that may reference the given
+// Objects.  If at least one of the given declarations is exported, the method
+// returns all the packages of this program; otherwise, it returns the
+// package(s) containing the given declarations.
+func packages(decls map[types.Object]bool, program *loader.Program) map[*loader.PackageInfo]bool {
+	// XXX(review D7): If performance is a concern, you could return only
+	// the packages in the reverse transitive closure of the package import
+	// graph, rather than all the packages.
+
+	result := make(map[*loader.PackageInfo]bool)
+	for decl := range decls {
+		if decl.Exported() {
+			return allPackages(program)
+		}
+		pkgInfo := program.AllPackages[decl.Pkg()]
+		result[pkgInfo] = true
+	}
+	return result
+}
+
+type finder struct {
+	program *loader.Program
 }
 
 //TODO : Make the search robust for packagenames in importspec
@@ -234,25 +229,6 @@ func (r *finder) offsetLengthofPkg(id *ast.BasicLit) text.Extent {
 	}*/
 
 	return text.Extent{offset, length}
-}
-
-// packages returns a set of PackageInfos that may reference the given
-// Objects.  If at least one of the given declarations is exported, the method
-// returns all the packages of this program; otherwise, it returns the
-// package(s) containing the given declarations.
-// TODO(review D7); If performance is a concern, you could return only the
-// packages in the reverse transitive closure of the package import graph,
-// rather than all the packages.
-func (r *finder) packages(decls map[types.Object]bool) map[*loader.PackageInfo]bool {
-	result := make(map[*loader.PackageInfo]bool)
-	for decl := range decls {
-		if decl.Exported() {
-			return allPackages(r.program)
-		}
-		pkgInfo := r.program.AllPackages[decl.Pkg()]
-		result[pkgInfo] = true
-	}
-	return result
 }
 
 func allPackages(prog *loader.Program) map[*loader.PackageInfo]bool {
