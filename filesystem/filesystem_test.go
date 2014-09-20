@@ -106,7 +106,7 @@ func TestEditedFileSystem(t *testing.T) {
 		t.Fatal(err)
 	}
 	es := text.NewEditSet()
-	es.Add(text.Extent{3, 5}, "xyz")
+	es.Add(&text.Extent{3, 5}, "xyz")
 	expected := "123xyz9\nABCDEFGHIJ"
 	fs := NewEditedFileSystem(NewLocalFileSystem(),
 		map[string]*text.EditSet{testFile: es})
@@ -136,7 +136,7 @@ func TestPatchOnFile(t *testing.T) {
 
 	fs := &LocalFileSystem{}
 	es := text.NewEditSet()
-	es.Add(text.Extent{0, 0}, "Before line 1\n")
+	es.Add(&text.Extent{0, 0}, "Before line 1\n")
 	patch, err := CreatePatch(es, fs, testfile)
 	if err != nil {
 		t.Fatal(err)

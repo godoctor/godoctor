@@ -63,19 +63,19 @@ type List struct {
 
 func (l *List) Run(state *State, input map[string]interface{}) (Reply, error) {
 	if valid, err := l.Validate(state, input); valid {
-		minQuality := refactoring.Development
+		hiddenOK := true
 		switch input["quality"].(string) {
 		case "in_testing":
-			minQuality = refactoring.Testing
+			hiddenOK = false
 		case "production":
-			minQuality = refactoring.Production
+			hiddenOK = false
 		}
 
 		// get all of the refactoring names
 		namesList := make([]map[string]string, 0)
 		for _, shortName := range engine.AllRefactoringNames() {
 			refactoring := engine.GetRefactoring(shortName)
-			if refactoring.Description().Quality >= minQuality {
+			if hiddenOK || !refactoring.Description().Hidden {
 				namesList = append(namesList, map[string]string{"shortName": shortName, "name": refactoring.Description().Name})
 			}
 		}
@@ -216,7 +216,7 @@ func (p *Put) Run(state *State, input map[string]interface{}) (Reply, error) {
 	}
 
 	es := text.NewEditSet()
-	es.Add(text.Extent{0, 0}, input["content"].(string))
+	es.Add(&text.Extent{0, 0}, input["content"].(string))
 	editedFS.Edits[stdinPath] = es
 	return Reply{map[string]interface{}{"reply": "OK"}}, nil
 }

@@ -37,7 +37,7 @@ Each <flag> must be one of the following:`)
 The <refactoring> argument determines the refactoring to perform:`)
 	for _, key := range engine.AllRefactoringNames() {
 		r := engine.GetRefactoring(key)
-		if r.Description().Quality >= refactoring.Testing {
+		if !r.Description().Hidden {
 			fmt.Fprintf(stderr, "    %-15s %s\n",
 				key, r.Description().Synopsis)
 		}
@@ -120,7 +120,7 @@ func Run(stdin io.Reader, stdout io.Writer, stderr io.Writer, args []string) int
 		for _, key := range engine.AllRefactoringNames() {
 			r := engine.GetRefactoring(key)
 			d := r.Description()
-			if r.Description().Quality >= refactoring.Testing {
+			if !r.Description().Hidden {
 				fmt.Fprintf(stderr, "%-15s\t%-50s\t%v\n",
 					key, d.Synopsis, d.Multifile)
 			}

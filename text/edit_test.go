@@ -9,7 +9,7 @@ import "testing"
 // -=-= Extent =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 func TestExtent(t *testing.T) {
-	ol := Extent{Offset: 5, Length: 20}
+	ol := &Extent{Offset: 5, Length: 20}
 	assertEquals("offset 5, length 20", ol.String(), t)
 }
 
@@ -81,15 +81,15 @@ func applyToString(e *EditSet, s string) string {
 
 func TestSizeChange(t *testing.T) {
 	es := NewEditSet()
-	es.Add(Extent{2, 5}, "x") // replace 5 bytes with 1 (-4)
-	es.Add(Extent{7, 0}, "6") // add 1 byte
+	es.Add(&Extent{2, 5}, "x") // replace 5 bytes with 1 (-4)
+	es.Add(&Extent{7, 0}, "6") // add 1 byte
 	if es.SizeChange() != -3 {
 		t.Fatalf("SizeChange: expected -3, got %d", es.SizeChange())
 	}
 
 	es = NewEditSet()
 	hello := "こんにちは"
-	es.Add(Extent{6, 5}, hello)
+	es.Add(&Extent{6, 5}, hello)
 	chg := len(hello) - 5
 	if es.SizeChange() != int64(chg) {
 		t.Fatalf("SizeChange: chged %d, got %d", chg, es.SizeChange())
@@ -98,8 +98,8 @@ func TestSizeChange(t *testing.T) {
 
 func TestNewOldOffset(t *testing.T) {
 	es := NewEditSet()
-	es.Add(Extent{2, 5}, "x") // replace 5 bytes with 1 (-4)
-	es.Add(Extent{7, 0}, "6") // add 1 byte
+	es.Add(&Extent{2, 5}, "x") // replace 5 bytes with 1 (-4)
+	es.Add(&Extent{7, 0}, "6") // add 1 byte
 
 	// NewOffset  "--------" -> "--x6--"
 	offset := []int{0, 1, 2, 3, 4, 5, 6, 7, 8}
@@ -129,9 +129,9 @@ func TestEditString(t *testing.T) {
 	es := NewEditSet()
 	assertEquals("", es.String(), t)
 
-	es.Add(Extent{5, 6}, "x")
-	es.Add(Extent{1, 2}, "y")
-	es.Add(Extent{3, 1}, "z")
+	es.Add(&Extent{5, 6}, "x")
+	es.Add(&Extent{1, 2}, "y")
+	es.Add(&Extent{3, 1}, "z")
 	assertEquals(`Replace offset 1, length 2 with "y"
 Replace offset 3, length 1 with "z"
 Replace offset 5, length 6 with "x"
@@ -165,8 +165,8 @@ func TestOverlap(t *testing.T) {
 
 	for _, tst := range tests {
 		es := NewEditSet()
-		es.Add(Extent{3, 4}, "x")
-		edit := Extent{tst.offset, tst.length}
+		es.Add(&Extent{3, 4}, "x")
+		edit := &Extent{tst.offset, tst.length}
 		err := es.Add(edit, "z")
 		if tst.overlapExpected != (err != nil) {
 			t.Fatalf("Overlapping edit %v undetected", edit)
@@ -181,46 +181,46 @@ func TestEditApply(t *testing.T) {
 	assertEquals(input, applyToString(es, input), t)
 
 	es = NewEditSet()
-	es.Add(Extent{0, 0}, "AAA")
+	es.Add(&Extent{0, 0}, "AAA")
 	assertEquals("AAA0123456789", applyToString(es, input), t)
 
 	es = NewEditSet()
-	es.Add(Extent{0, 2}, "AAA")
+	es.Add(&Extent{0, 2}, "AAA")
 	assertEquals("AAA23456789", applyToString(es, input), t)
 
 	es = NewEditSet()
-	es.Add(Extent{3, 2}, "")
+	es.Add(&Extent{3, 2}, "")
 	assertEquals("01256789", applyToString(es, input), t)
 
 	es = NewEditSet()
-	es.Add(Extent{8, 3}, "")
+	es.Add(&Extent{8, 3}, "")
 	assertError(applyToString(es, input), t)
 
 	es = NewEditSet()
-	err := es.Add(Extent{-1, 3}, "")
+	err := es.Add(&Extent{-1, 3}, "")
 	assertTrue(err != nil, t)
 	//assertError(applyToString(es, input), t)
 
 	es = NewEditSet()
-	es.Add(Extent{12, 3}, "")
+	es.Add(&Extent{12, 3}, "")
 	assertError(applyToString(es, input), t)
 
 	es = NewEditSet()
-	es.Add(Extent{2, 0}, "A")
-	es.Add(Extent{8, 1}, "B")
-	es.Add(Extent{4, 0}, "C")
-	es.Add(Extent{6, 2}, "D")
+	es.Add(&Extent{2, 0}, "A")
+	es.Add(&Extent{8, 1}, "B")
+	es.Add(&Extent{4, 0}, "C")
+	es.Add(&Extent{6, 2}, "D")
 	assertEquals("01A23C45DB9", applyToString(es, input), t)
 
 	es = NewEditSet()
-	es.Add(Extent{0, 0}, "ABC")
+	es.Add(&Extent{0, 0}, "ABC")
 	assertEquals("ABC", applyToString(es, ""), t)
 
 	es = NewEditSet()
-	es.Add(Extent{0, 3}, "")
+	es.Add(&Extent{0, 3}, "")
 	assertEquals("", applyToString(es, "ABC"), t)
 
 	es = NewEditSet()
-	es.Add(Extent{0, 0}, "")
+	es.Add(&Extent{0, 0}, "")
 	assertEquals("", applyToString(es, ""), t)
 }

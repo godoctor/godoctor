@@ -26,7 +26,7 @@ func (r *AddGoDoc) Description() *Description {
 		Usage:     "",
 		Multifile: false,
 		Params:    nil,
-		Quality:   Testing,
+		Hidden:    false,
 	}
 }
 
@@ -79,7 +79,7 @@ func (r *AddGoDoc) removeSemicolonBetween(node1, node2 ast.Node, replacement str
 		// but this should occur rarely enough we'll ignore it for now.
 		offset := r.program.Fset.Position(node1.End()).Offset
 		length := r.program.Fset.Position(node2.Pos()).Offset - offset
-		r.Edits[r.filename(r.file)].Add(text.Extent{offset, length}, replacement)
+		r.Edits[r.filename].Add(&text.Extent{offset, length}, replacement)
 	}
 }
 
@@ -117,5 +117,5 @@ func (r *AddGoDoc) addComment(decl ast.Node, comment string) { //, count int) {
 	//	comment = "\n// " + comment + " TODO: NEEDS COMMENT INFO\n"
 	//}
 	insertOffset := r.program.Fset.Position(decl.Pos()).Offset
-	r.Edits[r.filename(r.file)].Add(text.Extent{insertOffset, 0}, comment)
+	r.Edits[r.filename].Add(&text.Extent{insertOffset, 0}, comment)
 }

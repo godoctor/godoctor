@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strings"
 
+	"code.google.com/p/go.tools/go/loader"
 	"code.google.com/p/go.tools/go/types"
 
 	"golang-refactoring.org/go-doctor/analysis/cfg"
@@ -54,7 +55,7 @@ func (r *Debug) Description() *Description {
 			Prompt:       "Command",
 			DefaultValue: "",
 		}},
-		Quality: Development,
+		Hidden: true,
 	}
 }
 
@@ -97,8 +98,8 @@ func (r *Debug) Run(config *Config) *Result {
 		return &r.Result
 	}
 	if !r.Log.ContainsErrors() && command != "fmt" {
-		insert := text.Extent{0, 0}
-		r.Edits[r.filename(r.file)].Add(insert, b.String())
+		insert := &text.Extent{0, 0}
+		r.Edits[r.filename].Add(insert, b.String())
 	}
 	return &r.Result
 }
@@ -121,10 +122,7 @@ func (r *Debug) fmt() {
 				return
 			}
 
-			offset, length := r.offsetLength(node)
-			r.Edits[r.filename(r.file)].Add(
-				text.Extent{offset, length},
-				b.String())
+			r.Edits[r.filename].Add(r.extent(node), b.String())
 			return
 		}
 	}
@@ -201,7 +199,7 @@ func (r *Debug) showCFG(out io.Writer) {
 
 func (r *Debug) describeDefsUses(stmt ast.Stmt) string {
 	var buf bytes.Buffer
-	defs, uses := dataflow.ReferencedVars([]ast.Stmt{stmt}, r.pkgInfo(r.file))
+	defs, uses := dataflow.ReferencedVars([]ast.Stmt{stmt}, r.selectedNodePkg)
 	if len(defs) > 0 {
 		fmt.Fprintf(&buf, "Defs: %s\n", listNames(defs))
 	}
@@ -226,22 +224,31 @@ func listNames(vars map[*types.Var]struct{}) string {
 }
 
 func (r *Debug) showIdentifiers(out io.Writer) {
-	r.forEachInitialFile(func(file *ast.File) {
-		fmt.Fprintf(out, "=====%s=====\n", r.filename(file))
-		ast.Inspect(file, func(n ast.Node) bool {
-			switch id := n.(type) {
-			case *ast.Ident:
-				position := r.program.Fset.Position(id.Pos())
-				fmt.Fprintf(out, "%s\t(Line %d)", id.Name, position.Line)
-				if obj := r.pkgInfo(file).ObjectOf(id); obj == nil {
-					fmt.Fprintf(out, " does not have an associated object\n")
-				} else {
-					fmt.Fprintf(out, " is a reference to %s (%s)\n", obj.Id(), r.program.Fset.Position(obj.Pos()))
-				}
-			}
-			return true
-		})
+	for _, pkgInfo := range r.program.InitialPackages() {
+		for _, file := range pkgInfo.Files {
+			r.showIdentifiersInFile(pkgInfo, file, out)
+		}
+	}
+}
 
+func (r *Debug) showIdentifiersInFile(pkgInfo *loader.PackageInfo, file *ast.File, out io.Writer) {
+	fmt.Fprintf(out, "=====%s=====\n",
+		r.program.Fset.Position(file.Pos()).Filename)
+	ast.Inspect(file, func(n ast.Node) bool {
+		id, ok := n.(*ast.Ident)
+		if !ok {
+			return true
+		}
+
+		position := r.program.Fset.Position(id.Pos())
+		fmt.Fprintf(out, "%s\t(Line %d)", id.Name, position.Line)
+		if obj := pkgInfo.ObjectOf(id); obj == nil {
+			fmt.Fprintf(out, " does not reference an object\n")
+		} else {
+			fmt.Fprintf(out, " is a reference to %s (%s)\n",
+				obj.Id(), r.program.Fset.Position(obj.Pos()))
+		}
+		return true
 	})
 }
 
@@ -255,7 +262,8 @@ func (r *Debug) showLoadedPackagesAndFiles(out io.Writer) {
 	for _, pkgInfo := range r.program.AllPackages {
 		fmt.Fprintf(out, "\t%s\n", pkgInfo.Pkg.Name())
 		for _, file := range pkgInfo.Files {
-			fmt.Fprintf(out, "\t\t%s\n", r.filename(file))
+			filename := r.program.Fset.Position(file.Pos()).Filename
+			fmt.Fprintf(out, "\t\t%s\n", filename)
 		}
 	}
 }
@@ -274,10 +282,9 @@ func (r *Debug) showReferences(out io.Writer) {
 		ids := names.FindOccurrences(r.selectedNodePkg.ObjectOf(id), r.program)
 		strs := []string{}
 		for id, _ := range ids {
-			offset, length := r.offsetLength(id)
 			description := fmt.Sprintf("  %s: %s",
 				r.program.Fset.Position(id.Pos()).Filename,
-				(&text.Extent{offset, length}).String())
+				r.extent(id).String())
 			strs = append(strs, description)
 		}
 		sort.Strings(strs)

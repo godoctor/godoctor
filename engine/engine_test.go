@@ -16,9 +16,9 @@ type customRefactoring struct{}
 
 func (*customRefactoring) Description() *refactoring.Description {
 	return &refactoring.Description{
-		Name:    "Test",
-		Params:  nil,
-		Quality: refactoring.Development,
+		Name:   "Test",
+		Params: nil,
+		Hidden: false,
 	}
 }
 

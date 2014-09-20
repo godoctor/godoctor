@@ -24,7 +24,7 @@ func (r *Null) Description() *Description {
 			Prompt:       "Allow Errors",
 			DefaultValue: true,
 		}},
-		Quality: Development,
+		Hidden: true,
 	}
 }
 

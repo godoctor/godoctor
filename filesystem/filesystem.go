@@ -173,7 +173,7 @@ func NewSingleEditedFileSystem(filename, contents string) (*EditedFileSystem, er
 		return nil, err
 	}
 	es := text.NewEditSet()
-	es.Add(text.Extent{0, size}, contents)
+	es.Add(&text.Extent{0, size}, contents)
 	return NewEditedFileSystem(NewLocalFileSystem(), map[string]*text.EditSet{filename: es}), nil
 }
 

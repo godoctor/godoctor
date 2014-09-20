@@ -41,7 +41,7 @@ func (r *Rename) Description() *Description {
 			Prompt:       "What to rename this identifier to.",
 			DefaultValue: "",
 		}},
-		Quality: Testing,
+		Hidden: false,
 	}
 }
 
@@ -78,7 +78,7 @@ func (r *Rename) Run(config *Config) *Result {
 	switch ident := r.selectedNode.(type) {
 	case *ast.Ident:
 		// FIXME: Check if main function (not type/var/etc.) -JO
-		if ident.Name == "main" && r.pkgInfo(r.fileContaining(ident)).Pkg.Name() == "main" {
+		if ident.Name == "main" && r.selectedNodePkg.Pkg.Name() == "main" {
 			r.Log.Error("The \"main\" function in the \"main\" package cannot be renamed: it will eliminate the program entrypoint")
 			r.Log.AssociateNode(ident)
 			return &r.Result
@@ -121,38 +121,14 @@ func (r *Rename) rename(ident *ast.Ident, pkgInfo *loader.PackageInfo) {
 		r.Log.AssociatePos(conflict.Pos(), conflict.Pos())
 	}
 
-	var extents map[string][]text.Extent
+	var idents map[*ast.Ident]bool
 	if ts := r.selectedTypeSwitchVar(); ts != nil {
-		extents = r.extents(names.FindTypeSwitchVarOccurrences(ts, r.selectedNodePkg, r.program), r.program.Fset)
+		idents = names.FindTypeSwitchVarOccurrences(ts, r.selectedNodePkg, r.program)
 	} else {
-		extents = r.extents(names.FindOccurrences(pkgInfo.ObjectOf(ident), r.program), r.program.Fset)
+		idents = names.FindOccurrences(pkgInfo.ObjectOf(ident), r.program)
 	}
 
-	for fname, _ := range extents {
-		_, file := r.fileNamed(fname)
-		occs := names.FindInComments(ident.Name, file, r.program.Fset)
-		extents[fname] = append(extents[fname], occs...)
-	}
-
-	r.addOccurrences(extents)
-}
-
-func (r *Rename) extents(ids map[*ast.Ident]bool, fset *token.FileSet) map[string][]text.Extent {
-	result := map[string][]text.Extent{}
-	for id, _ := range ids {
-		pos := fset.Position(id.Pos())
-		if _, ok := result[pos.Filename]; !ok {
-			result[pos.Filename] = []text.Extent{}
-		}
-		result[pos.Filename] = append(result[pos.Filename],
-			text.Extent{Offset: pos.Offset, Length: len(id.Name)})
-	}
-
-	sorted := map[string][]text.Extent{}
-	for fname, extents := range result {
-		sorted[fname] = text.Sort(extents)
-	}
-	return sorted
+	r.addOccurrences(ident.Name, r.extents(idents, r.program.Fset))
 }
 
 func (r *Rename) selectedTypeSwitchVar() *ast.TypeSwitchStmt {
@@ -178,16 +154,40 @@ func (r *Rename) selectedTypeSwitchVar() *ast.TypeSwitchStmt {
 	return nil
 }
 
-func (r *Rename) addOccurrences(allOccurrences map[string][]text.Extent) {
+func (r *Rename) extents(ids map[*ast.Ident]bool, fset *token.FileSet) map[string][]*text.Extent {
+	result := map[string][]*text.Extent{}
+	for id, _ := range ids {
+		pos := fset.Position(id.Pos())
+		if _, ok := result[pos.Filename]; !ok {
+			result[pos.Filename] = []*text.Extent{}
+		}
+		result[pos.Filename] = append(result[pos.Filename],
+			&text.Extent{Offset: pos.Offset, Length: len(id.Name)})
+	}
+
+	sorted := map[string][]*text.Extent{}
+	for fname, extents := range result {
+		sorted[fname] = text.Sort(extents)
+	}
+	return sorted
+}
+
+func (r *Rename) addOccurrences(name string, allOccurrences map[string][]*text.Extent) {
 	hasOccsInGoRoot := false
 	for filename, occurrences := range allOccurrences {
 		if isInGoRoot(filename) {
 			hasOccsInGoRoot = true
 		} else {
+			if r.Edits[filename] == nil {
+				r.Edits[filename] = text.NewEditSet()
+			}
 			for _, occurrence := range occurrences {
-				if r.Edits[filename] == nil {
-					r.Edits[filename] = text.NewEditSet()
-				}
+				r.Edits[filename].Add(occurrence, r.newName)
+			}
+			_, file := r.fileNamed(filename)
+			commentOccurrences := names.FindInComments(
+				name, file, r.program.Fset)
+			for _, occurrence := range commentOccurrences {
 				r.Edits[filename].Add(occurrence, r.newName)
 			}
 		}
@@ -203,4 +203,17 @@ func isInGoRoot(absPath string) bool {
 		goRoot += string(filepath.Separator)
 	}
 	return strings.HasPrefix(absPath, goRoot)
+}
+
+func (r *Rename) fileNamed(filename string) (*loader.PackageInfo, *ast.File) {
+	absFilename, _ := filepath.Abs(filename)
+	for _, pkgInfo := range r.program.AllPackages {
+		for _, f := range pkgInfo.Files {
+			thisFile := r.program.Fset.Position(f.Pos()).Filename
+			if thisFile == filename || thisFile == absFilename {
+				return pkgInfo, f
+			}
+		}
+	}
+	return nil, nil
 }

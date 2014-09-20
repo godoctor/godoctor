@@ -79,7 +79,7 @@ func TestCreatePatch(t *testing.T) {
 	assertTrue(len(p.hunks) == 0, t)
 
 	es = NewEditSet()
-	es.Add(Extent{0, 0}, "AAA")
+	es.Add(&Extent{0, 0}, "AAA")
 	p, err = es.CreatePatch(strings.NewReader(s))
 	assertTrue(err == nil, t)
 	assertTrue(len(p.hunks) == 1, t)
@@ -89,7 +89,7 @@ func TestCreatePatch(t *testing.T) {
 		p.hunks[0].hunk.String(), t)
 
 	es = NewEditSet()
-	es.Add(Extent{0, 2}, "AAA")
+	es.Add(&Extent{0, 2}, "AAA")
 	p, err = es.CreatePatch(strings.NewReader(s))
 	assertTrue(err == nil, t)
 	assertTrue(len(p.hunks) == 1, t)
@@ -99,7 +99,7 @@ func TestCreatePatch(t *testing.T) {
 		p.hunks[0].hunk.String(), t)
 
 	es = NewEditSet()
-	es.Add(Extent{2, 5}, "AAA")
+	es.Add(&Extent{2, 5}, "AAA")
 	p, err = es.CreatePatch(strings.NewReader(s))
 	assertTrue(err == nil, t)
 	assertTrue(len(p.hunks) == 1, t)
@@ -109,7 +109,7 @@ func TestCreatePatch(t *testing.T) {
 		p.hunks[0].hunk.String(), t)
 
 	es = NewEditSet()
-	es.Add(Extent{2, 15}, "AAA")
+	es.Add(&Extent{2, 15}, "AAA")
 	p, err = es.CreatePatch(strings.NewReader(s))
 	assertTrue(err == nil, t)
 	assertTrue(len(p.hunks) == 1, t)
@@ -121,8 +121,8 @@ func TestCreatePatch(t *testing.T) {
 	// Line n starts at offset (n-1)*5
 	s2 := "1...\n2...\n3...\n4...\n5...\n6...\n7...\n8...\n9...\n0...\n"
 	es = NewEditSet()
-	es.Add(Extent{20, 2}, "5555\n5!")
-	es.Add(Extent{40, 0}, "CCC")
+	es.Add(&Extent{20, 2}, "5555\n5!")
+	es.Add(&Extent{40, 0}, "CCC")
 	p, err = es.CreatePatch(strings.NewReader(s2))
 	assertTrue(err == nil, t)
 	assertTrue(len(p.hunks) == 1, t)
@@ -133,8 +133,8 @@ func TestCreatePatch(t *testing.T) {
 	assertTrue(len(p.hunks[0].edits) == 2, t)
 
 	es = NewEditSet()
-	es.Add(Extent{0, 0}, "A")
-	es.Add(Extent{36, 0}, "B")
+	es.Add(&Extent{0, 0}, "A")
+	es.Add(&Extent{36, 0}, "B")
 	p, err = es.CreatePatch(strings.NewReader(s2))
 	assertTrue(err == nil, t)
 	assertTrue(len(p.hunks) == 2, t)

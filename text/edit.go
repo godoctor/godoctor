@@ -67,8 +67,8 @@ func (o *Extent) String() string {
 
 // Sort receives a slice of Extents and returns a copy with the Extents sorted
 // by increasing offset.
-func Sort(extents []Extent) []Extent {
-	s := make([]Extent, len(extents))
+func Sort(extents []*Extent) []*Extent {
+	s := make([]*Extent, len(extents))
 	copy(s, extents)
 	// Insertion sort
 	for j := 1; j < len(s); j++ {
@@ -100,7 +100,7 @@ type EditSet struct {
 }
 
 type edit struct {
-	Extent
+	*Extent
 	replacement string
 }
 
@@ -113,7 +113,7 @@ func NewEditSet() *EditSet {
 // minus the given offset, i.e., it is an edit relative to the given offset.
 func (e *edit) RelativeToOffset(offset int) edit {
 	return edit{
-		Extent{
+		&Extent{
 			Offset: e.Offset - offset,
 			Length: e.Length,
 		},
@@ -132,8 +132,7 @@ func (e *edit) String() string {
 
 // Add inserts an edit into this EditSet, returning an error if the edit has a
 // negative offset or overlaps an edit previously added to this EditSet.
-// FIXME(jeff): pos should be *Extent, not Extent
-func (e *EditSet) Add(pos Extent, replacement string) error {
+func (e *EditSet) Add(pos *Extent, replacement string) error {
 	if pos.Offset < 0 {
 		return fmt.Errorf("edit has negative offset (%d)",
 			pos.Offset)
@@ -148,10 +147,10 @@ func (e *EditSet) Add(pos Extent, replacement string) error {
 			break
 		}
 	}
-	if idx > 0 && e.edits[idx-1].overlaps(&pos) {
+	if idx > 0 && e.edits[idx-1].overlaps(pos) {
 		return fmt.Errorf("overlapping edit at offset %d", pos.Offset)
 	}
-	if idx < len(e.edits) && e.edits[idx].overlaps(&pos) {
+	if idx < len(e.edits) && e.edits[idx].overlaps(pos) {
 		return fmt.Errorf("overlapping edit at offset %d", pos.Offset)
 	}
 	newEdit := edit{pos, replacement}
@@ -218,7 +217,7 @@ func (e *EditSet) SizeChange() int64 {
 // Iterate executes the given callback on each of the edits in this EditSet,
 // traversing the edits in ascending order by offset.  Iteration stops
 // immediately after the callback returns false.
-func (e *EditSet) Iterate(callback func(Extent, string) bool) {
+func (e *EditSet) Iterate(callback func(*Extent, string) bool) {
 	for _, edit := range e.edits {
 		if !callback(edit.Extent, edit.replacement) {
 			break

@@ -1,5 +1,5 @@
 =====main.go=====
-main	(Line 1) does not have an associated object
+main	(Line 1) does not reference an object
 S	(Line 3) is a reference to S (main.go:3:6)
 s	(Line 4) is a reference to main.s (main.go:4:7)
 S	(Line 4) is a reference to S (main.go:3:6)

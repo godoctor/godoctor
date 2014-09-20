@@ -66,19 +66,6 @@ func (p *Parameter) IsBoolean() bool {
 	}
 }
 
-// Quality determines whether a refactoring is exposed to end users
-type Quality int
-
-const (
-	// Refactoring should not be exposed to end users
-	Development Quality = iota
-	// Refactoring has not been extensively tested on large codes but is
-	// stable enough for early adopters to try
-	Testing
-	// Refactoring can be safely used in a production environment
-	Production
-)
-
 // Description provides information about a refactoring suitable for display in
 // a user interface.
 type Description struct {
@@ -107,8 +94,8 @@ type Description struct {
 	Multifile bool
 	// Additional input required for this refactoring.  See Parameter.
 	Params []Parameter
-	// Whether this refactoring is suitable for production use.
-	Quality Quality
+	// False if this refactoring is not intended for production use.
+	Hidden bool
 }
 
 // A Config provides the initial configuration for a refactoring, including the
@@ -182,6 +169,8 @@ type refactoringBase struct {
 	program *loader.Program
 	// The AST of the file containing the user's selection
 	file *ast.File
+	// The filename containing the user's selection
+	filename string
 	// The complete contents of the file containing the user's selection
 	fileContents []byte
 	// The position of the first character of the user's selection
@@ -273,19 +262,21 @@ func (r *refactoringBase) Run(config *Config) *Result {
 	r.selectedNode = r.pathEnclosingSelection[0]
 	r.file = r.pathEnclosingSelection[len(r.pathEnclosingSelection)-1].(*ast.File)
 
-	reader, err := config.FileSystem.OpenFile(r.filename(r.file))
+	r.filename = r.program.Fset.Position(r.file.Package).Filename
+
+	reader, err := config.FileSystem.OpenFile(r.filename)
 	if err != nil {
-		r.Log.Errorf("Unable to open %s", r.filename(r.file))
+		r.Log.Errorf("Unable to open %s", r.filename)
 		return &r.Result
 	}
 	r.fileContents, err = ioutil.ReadAll(reader)
 	if err != nil {
-		r.Log.Errorf("Unable to read %s", r.filename(r.file))
+		r.Log.Errorf("Unable to read %s", r.filename)
 		return &r.Result
 	}
 
 	r.Edits = map[string]*text.EditSet{
-		r.filename(r.file): text.NewEditSet(),
+		r.filename: text.NewEditSet(),
 	}
 
 	return &r.Result
@@ -434,7 +425,7 @@ func (r *refactoringBase) lineColToPos(file *ast.File, line int, column int) tok
 
 func (r *refactoringBase) formatFileInEditor() {
 	oldFileContents := string(r.fileContents)
-	string, err := text.ApplyToString(r.Edits[r.filename(r.file)], oldFileContents)
+	string, err := text.ApplyToString(r.Edits[r.filename], oldFileContents)
 	if err != nil {
 		r.Log.Errorf("Transformation produced invalid EditSet: %v",
 			err.Error())
@@ -462,7 +453,7 @@ func (r *refactoringBase) formatFileInEditor() {
 	editSet := text.Diff(
 		strings.SplitAfter(oldFileContents, "\n"),
 		strings.SplitAfter(newFileContents, "\n"))
-	r.Edits[r.filename(r.file)] = editSet
+	r.Edits[r.filename] = editSet
 }
 
 // updateLog applies the edits in r.Edits and updates existing error messages
@@ -499,7 +490,7 @@ func (r *refactoringBase) updateLog(config *Config, checkForErrors bool) {
 	if fileCount >= 2 && config.Verbosity >= 1 {
 		fileNum := 1
 		for filename, edits := range r.Edits {
-			edits.Iterate(func(extent text.Extent, _ string) bool {
+			edits.Iterate(func(extent *text.Extent, _ string) bool {
 				file := programFiles[filename]
 				oldPos := file.Pos(extent.Offset)
 				r.Log.Infof("File %d of %d: %s",
@@ -574,7 +565,7 @@ func (r *refactoringBase) updateLog(config *Config, checkForErrors bool) {
 
 	if config.Verbosity >= 2 {
 		for filename, edits := range r.Edits {
-			edits.Iterate(func(extent text.Extent, replace string) bool {
+			edits.Iterate(func(extent *text.Extent, replace string) bool {
 				oldFile := programFiles[filename]
 				oldPos := oldFile.Pos(extent.Offset)
 				newPos := mapPos(r.program.Fset, oldPos,
@@ -588,7 +579,7 @@ func (r *refactoringBase) updateLog(config *Config, checkForErrors bool) {
 }
 
 // describeEdit returns a human-readable, one-line description of a text edit
-func describeEdit(extent text.Extent, replacement string) string {
+func describeEdit(extent *text.Extent, replacement string) string {
 	if extent.Length == 0 {
 		return fmt.Sprintf("| Insert \"%s\"", shorten(replacement))
 	} else if replacement == "" {
@@ -654,63 +645,14 @@ func InterpretArgs(args []string, r Refactoring) []interface{} {
 	return result
 }
 
-func (r *refactoringBase) pkgInfo(file *ast.File) *loader.PackageInfo {
-	for _, pkgInfo := range r.program.AllPackages {
-		for _, thisFile := range pkgInfo.Files {
-			if thisFile == file {
-				return pkgInfo
-			}
-		}
-	}
-	return nil
-}
-
-func (r *refactoringBase) filename(file *ast.File) string {
-	return r.program.Fset.Position(file.Package).Filename
-}
-
-func (r *refactoringBase) fileContaining(node ast.Node) *ast.File {
-	tfile := r.program.Fset.File(node.Pos())
-	for _, pkgInfo := range r.program.AllPackages {
-		for _, thisFile := range pkgInfo.Files {
-			thisTFile := r.program.Fset.File(thisFile.Package)
-			if thisTFile == tfile {
-				return thisFile
-			}
-		}
-	}
-	panic("No ast.File for node")
-}
-
-func (r *refactoringBase) fileNamed(filename string) (*loader.PackageInfo, *ast.File) {
-	absFilename, _ := filepath.Abs(filename)
-	for _, pkgInfo := range r.program.AllPackages {
-		for _, f := range pkgInfo.Files {
-			thisFile := r.program.Fset.Position(f.Pos()).Filename
-			if thisFile == filename || thisFile == absFilename {
-				return pkgInfo, f
-			}
-		}
-	}
-	return nil, nil
-}
-
-func (r *refactoringBase) forEachFile(f func(ast *ast.File)) {
-	for _, pkgInfo := range r.program.AllPackages {
-		for _, ast := range pkgInfo.Files {
-			f(ast)
-		}
-	}
-}
-
-func (r *refactoringBase) forEachInitialFile(f func(ast *ast.File)) {
-	for _, pkgInfo := range r.program.InitialPackages() {
-		for _, ast := range pkgInfo.Files {
-			f(ast)
-		}
-	}
-}
-
 func (r *refactoringBase) offsetLength(node ast.Node) (int, int) {
-	return r.program.Fset.Position(node.Pos()).Offset, (r.program.Fset.Position(node.End()).Offset - r.program.Fset.Position(node.Pos()).Offset)
+	offset := r.program.Fset.Position(node.Pos()).Offset
+	offsetPastEnd := r.program.Fset.Position(node.End()).Offset
+	length := offsetPastEnd - offset
+	return offset, length
+}
+
+func (r *refactoringBase) extent(node ast.Node) *text.Extent {
+	offset, length := r.offsetLength(node)
+	return &text.Extent{Offset: offset, Length: length}
 }

@@ -49,14 +49,14 @@ func Diff(a []string, b []string) *EditSet {
 		result := &EditSet{}
 		replacement := strings.Join(b, "")
 		if replacement != "" {
-			result.Add(Extent{0, 0}, replacement)
+			result.Add(&Extent{0, 0}, replacement)
 		}
 		return result
 	} else if m == 0 {
 		result := &EditSet{}
 		length := len(strings.Join(a, ""))
 		if length > 0 {
-			result.Add(Extent{0, length}, "")
+			result.Add(&Extent{0, length}, "")
 		}
 		return result
 	}
@@ -119,7 +119,7 @@ func constructEditSet(a, b []string, vs [][]int, edits *EditSet, k int) {
 
 			charsToCopy := y - prevy - 1
 			insertOffset := x - charsToCopy
-			ol := Extent{offsetOfString(insertOffset, a), 0}
+			ol := &Extent{offsetOfString(insertOffset, a), 0}
 			copyOffset := y - charsToCopy - 1
 			replaceWith := b[copyOffset : copyOffset+1]
 			replacement := strings.Join(replaceWith, "")
@@ -133,7 +133,7 @@ func constructEditSet(a, b []string, vs [][]int, edits *EditSet, k int) {
 
 			charsToCopy := x - prevx - 1
 			deleteOffset := x - charsToCopy - 1
-			ol := Extent{
+			ol := &Extent{
 				offsetOfString(deleteOffset, a),
 				len(a[deleteOffset])}
 			replaceWith := ""

@@ -33,7 +33,7 @@ func (r *ToggleVar) Description() *Description {
 		Usage:     "",
 		Multifile: false,
 		Params:    nil,
-		Quality:   Testing,
+		Hidden:    false,
 	}
 }
 
@@ -71,9 +71,8 @@ func (r *ToggleVar) Run(config *Config) *Result {
 }
 
 func (r *ToggleVar) short2var(assign *ast.AssignStmt) {
-	start, length := r.offsetLength(assign)
 	replacement := r.varDeclString(assign)
-	r.Edits[r.filename(r.file)].Add(text.Extent{start, length}, replacement)
+	r.Edits[r.filename].Add(r.extent(assign), replacement)
 	if strings.Contains(replacement, "\n") {
 		r.formatFileInEditor()
 	}
@@ -93,7 +92,7 @@ func (r *ToggleVar) varDeclString(assign *ast.AssignStmt) string {
 	replacement := make([]string, len(assign.Rhs))
 	path, _ := astutil.PathEnclosingInterval(r.file, assign.Pos(), assign.End())
 	for i, rhs := range assign.Rhs {
-		switch T := r.pkgInfo(r.file).TypeOf(rhs).(type) {
+		switch T := r.selectedNodePkg.TypeOf(rhs).(type) {
 		case *types.Tuple: // function type
 			if typeOfFunctionType(T) == "" {
 				replacement[i] = fmt.Sprintf("var %s = %s\n",
@@ -168,7 +167,7 @@ func (r *refactoringBase) lhsNames(assign *ast.AssignStmt) []bytes.Buffer {
 func (r *ToggleVar) var2short(decl *ast.GenDecl) {
 	start, _ := r.offsetLength(decl)
 	repstrlen := r.program.Fset.Position(decl.Specs[0].(*ast.ValueSpec).Values[0].Pos()).Offset - r.program.Fset.Position(decl.Pos()).Offset
-	r.Edits[r.filename(r.file)].Add(text.Extent{start, repstrlen}, r.shortAssignString(decl))
+	r.Edits[r.filename].Add(&text.Extent{start, repstrlen}, r.shortAssignString(decl))
 }
 
 func (r *ToggleVar) varDeclLHS(decl *ast.GenDecl) string {
