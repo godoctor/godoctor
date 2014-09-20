@@ -18,7 +18,6 @@ import (
 	"strings"
 
 	"code.google.com/p/go.tools/go/loader"
-	"code.google.com/p/go.tools/go/types"
 
 	"golang-refactoring.org/go-doctor/analysis/names"
 	"golang-refactoring.org/go-doctor/filesystem"
@@ -134,9 +133,8 @@ func (r *Rename) rename(ident *ast.Ident, pkgInfo *loader.PackageInfo) {
 	var searchResult map[string][]text.Extent
 	if isPackageName(ident, pkgInfo) {
 		searchResult = names.FindReferencesToPackage(ident.Name, r.program)
-	} else if isSwitchVar(ident, pkgInfo) {
-		//TODO change to perform switch and case variable rename
-		searchResult = names.FindOccurrencesOfCaseVar(ident.Name, r.program)
+	} else if ts := r.selectedTypeSwitchVar(); ts != nil {
+		searchResult = r.extents(names.FindTypeSwitchOccurrences(ts, r.selectedNodePkg), r.program.Fset)
 	} else {
 		searchResult = r.extents(names.FindOccurrences(pkgInfo.ObjectOf(ident), r.program), r.program.Fset)
 	}
@@ -164,17 +162,27 @@ func isPackageName(ident *ast.Ident, pkgInfo *loader.PackageInfo) bool {
 	return false
 }
 
-func isSwitchVar(ident *ast.Ident, pkgInfo *loader.PackageInfo) bool {
-	obj := pkgInfo.ObjectOf(ident)
-	if _, ok := obj.(*types.Var); !ok && obj == nil && !isPackageName(ident, pkgInfo) {
-		//fmt.Println("types.var of ident",v)
-		//fmt.Println("selected var in switch  clasue of type switch ")
-		// fmt.Println("slected  switch var and types.var is",obj.(*types.Var))
-		return true
-	}
+func (r *Rename) selectedTypeSwitchVar() *ast.TypeSwitchStmt {
+	obj := r.selectedNodePkg.ObjectOf(r.selectedNode.(*ast.Ident))
 
-	//fmt.Println(" var is not swithvar")
-	return false
+	for _, n := range r.pathEnclosingSelection {
+		if typeSwitch, ok := n.(*ast.TypeSwitchStmt); ok {
+			if asgt, ok := typeSwitch.Assign.(*ast.AssignStmt); ok {
+				if len(asgt.Lhs) == 1 &&
+					asgt.Tok == token.DEFINE &&
+					asgt.Lhs[0] == r.selectedNode {
+					return typeSwitch
+				}
+			}
+			for _, stmt := range typeSwitch.Body.List {
+				cc := stmt.(*ast.CaseClause)
+				if r.selectedNodePkg.Implicits[cc] == obj {
+					return typeSwitch
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func (r *Rename) addOccurrences(allOccurrences map[string][]text.Extent) {

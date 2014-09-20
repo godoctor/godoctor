@@ -65,6 +65,20 @@ func (o *Extent) String() string {
 	return fmt.Sprintf("offset %d, length %d", o.Offset, o.Length)
 }
 
+// Sort sorts a slice of Extents (in-place) by increasing offset.
+func Sort(s []Extent) {
+	// Insertion sort
+	for j := 1; j < len(s); j++ {
+		key := s[j]
+		i := j - 1
+		for i >= 0 && s[i].Offset > key.Offset {
+			s[i+1] = s[i]
+			i--
+		}
+		s[i+1] = key
+	}
+}
+
 // -=-= EditSet -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 // An EditSet is a collection of changes to be made to a text file.  Each edit
