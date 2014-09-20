@@ -134,7 +134,7 @@ func (r *Rename) rename(ident *ast.Ident, pkgInfo *loader.PackageInfo) {
 	if isPackageName(ident, pkgInfo) {
 		searchResult = names.FindReferencesToPackage(ident.Name, r.program)
 	} else if ts := r.selectedTypeSwitchVar(); ts != nil {
-		searchResult = r.extents(names.FindTypeSwitchOccurrences(ts, r.selectedNodePkg), r.program.Fset)
+		searchResult = r.extents(names.FindTypeSwitchVarOccurrences(ts, r.selectedNodePkg, r.program), r.program.Fset)
 	} else {
 		searchResult = r.extents(names.FindOccurrences(pkgInfo.ObjectOf(ident), r.program), r.program.Fset)
 	}

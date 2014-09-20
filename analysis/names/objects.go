@@ -11,19 +11,12 @@ import (
 	"code.google.com/p/go.tools/go/types"
 )
 
-/* -=-=- Search by Identifier  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
-
-// TODO(review D7): I think I mentioned this before but this function has a
-// strange signature: it mixes objects from two non-adjacent layers of the
-// design abstraction: semantic objects (e.g. types.Object) and concrete syntax
-// (text.OffsetLength). In between these two layers is that of abstract syntax (e.g.
-// ast.Ident). This suggests that the function is doing too much; perhaps it
-// should just be returning a set of *ast.Idents for a later function to map
-// down to concrete syntax.
-
-// FindOccurrences receives an identifier and returns the set of all
-// identically named identifiers that refer to the same object as that
-// identifier.
+// FindOccurrences receives an Object and returns the set of all identifiers
+// that refer to that Object.
+//
+// Note that this method cannot be used to find occurrences of package names or
+// variables defined by type switch statements; those must be handled using
+// different methods in this package.
 func FindOccurrences(obj types.Object, prog *loader.Program) map[*ast.Ident]bool {
 	decls := map[types.Object]bool{obj: true}
 	if isMethod(obj) {
