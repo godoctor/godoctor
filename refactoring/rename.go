@@ -110,13 +110,22 @@ func isReservedWord(newName string) bool {
 }
 
 func (r *Rename) rename(ident *ast.Ident, pkgInfo *loader.PackageInfo) {
-	if pkgInfo.ObjectOf(ident) == nil && r.selectedTypeSwitchVar() == nil {
+	obj := pkgInfo.ObjectOf(ident)
+
+	if obj == nil && r.selectedTypeSwitchVar() == nil {
 		r.Log.Errorf("Package renaming is not supported")
 		r.Log.AssociateNode(ident)
 		return
 	}
 
-	if conflict := names.FindConflict(pkgInfo.ObjectOf(ident), r.newName); conflict != nil {
+	if obj != nil && isInGoRoot(r.program.Fset.Position(obj.Pos()).Filename) {
+		r.Log.Errorf("%s is defined in $GOROOT and cannot be renamed",
+			ident.Name)
+		r.Log.AssociateNode(ident)
+		return
+	}
+
+	if conflict := names.FindConflict(obj, r.newName); conflict != nil {
 		r.Log.Errorf("Renaming %s to %s may cause conflicts with an existing declaration", ident.Name, r.newName)
 		r.Log.AssociatePos(conflict.Pos(), conflict.Pos())
 	}
@@ -125,7 +134,7 @@ func (r *Rename) rename(ident *ast.Ident, pkgInfo *loader.PackageInfo) {
 	if ts := r.selectedTypeSwitchVar(); ts != nil {
 		idents = names.FindTypeSwitchVarOccurrences(ts, r.selectedNodePkg, r.program)
 	} else {
-		idents = names.FindOccurrences(pkgInfo.ObjectOf(ident), r.program)
+		idents = names.FindOccurrences(obj, r.program)
 	}
 
 	r.addOccurrences(ident.Name, r.extents(idents, r.program.Fset))

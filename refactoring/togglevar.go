@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"fmt"
 	"go/ast"
+	"go/token"
 	"io"
 	"reflect"
 	"strings"
@@ -55,8 +56,10 @@ func (r *ToggleVar) Run(config *Config) *Result {
 	for _, node := range nodes {
 		switch selectedNode := node.(type) {
 		case *ast.AssignStmt:
-			r.short2var(selectedNode)
-			r.updateLog(config, true)
+			if selectedNode.Tok == token.DEFINE {
+				r.short2var(selectedNode)
+				r.updateLog(config, true)
+			}
 			return &r.Result
 		case *ast.GenDecl:
 			r.var2short(selectedNode)
