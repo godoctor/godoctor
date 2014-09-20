@@ -26,6 +26,8 @@ import (
 // method returns a set containing the reflexive, transitive closure of objects
 // that must be renamed if the given identifier is renamed.
 func FindDeclarationsAcrossInterfaces(obj types.Object, program *loader.Program) map[types.Object]bool {
+	// XXX: This only searches for matches within the declaring package.  There
+	// may be matches in other packages as well.
 	if isMethod(obj) {
 		// If obj is a method, search across interfaces: there may be
 		// many other methods that need to change to ensure that all
@@ -112,18 +114,20 @@ func reachableMethods(name string, obj *types.Func, pkgInfo *loader.PackageInfo)
 // methodDeclsMatchingSig walks all of the ASTs in the given package and
 // returns methods with the given signature and interfaces that explicitly
 // define a method with the given signature.
-// TODO(review D7): This looks quite expensive to do in a relatively low-level
-// function. Consider doing an initial pass over the ASTs to gather this
-// information if performance becomes an issue.
-// TODO(review D7): Two identifiers are identical iff (a) they are spelled the
-// same and (b) they are exported or they appear within the same package. So
-// really you need to know ident's package too, construct a types.Id instance
-// for each side, and compare those.
-// I doubt it's a major practical problem in this case, but it's something
-// important corner case to bear in mind if you're building Go tools. It means
-// you can have a legal struct or interface with two fields/methods both named
-// "f", if they come from different packages.
 func methodDeclsMatchingSig(name string, sig *types.Signature, pkgInfo *loader.PackageInfo) (methods map[types.Object]bool, interfaces map[*types.Interface]bool) {
+	// XXX(review D7): This looks quite expensive to do in a relatively low-level
+	// function. Consider doing an initial pass over the ASTs to gather this
+	// information if performance becomes an issue.
+
+	// XXX(review D7): Two identifiers are identical iff (a) they are spelled the
+	// same and (b) they are exported or they appear within the same package. So
+	// really you need to know name's package too, construct a types.Id instance
+	// for each side, and compare those.
+	// I doubt it's a major practical problem in this case, but it's something
+	// important corner case to bear in mind if you're building Go tools. It means
+	// you can have a legal struct or interface with two fields/methods both named
+	// "f", if they come from different packages.
+
 	methods = map[types.Object]bool{}
 	interfaces = map[*types.Interface]bool{}
 	for _, file := range pkgInfo.Files {
