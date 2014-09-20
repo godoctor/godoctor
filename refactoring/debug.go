@@ -271,18 +271,18 @@ func (r *Debug) showReferences(out io.Writer) {
 	switch id := r.selectedNode.(type) {
 	case *ast.Ident:
 		fmt.Fprintf(out, "References to %s:\n", id.Name)
-		searchResult := r.extents(names.FindOccurrences(r.selectedNodePkg.ObjectOf(id), r.program), r.program.Fset)
-		for filename, occs := range searchResult {
-			fmt.Fprintf(out, "  in %s:\n", filename)
-			strs := []string{}
-			for _, ol := range occs {
-				strs = append(strs,
-					fmt.Sprintf("    %s", ol.String()))
-			}
-			sort.Strings(strs)
-			for _, s := range strs {
-				fmt.Fprintln(out, s)
-			}
+		ids := names.FindOccurrences(r.selectedNodePkg.ObjectOf(id), r.program)
+		strs := []string{}
+		for id, _ := range ids {
+			offset, length := r.offsetLength(id)
+			description := fmt.Sprintf("  %s: %s",
+				r.program.Fset.Position(id.Pos()).Filename,
+				(&text.Extent{offset, length}).String())
+			strs = append(strs, description)
+		}
+		sort.Strings(strs)
+		for _, s := range strs {
+			fmt.Fprintln(out, s)
 		}
 	default:
 		r.Log.Error(errorMsg)

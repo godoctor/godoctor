@@ -65,8 +65,11 @@ func (o *Extent) String() string {
 	return fmt.Sprintf("offset %d, length %d", o.Offset, o.Length)
 }
 
-// Sort sorts a slice of Extents (in-place) by increasing offset.
-func Sort(s []Extent) {
+// Sort receives a slice of Extents and returns a copy with the Extents sorted
+// by increasing offset.
+func Sort(extents []Extent) []Extent {
+	s := make([]Extent, len(extents))
+	copy(s, extents)
 	// Insertion sort
 	for j := 1; j < len(s); j++ {
 		key := s[j]
@@ -77,6 +80,7 @@ func Sort(s []Extent) {
 		}
 		s[i+1] = key
 	}
+	return s
 }
 
 // -=-= EditSet -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-

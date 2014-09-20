@@ -46,9 +46,9 @@
 //
 // To additional options are available and are currently used only to test the
 // Debug refactoring.  When it does not make sense to compare against a .golden
-// file, include an empty file named filename.golden.ignoreOutput instead.  If
-// the output will contain absolute paths to files in the test folder, include
-// a file named filename.go.stripPaths, and the refactoring's output will be
+// file, include an empty file named filename.ignoreOutput instead.  If the
+// output will contain absolute paths to files in the test folder, include a
+// file named filename.go.stripPaths, and the refactoring's output will be
 // stripped of all occurrences of the absolute path to the .go file.
 
 package refactoring_test

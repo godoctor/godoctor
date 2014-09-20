@@ -99,9 +99,10 @@ func (r *Rename) Run(config *Config) *Result {
 		// FIXME: This seems too broad?  -JO
 		for pkg, _ := range r.program.AllPackages {
 			if pkg.Name() == strings.Replace(ident.Value, "\"", "", 2) {
-				searchResult := names.FindReferencesToPackage(pkg.Name(), r.program)
-				r.addOccurrences(searchResult)
-				r.addFileSystemChanges(searchResult, pkg.Name())
+				idents, imports := names.FindReferencesToPackage(pkg.Name(), r.program)
+				extents := r.pkgExtents(pkg.Name(), idents, imports, r.program.Fset)
+				r.addOccurrences(extents)
+				r.addFileSystemChanges(extents, pkg.Name())
 			}
 		}
 		r.updateLog(config, false)
@@ -130,27 +131,84 @@ func (r *Rename) rename(ident *ast.Ident, pkgInfo *loader.PackageInfo) {
 		r.Log.AssociatePos(conflict.Pos(), conflict.Pos())
 	}
 
-	var searchResult map[string][]text.Extent
+	var extents map[string][]text.Extent
 	if isPackageName(ident, pkgInfo) {
-		searchResult = names.FindReferencesToPackage(ident.Name, r.program)
+		idents, imports := names.FindReferencesToPackage(ident.Name, r.program)
+		extents = r.pkgExtents(ident.Name, idents, imports, r.program.Fset)
 	} else if ts := r.selectedTypeSwitchVar(); ts != nil {
-		searchResult = r.extents(names.FindTypeSwitchVarOccurrences(ts, r.selectedNodePkg, r.program), r.program.Fset)
+		extents = r.extents(names.FindTypeSwitchVarOccurrences(ts, r.selectedNodePkg, r.program), r.program.Fset)
 	} else {
-		searchResult = r.extents(names.FindOccurrences(pkgInfo.ObjectOf(ident), r.program), r.program.Fset)
+		extents = r.extents(names.FindOccurrences(pkgInfo.ObjectOf(ident), r.program), r.program.Fset)
 	}
 
-	for fname, _ := range searchResult {
+	for fname, _ := range extents {
 		_, file := r.fileNamed(fname)
 		occs := names.FindInComments(ident.Name, file, r.program.Fset)
-		searchResult[fname] = append(searchResult[fname], occs...)
+		extents[fname] = append(extents[fname], occs...)
 	}
 
-	r.addOccurrences(searchResult)
+	r.addOccurrences(extents)
 	if isPackageName(ident, pkgInfo) {
-		r.addFileSystemChanges(searchResult, ident.Name)
+		r.addFileSystemChanges(extents, ident.Name)
 	}
 
 	return
+}
+
+func (r *Rename) extents(ids map[*ast.Ident]bool, fset *token.FileSet) map[string][]text.Extent {
+	result := map[string][]text.Extent{}
+	for id, _ := range ids {
+		pos := fset.Position(id.Pos())
+		if _, ok := result[pos.Filename]; !ok {
+			result[pos.Filename] = []text.Extent{}
+		}
+		result[pos.Filename] = append(result[pos.Filename],
+			text.Extent{Offset: pos.Offset, Length: len(id.Name)})
+	}
+
+	sorted := map[string][]text.Extent{}
+	for fname, extents := range result {
+		sorted[fname] = text.Sort(extents)
+	}
+	return sorted
+}
+
+func (r *Rename) pkgExtents(pkgName string, idents map[*ast.Ident]bool, imports map[*ast.ImportSpec]bool, fset *token.FileSet) map[string][]text.Extent {
+	result := map[string][]text.Extent{}
+
+	for id, _ := range idents {
+		pos := fset.Position(id.Pos())
+		if _, ok := result[pos.Filename]; !ok {
+			result[pos.Filename] = []text.Extent{}
+		}
+		result[pos.Filename] = append(result[pos.Filename],
+			text.Extent{Offset: pos.Offset, Length: len(id.Name)})
+	}
+
+	for imp, _ := range imports {
+		pos := fset.Position(imp.Path.Pos())
+		if _, ok := result[pos.Filename]; !ok {
+			result[pos.Filename] = []text.Extent{}
+		}
+		result[pos.Filename] = append(result[pos.Filename],
+			substringExtent(imp.Path.Value, pkgName, pos.Offset))
+	}
+
+	sorted := map[string][]text.Extent{}
+	for fname, extents := range result {
+		sorted[fname] = text.Sort(extents)
+	}
+	return sorted
+}
+
+func substringExtent(s, pkgName string, baseOffset int) text.Extent {
+	idx := strings.Index(s, pkgName)
+	if idx < 1 {
+		panic("substringExtent: idx < 1")
+	}
+	return text.Extent{
+		Offset: baseOffset + idx,
+		Length: len(pkgName)}
 }
 
 func isPackageName(ident *ast.Ident, pkgInfo *loader.PackageInfo) bool {

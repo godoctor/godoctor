@@ -721,19 +721,3 @@ func (r *refactoringBase) forEachInitialFile(f func(ast *ast.File)) {
 func (r *refactoringBase) offsetLength(node ast.Node) (int, int) {
 	return r.program.Fset.Position(node.Pos()).Offset, (r.program.Fset.Position(node.End()).Offset - r.program.Fset.Position(node.Pos()).Offset)
 }
-
-func (r *refactoringBase) extents(ids map[*ast.Ident]bool, fset *token.FileSet) map[string][]text.Extent {
-	result := map[string][]text.Extent{}
-	for id, _ := range ids {
-		pos := fset.Position(id.Pos())
-		if _, ok := result[pos.Filename]; !ok {
-			result[pos.Filename] = []text.Extent{}
-		}
-		result[pos.Filename] = append(result[pos.Filename],
-			text.Extent{Offset: pos.Offset, Length: len(id.Name)})
-	}
-	for _, extents := range result {
-		text.Sort(extents)
-	}
-	return result
-}
