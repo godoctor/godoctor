@@ -36,7 +36,7 @@ func FindConflict(obj types.Object, name string) types.Object {
 	}
 
 	// Check for possible conflicts from a parent scope
-	if obj := obj.Parent().LookupParent(name); obj != nil {
+	if _, obj := obj.Parent().LookupParent(name); obj != nil {
 		return obj
 	}
 
