@@ -11,6 +11,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"time"
 
 	"strings"
@@ -283,12 +284,27 @@ func writeDiff(out io.Writer, edits map[string]*text.EditSet, fs filesystem.File
 			if f == stdinPath {
 				inFile = os.Stdin.Name()
 				outFile = os.Stdout.Name()
+			} else {
+				rel := relativePath(f)
+				inFile = rel
+				outFile = rel
 			}
 			fmt.Fprintf(out, "diff -u %s %s\n", inFile, outFile)
 			p.Write(inFile, outFile, time.Time{}, time.Time{}, out)
 		}
 	}
 	return nil
+}
+
+// relativePath returns a relative path to fname, or fname if a relative path
+// cannot be computed due to an error
+func relativePath(fname string) string {
+	if cwd, err := os.Getwd(); err == nil {
+		if rel, err := filepath.Rel(cwd, fname); err == nil {
+			return rel
+		}
+	}
+	return fname
 }
 
 // writeFileContents outputs the complete contents of each file affected by
