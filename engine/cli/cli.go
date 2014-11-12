@@ -1,4 +1,4 @@
-// Copyright 2014 The Go Authors. All rights reserved.
+// Copyright 2014 Auburn University. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -16,11 +16,11 @@ import (
 
 	"strings"
 
-	"golang-refactoring.org/go-doctor/engine"
-	"golang-refactoring.org/go-doctor/engine/protocol"
-	"golang-refactoring.org/go-doctor/filesystem"
-	"golang-refactoring.org/go-doctor/refactoring"
-	"golang-refactoring.org/go-doctor/text"
+	"github.com/godoctor/godoctor/engine"
+	"github.com/godoctor/godoctor/engine/protocol"
+	"github.com/godoctor/godoctor/filesystem"
+	"github.com/godoctor/godoctor/refactoring"
+	"github.com/godoctor/godoctor/text"
 )
 
 const useHelp = "Run 'godoctor -help' for more information.\n"

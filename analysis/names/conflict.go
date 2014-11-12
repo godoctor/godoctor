@@ -1,10 +1,10 @@
-// Copyright 2014 The Go Authors. All rights reserved.
+// Copyright 2014 Auburn University. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
 package names
 
-import "code.google.com/p/go.tools/go/types"
+import "golang.org/x/tools/go/types"
 
 // FindConflict determines if there already exists an identifier with the given
 // newName such that the given ident cannot be renamed to name.  It returns

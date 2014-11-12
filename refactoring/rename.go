@@ -1,4 +1,4 @@
-// Copyright 2014 The Go Authors. All rights reserved.
+// Copyright 2014 Auburn University. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -11,14 +11,15 @@ import (
 	"go/ast"
 	"go/token"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"runtime"
 	"strings"
 
-	"code.google.com/p/go.tools/go/loader"
+	"golang.org/x/tools/go/loader"
 
-	"golang-refactoring.org/go-doctor/analysis/names"
-	"golang-refactoring.org/go-doctor/text"
+	"github.com/godoctor/godoctor/analysis/names"
+	"github.com/godoctor/godoctor/text"
 )
 
 // Rename is a refactoring that changes the names of variables, functions,
@@ -77,9 +78,16 @@ func (r *Rename) Run(config *Config) *Result {
 
 	switch ident := r.selectedNode.(type) {
 	case *ast.Ident:
+
 		// FIXME: Check if main function (not type/var/etc.) -JO
 		if ident.Name == "main" && r.selectedNodePkg.Pkg.Name() == "main" {
 			r.Log.Error("The \"main\" function in the \"main\" package cannot be renamed: it will eliminate the program entrypoint")
+			r.Log.AssociateNode(ident)
+			return &r.Result
+		}
+
+		if isPredeclaredIdentifier(ident.Name) {
+			r.Log.Errorf("selected predeclared  identifier \"%s\" , it cannot be renamed", ident.Name)
 			r.Log.AssociateNode(ident)
 			return &r.Result
 		}
@@ -93,14 +101,20 @@ func (r *Rename) Run(config *Config) *Result {
 		return &r.Result
 
 	default:
-		r.Log.Error("Please select an identifier to rename.")
+		r.Log.Errorf("Please select an identifier to rename. "+
+			"(Selected node: %s)", reflect.TypeOf(ident))
 		r.Log.AssociatePos(r.selectionStart, r.selectionEnd)
 		return &r.Result
 	}
 }
 
 func isIdentifierValid(newName string) bool {
-	b, _ := regexp.MatchString("^\\p{L}[\\p{L}\\p{N}]*$", newName)
+	b, _ := regexp.MatchString("^[\\p{L}|_][\\p{L}|_|\\p{N}]*$", newName)
+	return b
+}
+
+func isPredeclaredIdentifier(selectedIdentifier string) bool {
+	b, _ := regexp.MatchString("^(bool|byte|complex64|complex128|error|float32|float64|int|int8|int16|int32|int64|rune|string|uint|uint8|uint16|uint32|uint64|uintptr|true|false|iota|nil|append|cap|close|complex|copy|delete|imag|len|make|new|panic|print|println|real|recover)$", selectedIdentifier)
 	return b
 }
 
@@ -124,12 +138,10 @@ func (r *Rename) rename(ident *ast.Ident, pkgInfo *loader.PackageInfo) {
 		r.Log.AssociateNode(ident)
 		return
 	}
-
 	if conflict := names.FindConflict(obj, r.newName); conflict != nil {
 		r.Log.Errorf("Renaming %s to %s may cause conflicts with an existing declaration", ident.Name, r.newName)
 		r.Log.AssociatePos(conflict.Pos(), conflict.Pos())
 	}
-
 	var idents map[*ast.Ident]bool
 	if ts := r.selectedTypeSwitchVar(); ts != nil {
 		idents = names.FindTypeSwitchVarOccurrences(ts, r.selectedNodePkg, r.program)

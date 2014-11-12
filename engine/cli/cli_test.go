@@ -1,4 +1,4 @@
-// Copyright 2014 The Go Authors. All rights reserved.
+// Copyright 2014 Auburn University. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"golang-refactoring.org/go-doctor/engine/cli"
+	"github.com/godoctor/godoctor/engine/cli"
 )
 
 const (
@@ -113,7 +113,7 @@ func TestInvalidCombos(t *testing.T) {
 		[]string{"-file=-", "-json"},
 		[]string{"-json", "-list"},
 		[]string{"-json", "-pos=1,1:1,1"},
-		[]string{"-json", "-scope=code.google.com/p/go.tools"},
+		[]string{"-json", "-scope=golang.org/x/tools"},
 		[]string{"-json", "-v"},
 		[]string{"-json", "-w"},
 		[]string{"-list", "-v"},

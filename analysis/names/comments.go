@@ -1,4 +1,4 @@
-// Copyright 2014 The Go Authors. All rights reserved.
+// Copyright 2014 Auburn University. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -11,7 +11,7 @@ import (
 	"regexp"
 	"strings"
 
-	"golang-refactoring.org/go-doctor/text"
+	"github.com/godoctor/godoctor/text"
 )
 
 // FindInComments searches the comments of the given packages' source files for

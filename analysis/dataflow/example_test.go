@@ -1,4 +1,4 @@
-// Copyright 2014 The Go Authors. All rights reserved.
+// Copyright 2014 Auburn University. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"go/ast"
 
-	"code.google.com/p/go.tools/go/loader"
+	"golang.org/x/tools/go/loader"
 
-	"golang-refactoring.org/go-doctor/analysis/cfg"
-	"golang-refactoring.org/go-doctor/analysis/dataflow"
+	"github.com/godoctor/godoctor/analysis/cfg"
+	"github.com/godoctor/godoctor/analysis/dataflow"
 )
 
 func ExampleReachingDefs() {

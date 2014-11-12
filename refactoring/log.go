@@ -1,4 +1,4 @@
-// Copyright 2014 The Go Authors. All rights reserved.
+// Copyright 2014 Auburn University. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -25,7 +25,7 @@ import (
 	"go/ast"
 	"go/token"
 
-	"golang-refactoring.org/go-doctor/filesystem"
+	"github.com/godoctor/godoctor/filesystem"
 )
 
 // A Severity indicates whether a log entry describes an informational message,

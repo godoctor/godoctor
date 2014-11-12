@@ -1,4 +1,4 @@
-// Copyright 2014 The Go Authors. All rights reserved.
+// Copyright 2014 Auburn University. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -10,7 +10,7 @@ package refactoring
 import (
 	"go/ast"
 
-	"golang-refactoring.org/go-doctor/text"
+	"github.com/godoctor/godoctor/text"
 )
 
 // The AddGoDoc refactoring adds GoDoc comments to all exported top-level

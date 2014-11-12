@@ -1,4 +1,4 @@
-// Copyright 2014 The Go Authors. All rights reserved.
+// Copyright 2014 Auburn University. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -15,7 +15,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"golang-refactoring.org/go-doctor/filesystem"
+	"github.com/godoctor/godoctor/filesystem"
 )
 
 type Reply struct {

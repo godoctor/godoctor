@@ -25,10 +25,10 @@ import (
 	"strings"
 	"sync"
 
-	"code.google.com/p/go.tools/go/loader"
-	"code.google.com/p/go.tools/go/types"
-	"golang-refactoring.org/go-doctor/filesystem"
-	"golang-refactoring.org/go-doctor/text"
+	"golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/types"
+	"github.com/godoctor/godoctor/filesystem"
+	"github.com/godoctor/godoctor/text"
 )
 
 // The maximum number of errors from the go/loader that will be reported

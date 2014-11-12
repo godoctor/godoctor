@@ -1,4 +1,4 @@
-// Copyright 2014 The Go Authors. All rights reserved.
+// Copyright 2014 Auburn University. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"golang-refactoring.org/go-doctor/text"
+	"github.com/godoctor/godoctor/text"
 )
 
 // The filename assigned to Go source code supplied on standard input.  It is
