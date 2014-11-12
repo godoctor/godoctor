@@ -8,7 +8,7 @@ package main
 import (
 	"os"
 
-	"golang-refactoring.org/go-doctor/engine/cli"
+	"github.com/godoctor/godoctor/engine/cli"
 )
 
 func main() {

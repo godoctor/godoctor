@@ -15,7 +15,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"golang-refactoring.org/go-doctor/filesystem"
+	"github.com/godoctor/godoctor/filesystem"
 )
 
 type Reply struct {

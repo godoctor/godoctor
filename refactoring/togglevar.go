@@ -16,9 +16,9 @@ import (
 	"reflect"
 	"strings"
 
-	"code.google.com/p/go.tools/astutil"
-	"code.google.com/p/go.tools/go/types"
-	"golang-refactoring.org/go-doctor/text"
+	"golang.org/x/tools/astutil"
+	"golang.org/x/tools/go/types"
+	"github.com/godoctor/godoctor/text"
 )
 
 // A ToggleVar refactoring converts between explicitly-typed variable

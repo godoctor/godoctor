@@ -25,7 +25,7 @@ import (
 	"go/ast"
 	"go/token"
 
-	"golang-refactoring.org/go-doctor/filesystem"
+	"github.com/godoctor/godoctor/filesystem"
 )
 
 // A Severity indicates whether a log entry describes an informational message,

@@ -4,7 +4,7 @@
 
 package names
 
-import "code.google.com/p/go.tools/go/types"
+import "golang.org/x/tools/go/types"
 
 // FindConflict determines if there already exists an identifier with the given
 // newName such that the given ident cannot be renamed to name.  It returns

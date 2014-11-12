@@ -7,9 +7,9 @@ package engine_test
 import (
 	"testing"
 
-	"golang-refactoring.org/go-doctor/engine"
-	"golang-refactoring.org/go-doctor/refactoring"
-	"golang-refactoring.org/go-doctor/text"
+	"github.com/godoctor/godoctor/engine"
+	"github.com/godoctor/godoctor/refactoring"
+	"github.com/godoctor/godoctor/text"
 )
 
 type customRefactoring struct{}

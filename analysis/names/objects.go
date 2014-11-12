@@ -7,8 +7,8 @@ package names
 import (
 	"go/ast"
 
-	"code.google.com/p/go.tools/go/loader"
-	"code.google.com/p/go.tools/go/types"
+	"golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/types"
 )
 
 // FindOccurrences receives an Object and returns the set of all identifiers

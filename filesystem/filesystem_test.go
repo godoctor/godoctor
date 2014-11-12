@@ -13,12 +13,12 @@ import (
 	"testing"
 	"time"
 
-	"code.google.com/p/go.tools/go/loader"
+	"golang.org/x/tools/go/loader"
 
 	"go/build"
 	"go/parser"
 
-	"golang-refactoring.org/go-doctor/text"
+	"github.com/godoctor/godoctor/text"
 )
 
 // Use zz_* for test file and directory names, since those paths are in

@@ -10,7 +10,7 @@ import (
 	"go/parser"
 	"go/token"
 
-	"golang-refactoring.org/go-doctor/analysis/cfg"
+	"github.com/godoctor/godoctor/analysis/cfg"
 )
 
 func ExampleCFG() {

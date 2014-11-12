@@ -11,7 +11,7 @@ import (
 	"regexp"
 	"strings"
 
-	"golang-refactoring.org/go-doctor/text"
+	"github.com/godoctor/godoctor/text"
 )
 
 // FindInComments searches the comments of the given packages' source files for

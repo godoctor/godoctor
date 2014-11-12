@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"go/ast"
 
-	"code.google.com/p/go.tools/go/loader"
+	"golang.org/x/tools/go/loader"
 
-	"golang-refactoring.org/go-doctor/analysis/cfg"
-	"golang-refactoring.org/go-doctor/analysis/dataflow"
+	"github.com/godoctor/godoctor/analysis/cfg"
+	"github.com/godoctor/godoctor/analysis/dataflow"
 )
 
 func ExampleReachingDefs() {

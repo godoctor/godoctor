@@ -16,10 +16,10 @@ import (
 	"runtime"
 	"strings"
 
-	"code.google.com/p/go.tools/go/loader"
+	"golang.org/x/tools/go/loader"
 
-	"golang-refactoring.org/go-doctor/analysis/names"
-	"golang-refactoring.org/go-doctor/text"
+	"github.com/godoctor/godoctor/analysis/names"
+	"github.com/godoctor/godoctor/text"
 )
 
 // Rename is a refactoring that changes the names of variables, functions,

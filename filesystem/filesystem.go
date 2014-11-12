@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"golang-refactoring.org/go-doctor/text"
+	"github.com/godoctor/godoctor/text"
 )
 
 // The filename assigned to Go source code supplied on standard input.  It is

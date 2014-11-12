@@ -65,10 +65,10 @@ import (
 	"strings"
 	"testing"
 
-	"golang-refactoring.org/go-doctor/engine"
-	"golang-refactoring.org/go-doctor/filesystem"
-	"golang-refactoring.org/go-doctor/refactoring"
-	"golang-refactoring.org/go-doctor/text"
+	"github.com/godoctor/godoctor/engine"
+	"github.com/godoctor/godoctor/filesystem"
+	"github.com/godoctor/godoctor/refactoring"
+	"github.com/godoctor/godoctor/text"
 )
 
 const MARKER = "<<<<<"

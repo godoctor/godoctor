@@ -21,13 +21,13 @@ import (
 	"sort"
 	"strings"
 
-	"code.google.com/p/go.tools/go/loader"
-	"code.google.com/p/go.tools/go/types"
+	"golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/types"
 
-	"golang-refactoring.org/go-doctor/analysis/cfg"
-	"golang-refactoring.org/go-doctor/analysis/dataflow"
-	"golang-refactoring.org/go-doctor/analysis/names"
-	"golang-refactoring.org/go-doctor/text"
+	"github.com/godoctor/godoctor/analysis/cfg"
+	"github.com/godoctor/godoctor/analysis/dataflow"
+	"github.com/godoctor/godoctor/analysis/names"
+	"github.com/godoctor/godoctor/text"
 )
 
 const usage = `Usage: debug <options>

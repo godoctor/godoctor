@@ -8,7 +8,7 @@ package engine
 import (
 	"fmt"
 
-	"golang-refactoring.org/go-doctor/refactoring"
+	"github.com/godoctor/godoctor/refactoring"
 )
 
 // All available refactorings, keyed by a unique, one-word, all-lowercase name

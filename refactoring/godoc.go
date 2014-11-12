@@ -10,7 +10,7 @@ package refactoring
 import (
 	"go/ast"
 
-	"golang-refactoring.org/go-doctor/text"
+	"github.com/godoctor/godoctor/text"
 )
 
 // The AddGoDoc refactoring adds GoDoc comments to all exported top-level

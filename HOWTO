@@ -3,10 +3,19 @@
                        "HOWTO" FOR GO DOCTOR DEVELOPERS
 
 
+INSTALL THE GO DOCTOR BINARY---------------------------------------------------
+
+Assuming that you have checked out the Go Doctor sources (as described below),
+all the tests pass (also described below), and your working directory is
+$GOPATH/src/github.com/godoctor/godoctor, run this command:
+
+    go install github.com/godoctor/godoctor/cmd/godoctor
+
+
 RUN TESTS----------------------------------------------------------------------
 
 The following commands assume your working directory is
-$GOPATH/src/golang-refactoring.org/go-doctor
+$GOPATH/src/github.com/godoctor/godoctor
 
 To run all tests for all packages:
     go test ./...               # Be patient!  It may take a while
@@ -48,7 +57,7 @@ sane, since it lets you see each package as a third-party developer would.
 In a shell, start the godoc server in the background:
     godoc -http :8080 &
 Wait a minute for it to load (if your workspace is huge)
-Browse to http://localhost:8080/pkg/golang-refactoring.org/
+Browse to http://localhost:8080/pkg/github.com/godoctor
 When you don't need it anymore, shut down the godoc server:
     killall godoc
 
@@ -67,7 +76,7 @@ these commands will not work under Windows; others require modifications (e.g.,
 changing $GOPATH to %GOPATH%).
 
 The Git commands in most of these scenarios will require your working directory
-to be $GOPATH/src/golang-refactoring.org/go-doctor.
+to be $GOPATH/src/github.com/godoctor/godoctor.
 
 
 SET NAME/E-MAIL USED BY GIT
@@ -88,13 +97,26 @@ SET NAME/E-MAIL USED BY GIT
 CLONING THE GO DOCTOR GIT REPOSITORY
 
     The source code for the Go Doctor should be stored in
-    $GOPATH/src/golang-refactoring.org.  Use the following to get the code:
+    $GOPATH/src/github.com/godoctor.  You will need Mercurial to get go.tools
+    and Git to get everything else.  To set up a development workspace:
 
-        $ git clone ssh://username@git.golang-refactoring.org/gitroot/go-doctor.git $GOPATH/src/golang-refactoring.org
+        $ go get golang.org/x/tools
+        $ go get github.com/willf/bitset
+        $ git clone https://github.com/godoctor/godoctor.git $GOPATH/src/github.com/godoctor
         $ git config branch.autosetuprebase always
         $ git config branch.master.rebase true
-        $ cd go-doctor
+
+    Instead of the last two lines, you can get all dependencies automatically:
+
+        $ cd $GOPATH/src/github.com/godoctor
         $ go get -u -v ./...    # To get dependencies, including go.tools
+
+    If you have your own fork of the GitHub repository, you will want to store
+    it locally in $GOPATH/src/github.com/godoctor so that you do not have to
+    manually change all of the import paths.  Instead of the "git clone" line
+    above, use this:
+
+        $ git clone git@github.com:your_github_username/godoctor.git $GOPATH/src/github.com/godoctor
 
 
 DEVELOPING A NEW FEATURE
@@ -159,43 +181,6 @@ DEVELOPING A NEW FEATURE
 
     After sharing your branch on the server, when you make new commits to your
     branch, you can use "git push" to push those commits to the server.
-
-
-CHECK OUT OTHER DEVELOPERS' FEATURES
-
-    Suppose you want to check out someone else's new feature, which is in a
-    development branch on the server.
-
-    First, commit any outstanding changes in your current branch.  Run
-    "git status", and make sure you don't have any outstanding modifications or
-    untracked files (e.g., uncommitted tests that don't pass yet).  When you
-    switch branches, your untracked and modified files will still be there.  If
-    you're checking out someone else's work, this probably isn't what you want.
-
-    To list all the branches available on the server:
-
-        $ git fetch
-        $ git branch -r
-
-    This will give a list of branches, like this:
-
-          origin/HEAD -> origin/master
-          origin/devel-something
-          origin/devel-whatever
-
-    Suppose you want to check out a new feature someone else is working on in
-    in the devel-whatever branch on the server.  Run "git status" to make
-    sure you don't have any changes in your local Git repository.  Then:
-
-        $ git checkout --track origin/devel-whatever
-
-    To switch back to the master branch (without the new feature/bugfix),
-
-        $ git checkout master
-
-    or to switch back to your local devel-something branch,
-
-        $ git checkout devel-something
 
 
 EDITOR INTEGRATION-------------------------------------------------------------

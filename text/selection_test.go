@@ -9,7 +9,7 @@ import (
 	"go/token"
 	"reflect"
 
-	"golang-refactoring.org/go-doctor/text"
+	"github.com/godoctor/godoctor/text"
 
 	"testing"
 )
