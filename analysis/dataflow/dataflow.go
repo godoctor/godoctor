@@ -23,7 +23,6 @@ import (
 func ReferencedVars(stmts []ast.Stmt, info *loader.PackageInfo) (def, use map[*types.Var]struct{}) {
 	def = make(map[*types.Var]struct{})
 	use = make(map[*types.Var]struct{})
-
 	for _, stmt := range stmts {
 		for _, d := range defs(stmt, info) {
 			def[d] = struct{}{}
@@ -108,6 +107,7 @@ func typeCaseVar(info *loader.PackageInfo, cc *ast.CaseClause) *types.Var {
 
 // uses extracts local variables whose values are used in the given statement.
 func uses(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
+
 	idnts := make(map[*ast.Ident]struct{})
 
 	ast.Inspect(stmt, func(n ast.Node) bool {
@@ -116,13 +116,12 @@ func uses(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 			// some LHS are uses, e.g. x[i]
 			for _, x := range stmt.Lhs {
 				indExp := false
-				ast.Inspect(stmt, func(n ast.Node) bool {
-					if _, ok := n.(*ast.IndexExpr); ok {
-						indExp = true
-						return false
-					}
-					return true
-				})
+				switch T := x.(type) {
+				case *ast.IndexExpr:
+					indExp = true
+				case *ast.SelectorExpr:
+					idnts = union(idnts, idents(T))
+				}
 				if indExp || // x[i] is a uses of x and i
 					(stmt.Tok != token.ASSIGN &&
 						stmt.Tok != token.DEFINE) { // e.g. +=, ^=, etc.
@@ -135,7 +134,10 @@ func uses(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 			}
 		case *ast.BlockStmt: // no uses, skip - should not appear in cfg
 		case *ast.BranchStmt: // no uses, skip
-		case *ast.CaseClause: // no uses, skip
+		case *ast.CaseClause: 
+			for _, i := range stmt.List{
+				idnts = union(idnts, idents(i))
+			}
 		case *ast.CommClause: // no uses, skip
 		case *ast.DeclStmt: // no uses, skip
 		case *ast.DeferStmt:
@@ -150,9 +152,11 @@ func uses(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 		case *ast.SelectStmt: // no uses, skip
 		case *ast.SwitchStmt:
 			idnts = idents(stmt.Tag)
-		case *ast.TypeSwitchStmt: // no uses, skip
+		case *ast.TypeSwitchStmt: 
+			idnts = idents(stmt.Assign)
 		case ast.Stmt: // everything else is all uses
 			idnts = idents(stmt)
+
 		}
 		return true
 	})
@@ -165,7 +169,6 @@ func uses(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 			vars = append(vars, v)
 		}
 	}
-
 	return vars
 }
 
