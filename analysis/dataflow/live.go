@@ -7,10 +7,10 @@ package dataflow
 import (
 	"go/ast"
 
-	"golang.org/x/tools/go/loader"
-	"golang.org/x/tools/go/types"
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"github.com/willf/bitset"
+	"golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/types"
 )
 
 // File defines live variables analysis for a statement
@@ -44,82 +44,72 @@ import (
 //  IN[EXIT] = USE(each d in cfg.Defers)
 //  OUT[EXIT] = {}
 func LiveVars(cfg *cfg.CFG, info *loader.PackageInfo) (in, out map[ast.Stmt]map[*types.Var]struct{}) {
-	lvBuilder := &liveVarBuilder{
-		cfg:    cfg,
-		blocks: cfg.Blocks(),
-		info:   info,
-		ins:    make(map[ast.Stmt]*bitset.BitSet),
-		outs:   make(map[ast.Stmt]*bitset.BitSet),
-		def:    make(map[ast.Stmt]*bitset.BitSet),
-		use:    make(map[ast.Stmt]*bitset.BitSet),
-	}
-
-	lvBuilder.buildDefUse()
-	lvBuilder.build()
-	return lvBuilder.results()
+	vars, def, use := defUseBitsets(cfg, info)
+	ins, outs := liveVarsBitsets(cfg, def, use)
+	return liveVarsResultSets(cfg, vars, ins, outs)
 }
 
-type liveVarBuilder struct {
-	cfg       *cfg.CFG
-	info      *loader.PackageInfo
-	blocks    []ast.Stmt
-	vars      []*types.Var // list of vars whose indices appear in bitsets
-	ins, outs map[ast.Stmt]*bitset.BitSet
-	def, use  map[ast.Stmt]*bitset.BitSet
-}
+// defUseBitsets builds def and use bitsets for the given cfg in the context
+// of the given loader.PackageInfo. Each entry in the resulting bitsets maps back to
+// the same index in the returned vars slice.
+func defUseBitsets(cfg *cfg.CFG, info *loader.PackageInfo) (vars []*types.Var, def, use map[ast.Stmt]*bitset.BitSet) {
+	blocks := cfg.Blocks()
 
-// buildDefUse builds def and use bitsets
-func (lv *liveVarBuilder) buildDefUse() {
-	varIndices := make(map[*types.Var]uint) // map var to its index in lv.vars
+	def = make(map[ast.Stmt]*bitset.BitSet, len(blocks))
+	use = make(map[ast.Stmt]*bitset.BitSet, len(blocks))
+	varIndices := make(map[*types.Var]uint) // map var to its index in vars
 
-	for _, block := range lv.blocks {
+	for _, block := range blocks {
 		// prime the def-uses sets
-		lv.def[block] = new(bitset.BitSet)
-		lv.use[block] = new(bitset.BitSet)
+		def[block] = new(bitset.BitSet)
+		use[block] = new(bitset.BitSet)
 
-		def := defs(block, lv.info)
-		use := uses(block, lv.info)
+		d := defs(block, info)
+		u := uses(block, info)
 
 		// use[Exit] = use(each d in cfg.Defers)
-		if block == lv.cfg.Exit {
-			for _, d := range lv.cfg.Defers {
-				use = append(use, uses(d, lv.info)...)
+		if block == cfg.Exit {
+			for _, dfr := range cfg.Defers {
+				u = append(u, uses(dfr, info)...)
 			}
 		}
 
-		for _, d := range def {
+		for _, d := range d {
 			// if we have it already, uses that index
 			// if we don't, add it to our slice and save its index
 			k, ok := varIndices[d]
 			if !ok {
-				k = uint(len(lv.vars))
+				k = uint(len(vars))
 				varIndices[d] = k
-				lv.vars = append(lv.vars, d)
+				vars = append(vars, d)
 			}
 
-			lv.def[block].Set(k)
+			def[block].Set(k)
 		}
 
-		for _, u := range use {
+		for _, u := range u {
 			k, ok := varIndices[u]
 			if !ok {
-				k = uint(len(lv.vars))
+				k = uint(len(vars))
 				varIndices[u] = k
-				lv.vars = append(lv.vars, u)
+				vars = append(vars, u)
 			}
 
-			lv.use[block].Set(k)
+			use[block].Set(k)
 		}
 	}
+	return vars, def, use
 }
 
-// build will compute the live variables for each block in the builder's cfg.
-// Precondition: buildDefUse() must have been called previously.
-func (lv *liveVarBuilder) build() {
+// liveVarsBitsets generatates live variable analysis in and out bitsets from def and use sets
+func liveVarsBitsets(cfg *cfg.CFG, def, use map[ast.Stmt]*bitset.BitSet) (in, out map[ast.Stmt]*bitset.BitSet) {
+	blocks := cfg.Blocks()
+	in = make(map[ast.Stmt]*bitset.BitSet, len(blocks))
+	out = make(map[ast.Stmt]*bitset.BitSet, len(blocks))
 	// for(each basic block B) IN[B} = {};
-	for _, block := range lv.blocks {
-		lv.ins[block] = new(bitset.BitSet)
-		lv.outs[block] = new(bitset.BitSet)
+	for _, block := range blocks {
+		in[block] = new(bitset.BitSet)
+		out[block] = new(bitset.BitSet)
 	}
 
 	// for(changes to any IN occur)
@@ -127,46 +117,49 @@ func (lv *liveVarBuilder) build() {
 		var change bool
 
 		// for(each basic block B) {
-		for _, block := range lv.blocks {
+		for _, block := range blocks {
 
 			// OUT[B] = Union(S a succ of B) IN[S]
-			for _, s := range lv.cfg.Succs(block) {
-				lv.outs[block].InPlaceUnion(lv.ins[s])
+			for _, s := range cfg.Succs(block) {
+				out[block].InPlaceUnion(in[s])
 			}
 
-			old := lv.ins[block].Clone()
+			old := in[block].Clone()
 
 			// IN[B] = uses[B] U (OUT[B] - def[B])
-			lv.ins[block] = lv.use[block].Union(lv.outs[block].Difference(lv.def[block]))
+			in[block] = use[block].Union(out[block].Difference(def[block]))
 
-			change = change || !old.Equal(lv.ins[block])
+			change = change || !old.Equal(in[block])
 		}
 
 		if !change {
 			break
 		}
 	}
+	return in, out
 }
 
-// results maps bits from the in and out sets back to the corresponding vars.
-// Precondition: build() must have been called previously.
-func (lv *liveVarBuilder) results() (in, out map[ast.Stmt]map[*types.Var]struct{}) {
-	in = make(map[ast.Stmt]map[*types.Var]struct{})
-	out = make(map[ast.Stmt]map[*types.Var]struct{})
+// liveVarsResultsSets maps in and out bitsets back to their respective vars, such that
+// each statement has a set of variables that are live upon entry and a set of
+// variables that are live upon exit.
+func liveVarsResultSets(cfg *cfg.CFG, vars []*types.Var, ins, outs map[ast.Stmt]*bitset.BitSet) (in, out map[ast.Stmt]map[*types.Var]struct{}) {
+	blocks := cfg.Blocks()
+	in = make(map[ast.Stmt]map[*types.Var]struct{}, len(blocks))
+	out = make(map[ast.Stmt]map[*types.Var]struct{}, len(blocks))
 
-	for _, block := range lv.blocks {
+	for _, block := range blocks {
 		in[block] = make(map[*types.Var]struct{})
 		out[block] = make(map[*types.Var]struct{})
 
-		for i := uint(0); i < lv.ins[block].Len(); i++ {
-			if lv.ins[block].Test(i) {
-				in[block][lv.vars[i]] = struct{}{}
+		for i := uint(0); i < ins[block].Len(); i++ {
+			if ins[block].Test(i) {
+				in[block][vars[i]] = struct{}{}
 			}
 		}
 
-		for i := uint(0); i < lv.outs[block].Len(); i++ {
-			if lv.outs[block].Test(i) {
-				out[block][lv.vars[i]] = struct{}{}
+		for i := uint(0); i < outs[block].Len(); i++ {
+			if outs[block].Test(i) {
+				out[block][vars[i]] = struct{}{}
 			}
 		}
 	}
