@@ -89,16 +89,31 @@ func TestInvalidFlag(t *testing.T) {
 	}
 }
 
+func TestMan(t *testing.T) {
+	exit, stdout, stderr := runCLI("", "-man")
+	if exit != 0 || stderr != "" || !strings.Contains(stdout, ".TH") {
+		t.Fatalf("-man expected man page with exit 0")
+	}
+
+	for _, flag := range []string{"-list", "-w", "-complete", "-json"} {
+		exit, stdout, stderr = runCLI("", flag, "-man")
+		if exit != 1 || stdout != "" || !strings.Contains(stderr,
+			"-man flag cannot be used with") {
+			t.Fatalf("-man should fail and exit 1 if used with %s", flag)
+		}
+	}
+}
+
 func TestList(t *testing.T) {
 	exit, stdout, stderr := runCLI("", "-list")
 	if exit != 0 || stdout != "" || !strings.Contains(stderr, "rename") {
 		t.Fatalf("-list expected refactoring list with exit 0")
 	}
 
-	for _, flag := range []string{"-w", "-complete", "-json"} {
+	for _, flag := range []string{"-man", "-w", "-complete", "-json"} {
 		exit, stdout, stderr = runCLI("", flag, "-list")
 		if exit != 1 || stdout != "" || !strings.Contains(stderr,
-			"-list flag cannot be used with") {
+			"cannot be used with") {
 			t.Fatalf("-list should fail and exit 1 if used with %s", flag)
 		}
 	}
@@ -106,19 +121,28 @@ func TestList(t *testing.T) {
 
 func TestInvalidCombos(t *testing.T) {
 	invalid := [][]string{
-		// complete file json list pos scope verbose write
+		// complete file json list man pos scope verbose write
 		[]string{"-complete", "-json"},
 		[]string{"-complete", "-list"},
+		[]string{"-complete", "-man"},
 		[]string{"-complete", "-w"},
 		[]string{"-file=-", "-json"},
+		[]string{"-file=-", "-man"},
 		[]string{"-json", "-list"},
+		[]string{"-json", "-man"},
 		[]string{"-json", "-pos=1,1:1,1"},
 		[]string{"-json", "-scope=golang.org/x/tools"},
 		[]string{"-json", "-v"},
 		[]string{"-json", "-w"},
+		[]string{"-list", "-man"},
 		[]string{"-list", "-v"},
 		[]string{"-list", "-w"},
 		[]string{"-list", "somearg"},
+		[]string{"-man", "-pos=1,1:1,1"},
+		[]string{"-man", "-scope=golang.org/x/tools"},
+		[]string{"-man", "-v"},
+		[]string{"-man", "-w"},
+		[]string{"-man", "somearg"},
 	}
 	for _, flags := range invalid {
 		exit, stdout, stderr := runCLI("", flags...)
