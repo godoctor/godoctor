@@ -9,7 +9,6 @@
 package refactoring
 
 import (
-	"fmt"
 	"go/ast"
 	"regexp"
 
@@ -113,15 +112,20 @@ func (r *ExtractLocal) singleExtract() {
 			if sNode, ok := selectedNode.(*ast.SwitchStmt); ok {
 				switchNode = sNode
 				switchList = sNode.Body.List
-			} else if fNode, ok := selectedNode.(*ast.ForStmt); ok {
-				fini = fNode.Init
-				fcond = fNode.Cond
-				fpost = fNode.Post
 			} else if ifNode, ok := selectedNode.(*ast.IfStmt); ok {
 				if assignNode, ok := ifNode.Init.(*ast.AssignStmt); ok {
 					ifInitAssign = assignNode
 				} else if ifNode.Else != nil {
 					ifElse = ifNode.Else
+				}
+			} else if fNode, ok := selectedNode.(*ast.ForStmt); ok {
+				fini = fNode.Init
+				fcond = fNode.Cond
+				fpost = fNode.Post
+				isForCond := r.forCheck()
+				if isForCond {
+					found = true
+					errorType = "for"
 				}
 			} else if typeSwitch, ok := selectedNode.(*ast.TypeSwitchStmt); ok {
 				body := typeSwitch.Body.List
@@ -156,11 +160,8 @@ func (r *ExtractLocal) singleExtract() {
 			isCallExpr := r.callCheck(selectedNode)
 			isSelectorType := r.selectorCheck(selectedNode)
 			isNil := r.checkNil(selectedNode)
-			isInsideCompositLit := r.checkInsideCompsite(selectedNode)
 			isKeyValueExpr := r.keyValueCheck()
-			//isCompositeLit := r.checkComposite()
-			isObjInBinary := r.checkBinaryObj(selectedNode) // need to figure out why it is needed for random case 352
-			//isObjInBinary = false
+			isCompositeLit := r.checkComposite()
 			isIdentInAssign := r.checkAssignIdents()
 			funcInput := r.funcInputCheck(plists, rlists, recLists)
 			// might not need this one, will have to wait till after
@@ -195,12 +196,9 @@ func (r *ExtractLocal) singleExtract() {
 			} else if isKeyValueExpr { // check to see if from a key:value
 				errorType = "keyValue"
 				found = true
-			} else if isObjInBinary {
-				errorType = "objInBinary"
+			} else if isCompositeLit {
+				errorType = "blockSelected"
 				found = true
-			} else if isInsideCompositLit {
-				newVar := r.createVar(r.selectedNode)
-				found = r.createParent(newVar)
 			} else if isBranchStmt {
 				errorType = "branchStmt"
 				found = true
@@ -214,40 +212,28 @@ func (r *ExtractLocal) singleExtract() {
 				typeCase := r.typeSwitchCheck(typeSwitchFound, condition, assign)
 				isIfMult := r.ifMultLeftCheck(ifInitAssign, selectedNode)
 				isSwitchCase := r.switchCheck(switchList, selectedNode)
-				isForCond := r.forCheck(fini, fcond, fpost, selectedNode)
 				line1 := r.endLine(selectedNode)
 				line2 := r.endLine(r.selectedNode)
-				//isLeftBinary := r.checkBinary(selectedNode)
-				isIndexExpr := r.checkIndexExpr(selectedNode)
-				//isStarExpr := r.starCheck(selectedNode)
+				//isIndexExpr := r.checkIndexExpr(selectedNode)
 				if isSwitchCase { // check for switch stmts
 					newVar := r.createVar(selectedNode)
 					found = r.addForSwitch(switchNode, selectedNode, newVar)
 				} else if typeCase { // check if selected node is from part of the type switch
 					errorType = "typeSwitchCase"
 					found = true
-				} else if isForCond { // check if selected node is from the for loop definition
-					errorType = "for"
-					found = true
 				} else if isIfMult { // check for for loops or if mutli assign
 					found = true
 					errorType = "ifMulti"
-				} else if isIndexExpr {
-					errorType = "indexExpr"
-					found = true
 				} else if line1 == line2 || ifElse != nil {
 					newVar := r.createVar(selectedNode)
 					found = r.createParent(newVar)
-				} /* else if isCompositeLit {
-					errorType = "blockSelected"
+				} /* else if isStarExpr { // checks if it's a star expr
+						errorType = "starExpr"
+						found = true
+					} else if isIndexExpr {
+					errorType = "indexExpr"
 					found = true
-				}  else if isStarExpr { // checks if it's a star expr
-					errorType = "starExpr"
-					found = true
-				} else if isLeftBinary { // check to see if on the lhs of a =, ==, or :=
-					errorType = "lhsAssign"
-					found = true
-				}*/
+				} */
 			}
 		default:
 		}
@@ -273,33 +259,6 @@ func (r *ExtractLocal) posLine(node ast.Node) int {
 	return r.program.Fset.Position(node.Pos()).Line
 }
 
-func (r *ExtractLocal) posColumn(node ast.Node) int {
-	return r.program.Fset.Position(node.Pos()).Column
-}
-
-/*// getIndexOfParentIf gets the index of the first if statement
-// parent node to put the assignment before when r.selectedNode
-// is inside an if statement
-func (r *ExtractLocal) getIndexOfParentIf(enclosing []ast.Node) int {
-	firstIfPar := 0
-	for _, index := range enclosing {
-		if firstIfPar == 0 {
-			if _, ok := index.(*ast.IfStmt); ok {
-				firstIfPar++
-			}
-		} else {
-			if _, ok := index.(*ast.IfStmt); ok {
-				//	if ifPar.Else != nil {
-				firstIfPar++
-				//}
-			} else {
-				break
-			}
-		}
-	}
-	return firstIfPar
-} */
-
 // switchCheck switch case check for switch version of extraction
 func (r *ExtractLocal) switchCheck(switchList []ast.Stmt, selectedNode ast.Node) bool {
 	for index, _ := range switchList {
@@ -313,53 +272,15 @@ func (r *ExtractLocal) switchCheck(switchList []ast.Stmt, selectedNode ast.Node)
 }
 
 // forCheck for loop init/cond/post test
-func (r *ExtractLocal) forCheck(fini ast.Node, fcond ast.Node, fpost ast.Node, selectedNode ast.Node) bool {
+func (r *ExtractLocal) forCheck() bool {
 	off1 := r.posLine(r.selectedNode)
-	//fmt.Println("test goes here")
-	//r.Log.Infof("\ntest goes here\n")
-	//fmt.Println("\ntest goes here\n")
 	enclosing, _ := astutil.PathEnclosingInterval(r.file, r.selectedNode.Pos(), r.selectedNode.End())
 	for _, index2 := range enclosing {
 		if forparent, ok := index2.(*ast.ForStmt); ok {
 			if r.posLine(forparent) == off1 {
-				//fmt.Println("test goes here 2")
-
 				return true
 			}
 		}
-	}
-
-	if fini != nil {
-		off2 := r.posLine(fini)
-		isInitExpr := off2 == off1
-		if isInitExpr {
-			fmt.Println("test goes here3")
-
-			return true
-		}
-	}
-	if fcond != nil {
-		off3 := r.posLine(fcond)
-		isCondExpr := off3 == off1
-		if isCondExpr {
-			fmt.Println("test goes here4")
-
-			return true
-		}
-	}
-	if fpost != nil {
-		off4 := r.posLine(fpost)
-		isPostExpr := off4 == off1
-		if isPostExpr {
-			fmt.Println("test goes here5")
-
-			return true
-		}
-	}
-	if fini == r.selectedNode || fcond == r.selectedNode || fpost == r.selectedNode {
-		fmt.Println("test goes here6")
-
-		return true
 	}
 	return false
 }
@@ -432,10 +353,18 @@ func (r *ExtractLocal) funcInputCheck(plists []*ast.Field, rlists []*ast.Field, 
 		for _, index := range recLists {
 			if r.posLine(index) == r.posLine(r.selectedNode) {
 				return true
+			} /*else if index == r.selectedNode {
+				fmt.Printf("goes here")
+				return true
 			}
+			for _, names := range index.Names {
+				if names == r.selectedNode {
+					fmt.Printf("goes here")
+					return true
+				}
+			}*/
 		}
 	}
-
 	return false
 }
 
@@ -490,10 +419,10 @@ func (r *ExtractLocal) lhsAssignVarCheck() bool {
 	for _, index := range enclosing {
 		if assign, ok := index.(*ast.AssignStmt); ok {
 			for _, index2 := range assign.Lhs {
-				if index2 == r.selectedNode {
+				if _, ok := index2.(*ast.SelectorExpr); ok {
 					return true
 				}
-				if _, ok := index2.(*ast.SelectorExpr); ok {
+				if index2 == r.selectedNode {
 					return true
 				}
 			}
@@ -506,7 +435,7 @@ func (r *ExtractLocal) lhsAssignVarCheck() bool {
 // a call expr itself, or if part of the callexpr (although
 // inside the () of it should work)
 func (r *ExtractLocal) callCheck(selectedNode ast.Node) bool {
-	if call, ok := selectedNode.(*ast.CallExpr); ok {
+	/*if call, ok := selectedNode.(*ast.CallExpr); ok {
 		if call == r.selectedNode {
 			return true
 		} else if fun, ok := call.Fun.(*ast.SelectorExpr); ok {
@@ -533,7 +462,7 @@ func (r *ExtractLocal) callCheck(selectedNode ast.Node) bool {
 				}
 			}
 		}
-	}
+	} */
 	enclosing, _ := astutil.PathEnclosingInterval(r.file, r.selectedNode.Pos(), r.selectedNode.End())
 	for _, index := range enclosing {
 		if call, ok := index.(*ast.CallExpr); ok {
@@ -551,21 +480,6 @@ func (r *ExtractLocal) callCheck(selectedNode ast.Node) bool {
 	}
 	return false
 }
-
-/*// starCheck checks if the r.selectedNode is a starExpr or
-// is a starExpr inside of parenthesis
-// TODO: might not need, check all 400 tests to see
-func (r *ExtractLocal) starCheck(selectedNode ast.Node) bool {
-	if paren, ok := r.selectedNode.(*ast.ParenExpr); ok {
-		if _, ok := paren.X.(*ast.StarExpr); ok {
-			return true
-		}
-	}
-	if _, ok := r.selectedNode.(*ast.StarExpr); ok {
-		return true
-	}
-	return false
-} */
 
 // selectorCheck this will check the selector expr and see if the
 // sel part (which is the type) is the r.selectedNode
@@ -591,70 +505,16 @@ func (r *ExtractLocal) checkNil(selectedNode ast.Node) bool {
 	return false
 }
 
-/*// checkBinary checks the lhs of a binary expression to see if that
-// was extracted, and also to make sure it's only checking for
-// exprs with =, ==, or :=
-// TODO: might not need since have lhs of assign one, check all
-// 400 tests to see
-func (r *ExtractLocal) checkBinary(selectedNode ast.Node) bool {
-	if bin, ok := selectedNode.(*ast.BinaryExpr); ok {
-		if bin == r.selectedNode {
-			return false
-		}
-	}
-	if binary, ok := selectedNode.(*ast.BinaryExpr); ok {
-		if binary.X == r.selectedNode && binary.Op.String() == "=" || binary.Op.String() == ":=" {
-			return true
-		}
-	}
-	return false
-} */
-
-// checkBinaryObj checks if the binary expr is a var type expr
-// and stops it since extracting from a var obj would change
-// the def of the object
-func (r *ExtractLocal) checkBinaryObj(selectedNode ast.Node) bool {
-	if binary, ok := selectedNode.(*ast.BinaryExpr); ok {
-		if r.posLine(selectedNode) == r.posLine(r.selectedNode) {
-			if binary.X == r.selectedNode && binary.Op.String() == "=" || binary.Op.String() == ":=" {
-				if ident, ok := binary.X.(*ast.Ident); ok {
-					if ident.Obj != nil {
-						if ident.Obj.Kind.String() == "var" {
-							return true
-						}
-					}
-				}
-			}
-		}
-	}
-	return false
-
-}
-
-/*// checkComposite checks if r.selectedNode is a composite lit
+// checkComposite checks if r.selectedNode is a composite lit
 // which should be handled by extract, not extract local
-// TODO: might not need, check all 400 tests to see
 func (r *ExtractLocal) checkComposite() bool {
 	if _, ok := r.selectedNode.(*ast.CompositeLit); ok {
 		return true
 	}
 	return false
-} */
-
-// checks if it's inside composite lit and if so uses the line position of the composite lit
-// as the "parent node" for placement
-func (r *ExtractLocal) checkInsideCompsite(selectedNode ast.Node) bool {
-	if comp, ok := selectedNode.(*ast.CompositeLit); ok {
-		for _, index := range comp.Elts {
-			if index == r.selectedNode {
-				return true
-			}
-		}
-	}
-	return false
 }
 
-// checkIndexExpr checks to see if it's an index expr
+/*// checkIndexExpr checks to see if it's an index expr
 func (r *ExtractLocal) checkIndexExpr(selectedNode ast.Node) bool {
 	enclosing, _ := astutil.PathEnclosingInterval(r.file, selectedNode.Pos(), selectedNode.End())
 	for _, index := range enclosing {
@@ -665,12 +525,12 @@ func (r *ExtractLocal) checkIndexExpr(selectedNode ast.Node) bool {
 		}
 	}
 	return false
-}
+}*/
 
 // checkAssignIdents checks to see if an ident obj is inside an assign, which would be
 // allowed to be extracted
 func (r *ExtractLocal) checkAssignIdents() bool {
-	if ident, ok := r.selectedNode.(*ast.BasicLit); ok {
+	/*if ident, ok := r.selectedNode.(*ast.BasicLit); ok {
 		enclosing, _ := astutil.PathEnclosingInterval(r.file, ident.Pos(), ident.End())
 		for _, index := range enclosing {
 			if assign, ok := index.(*ast.AssignStmt); ok {
@@ -690,12 +550,12 @@ func (r *ExtractLocal) checkAssignIdents() bool {
 				return true
 			}
 		}
-	} else if ident, ok := r.selectedNode.(*ast.Ident); ok {
+	} else*/if ident, ok := r.selectedNode.(*ast.Ident); ok {
 		enclosing, _ := astutil.PathEnclosingInterval(r.file, ident.Pos(), ident.End())
 		for _, index := range enclosing {
 			if assign, ok := index.(*ast.AssignStmt); ok {
 				for _, index := range assign.Rhs {
-					if index == ident {
+					/*if index == ident {
 						enclosing2, _ := astutil.PathEnclosingInterval(r.file, index.Pos(), index.End())
 						for _, index2 := range enclosing2 {
 							if _, ok := index2.(*ast.SelectorExpr); ok {
@@ -705,7 +565,7 @@ func (r *ExtractLocal) checkAssignIdents() bool {
 							}
 						}
 						return false
-					} else if selector, ok := index.(*ast.SelectorExpr); ok {
+					} else*/if selector, ok := index.(*ast.SelectorExpr); ok {
 						if selector.Sel == ident || selector.X == ident {
 							return false
 						}
@@ -736,7 +596,7 @@ func (r *ExtractLocal) isPreDeclaredIdent() bool {
 	pos1 := r.posOff(r.selectedNode)
 	pos2 := r.endOff(r.selectedNode)
 	selectedNodeName := string(r.fileContents[int(pos1):int(pos2)])
-	result, _ := regexp.MatchString("^(bool|byte|complex64|complex128|error|float32|float64|int|int8|int16|int32|int64|rune|string|uint|uint8|uint16|uint32|uint64|uintptr|global)$", selectedNodeName)
+	result, _ := regexp.MatchString("^(bool|byte|complex64|complex128|error|float32|float64|int|int8|int16|int32|int64|rune|string|uint|uint8|uint16|uint32|uint64|uintptr|global|reflect)$", selectedNodeName)
 	return result
 }
 
@@ -758,7 +618,9 @@ func (r *ExtractLocal) createVar(selectedNode ast.Node) string {
 	return newVar
 }
 
-/*// createVar2 create new var as var __ ___
+/*// createVar2 create new var as var _
+  // just in case there is a extract that you have to do var a ___
+  // rather than a := ______ ___
 func (r *ExtractLocal) createVar2(selectedNode ast.Node) string {
 	pos1 := r.posOff(selectedNode)
 	pos2 := r.endOff(selectedNode)
@@ -818,7 +680,7 @@ func (r *ExtractLocal) errorCheck(errorType string) {
 		case "mulitAssign":
 			r.Log.Error("You can't extract from a multi-assign statement (ie: a, b := 0, 0).")
 		case "funcInput":
-			r.Log.Error("You can't extract from the function parameters/results/method input at the function definition or the function definition itself.")
+			r.Log.Error("You can't extract from the function parameters/results/method input at the function definition or the whole function itself (for full function extraction use the extract refactoring).")
 		case "keyValue":
 			r.Log.Error("You can't extract the whole key/value from a key value expression (ie: key: value can't be newVar := key: value).")
 		case "assignStmt":
@@ -829,8 +691,6 @@ func (r *ExtractLocal) errorCheck(errorType string) {
 			r.Log.Error("You can't extract this part of a 'call expr' (ie:  fmt.Println('____') can't extract the fmt or Println, or fmt.Println).")
 		case "ifMulti":
 			r.Log.Error("You can't extract from an if statement with an assign stmt in it")
-		/*case "starExpr":
-		r.Log.Error("You can't put a star expr as a value (ie: *Buffer can't be buffer1 := *Buffer).")*/
 		case "blockSelected":
 			r.Log.Error("You can't select a block for extract local. Please use the extract refactoring when selecting blocks or functions.")
 		case "selectorType":
@@ -841,12 +701,10 @@ func (r *ExtractLocal) errorCheck(errorType string) {
 			r.Log.Error("Sorry, you can't extract the switch key or the case selector.")
 		case "branchStmt":
 			r.Log.Error("Sorry, you can't extract a goto, break, continue, or fallthrough statement")
-		case "objInBinary":
-			r.Log.Error("You can't extract an object from lhs of == (ie f *ast.FieldList, if f == nil can't extract f ).")
 		case "labelStmt":
 			r.Log.Error("You can't create a variable for a lable.")
-		case "indexExpr":
-			r.Log.Error("You can't extract an index expr or the variable that has an index expr with it (ie mapping[beta.result] can't extract mapping or beta.result although you can extract the whole thing.)")
+		/*case "indexExpr":
+		r.Log.Error("You can't extract an index expr or the variable that has an index expr with it (ie mapping[beta.result] can't extract mapping or beta.result although you can extract the whole thing.)")*/
 		case "preIdent":
 			r.Log.Error("Sorry, you can't pull out a predetermined identifier like string or reflect and make a variable of that type (reflect.String can't be made newVar.String since it isn't type reflect)")
 		default:
