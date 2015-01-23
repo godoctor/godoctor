@@ -1,3 +1,4 @@
+// Copyright 2015 Auburn University. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -25,10 +26,10 @@ import (
 	"strings"
 	"sync"
 
-	"golang.org/x/tools/go/loader"
-	"golang.org/x/tools/go/types"
 	"github.com/godoctor/godoctor/filesystem"
 	"github.com/godoctor/godoctor/text"
+	"golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/types"
 )
 
 // The maximum number of errors from the go/loader that will be reported
