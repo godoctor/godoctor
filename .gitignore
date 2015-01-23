@@ -1,8 +1,6 @@
 .DS_Store
 ._*
 tags
-go-doctor
-godoctor
 *.test
 *.swp
 *.out
