@@ -12,7 +12,7 @@ func (r Rectangle) Area_by_value() int {
 }
 
 func (r *Rectangle) Area_by_reference() int {
-	r = r.incrementFunc()
+	r.incrementFunc()
 	return r.length * r.width
 }
 
@@ -22,8 +22,7 @@ func main() {
 	fmt.Println("Rectangle area is r1.Area_by_value(): 		", r1.Area_by_value())
 	fmt.Println("Rectangle area is (&r1).Area_by_reference(): 	", (&r1).Area_by_reference())
 }
-func (r *Rectangle) incrementFunc() *Rectangle {
+func (r *Rectangle) incrementFunc() {
 	r.length += 2
 	r.width += 4
-	return r
 }

@@ -11,11 +11,10 @@ func main() {
 	p := &Pt{3, 4}
 	fmt.Println("Old Pt", p)
 	p.x = 5
-	p = foo(p)
+	foo(p)
 	fmt.Println("Printing Modified point after returning", p)
 }
-func foo(p *Pt) *Pt {
+func foo(p *Pt) {
 	p.y = 6
 	fmt.Println("New Pt", p)
-	return p
 }

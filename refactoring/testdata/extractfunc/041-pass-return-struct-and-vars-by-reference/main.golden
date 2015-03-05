@@ -13,15 +13,15 @@ func main() {
 	p := &Pt{3, 4}
 	fmt.Println("Old Pt", p)
 	p.x = 5
-	c, n, p := foo(a, b, p)
+	c, n := foo(a, b, p)
 	fmt.Println("Value of c is ", c)
 	fmt.Println("Value of n is ", n)
 	fmt.Println("Printing Modified point after returning", p)
 }
-func foo(a int, b int, p *Pt) (int, int, *Pt) {
+func foo(a int, b int, p *Pt) (int, int) {
 	p.y = 6
 	fmt.Println("New Pt", p)
 	c := a * b
 	n := p.x * p.y
-	return c, n, p
+	return c, n
 }

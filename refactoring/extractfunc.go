@@ -175,9 +175,10 @@ func (r *ExtractFunc) callEditset(node *ast.BlockStmt, path []ast.Node) {
 func (r *ExtractFunc) createNewFunction(node *ast.BlockStmt, path []ast.Node) (string, string) {
 	receieverName, receiverType, rType := r.checkForReceiver(path)
 	paramVarList, returnVarList, varDecl, flagShortAssign := r.parseCode(node, path)
-	varName, varType := r.returnNameType(paramVarList, path, rType)
-	retVarName, retVarType := r.returnNameType(returnVarList, path, nil)
-	varDeclName, varDeclType := r.returnNameType(varDecl, path, rType)
+	varName, varType := r.returnNameType(paramVarList, path, rType, true)
+	retVarName, retVarType := r.returnNameType(returnVarList, path, nil, false) // the final boolean is for pointers that must not be returned
+	varDeclName, varDeclType := r.returnNameType(varDecl, path, rType, true)
+	r.checkParameters(receieverName, varName, varDeclName)
 	if len(retVarType) == 1 { // if the variable returned is of the receiver type, the shortAssign flag is set to false
 		if returnVarList[0].Type() == rType {
 			flagShortAssign = false
@@ -213,7 +214,7 @@ func (r *ExtractFunc) checkForReceiver(path []ast.Node) (string, string, types.T
 }
 
 // for every variable that is passed/returned/declared the function returns the name and type
-func (r *ExtractFunc) returnNameType(varList []*types.Var, path1 []ast.Node, rType types.Type) ([]string, []string) {
+func (r *ExtractFunc) returnNameType(varList []*types.Var, path1 []ast.Node, rType types.Type, boolVar bool) ([]string, []string) {
 	var varType []string
 	var varName []string
 	for _, a := range varList {
@@ -224,36 +225,46 @@ func (r *ExtractFunc) returnNameType(varList []*types.Var, path1 []ast.Node, rTy
 			case *types.Named:
 				if b.Obj().Type().String() != "error" {
 					if b.Obj().Pkg().Name() == path1[len(path1)-1].(*ast.File).Name.Name { // prefix is of the current package, remove prefix
-						if !a.IsField() {
+						if !a.IsField() && a.Name() != "_" {
 							varName = append(varName, a.Name())
 							varType = append(varType, strings.TrimPrefix(a.Type().String(), b.Obj().Pkg().Path()+"."))
 						}
 					} else {
-						if !a.IsField() {
+						if !a.IsField() && a.Name() != "_" {
 							varName = append(varName, a.Name())
 							varType = append(varType, b.Obj().Pkg().Name()+"."+b.Obj().Id())
 						}
 					}
 				} else {
-					if !a.IsField() {
+					if !a.IsField() && a.Name() != "_" {
 						varName = append(varName, a.Name())
 						varType = append(varType, b.Obj().Type().String())
 					}
 				}
 			case *types.Pointer:
-				if b.Elem().(*types.Named).Obj().Pkg().Name() == path1[len(path1)-1].(*ast.File).Name.Name { // prefix is of the current package, remove prefix
-					if !a.IsField() {
-						varName = append(varName, a.Name())
-						varType = append(varType, "*"+strings.TrimPrefix(a.Type().String(), "*"+b.Elem().(*types.Named).Obj().Pkg().Path()+"."))
+				switch temp := b.Elem().(type) {
+				case *types.Basic:
+					if temp.Name() == "float64" || temp.Name() == "float32" || temp.Name() == "int" || temp.Name() == "string" {
+						if !a.IsField() && a.Name() != "_" && boolVar == true {
+							varName = append(varName, a.Name())
+							varType = append(varType, "*"+b.Elem().(*types.Basic).Name())
+						}
 					}
-				} else {
-					if !a.IsField() {
-						varName = append(varName, a.Name())
-						varType = append(varType, "*"+b.Elem().(*types.Named).Obj().Pkg().Name()+"."+b.Elem().(*types.Named).Obj().Name())
+				case *types.Named:
+					if temp.Obj().Pkg().Name() == path1[len(path1)-1].(*ast.File).Name.Name { // prefix is of the current package, remove prefix
+						if !a.IsField() && a.Name() != "_" && boolVar == true {
+							varName = append(varName, a.Name())
+							varType = append(varType, "*"+strings.TrimPrefix(a.Type().String(), "*"+b.Elem().(*types.Named).Obj().Pkg().Path()+"."))
+						}
+					} else if temp.Obj().Pkg().Name() != path1[len(path1)-1].(*ast.File).Name.Name {
+						if !a.IsField() && a.Name() != "_" && boolVar == true {
+							varName = append(varName, a.Name())
+							varType = append(varType, "*"+b.Elem().(*types.Named).Obj().Pkg().Name()+"."+b.Elem().(*types.Named).Obj().Name())
+						}
 					}
 				}
 			default:
-				if !a.IsField() {
+				if !a.IsField() && a.Name() != "_" {
 					varName = append(varName, a.Name())
 					varType = append(varType, r.TypeString(a.Pkg(), a.Type()))
 				}
@@ -261,6 +272,21 @@ func (r *ExtractFunc) returnNameType(varList []*types.Var, path1 []ast.Node, rTy
 		}
 	}
 	return varName, varType
+}
+
+// if the name of the receiver and that of any of the arguments passed are the same then do not allow transformation
+// function of check if the receiver name and that of the parametr names are the same
+func (r *ExtractFunc) checkParameters(receieverName string, varName []string, varDeclName []string) {
+	for _, a := range varName {
+		if a == receieverName {
+			r.Log.Error("The method receiever name and the parameters passed cannot have the same name!")
+		}
+	}
+	for _, a := range varDeclName {
+		if a == receieverName {
+			r.Log.Error("The method receiever name and the parameters declared cannot have the same name!")
+		}
+	}
 }
 
 // returns the string representation of the code
@@ -387,9 +413,35 @@ func (r *ExtractFunc) parseCode(node *ast.BlockStmt, path []ast.Node) ([]*types.
 	breakConditionCheck, stmtArr, InitStmts := r.checkEntryExitCondtion(funcCFG, node) // returns the initStmt slice as well
 	valid := r.checkValidSelection(stmtArr)
 	for _, stmt := range InitStmts { // initStatment conversion to variables
-		if a, ok := stmt.(*ast.AssignStmt); ok {
+		switch a := stmt.(type) {
+		case *ast.AssignStmt:
 			for _, v := range a.Lhs { // get the list of variables that are declared in the init of for loop
-				if i, ok := r.selectedNodePkg.ObjectOf(v.(*ast.Ident)).(*types.Var); ok {
+				switch tempv := v.(type) {
+				case *ast.Ident:
+					if i, ok := r.selectedNodePkg.ObjectOf(tempv).(*types.Var); ok {
+						initVars = append(initVars, i)
+					}
+				case *ast.IndexExpr:
+					if i, ok := r.selectedNodePkg.ObjectOf(tempv.X.(*ast.Ident)).(*types.Var); ok { // name of the array
+						initVars = append(initVars, i)
+					}
+					if i, ok := r.selectedNodePkg.ObjectOf(tempv.Index.(*ast.Ident)).(*types.Var); ok { // index variable
+						initVars = append(initVars, i)
+					}
+				case *ast.StarExpr:
+					if i, ok := r.selectedNodePkg.ObjectOf(tempv.X.(*ast.Ident)).(*types.Var); ok {
+						initVars = append(initVars, i)
+					}
+				}
+			}
+		case *ast.RangeStmt: // HERE WHEN YOU COME ACROSS RANGE STATEMENTS, THOSE VARIABLES TOTHE LEFT OF THE := ARE PART OF THE INIT STATATEMENTS
+			if i, ok := r.selectedNodePkg.ObjectOf(a.Key.(*ast.Ident)).(*types.Var); ok {
+				if i.Name() != "_" {
+					initVars = append(initVars, i)
+				}
+			}
+			if i, ok := r.selectedNodePkg.ObjectOf(a.Value.(*ast.Ident)).(*types.Var); ok {
+				if i.Name() != "_" {
 					initVars = append(initVars, i)
 				}
 			}
@@ -403,12 +455,13 @@ func (r *ExtractFunc) parseCode(node *ast.BlockStmt, path []ast.Node) ([]*types.
 		defined = r.returnDefined(stmtArr, r.selectedNodePkg)
 		defArr = r.removeDuplicates(unionOp(assign, defined))
 		aliveLast := r.returnExitLiveVar(stmtArr, funcCFG, node)
-		//aliveFirst = unionOp(aliveFirst, partialAssign) // every partially assigned variable is alive at the first line
 		aliveFirst = differenceOp(aliveFirst, initVars) // incase of a for loop
 		aliveLast = differenceOp(aliveLast, initVars)
 		paramVarList, _ = isIntersection(aliveFirst, useArr) // Params = LIVE_IN[Entry(selection node)] INTERSECTION USE[selection] //--original
 		returnVarList, _ = isIntersection(aliveLast, defArr) // returns = LIVE_OUT[exit(sel)] INTERSECTION DEF[sel]
 		varDecl = unionOp(differenceOp(assign, paramVarList), differenceOp(useArr, aliveFirst))
+		varDecl = differenceOp(varDecl, initVars)
+
 	} else {
 		r.Log.Error("The code cannot be extracted since the 'Single Entry/Single Exit' conditon failed (OR) a Valid selection wasn't made!")
 	}
@@ -459,15 +512,22 @@ func (r *ExtractFunc) returnStmtArray(funcCFG *cfg.CFG, node *ast.BlockStmt) ([]
 				}
 				stmtArr = append(stmtArr, x)
 			case *ast.ForStmt:
-				if x.Init != nil {
+				if x.Init != nil { // what about range statements
 					InitStmts = append(InitStmts, x.Init)
 				}
+				stmtArr = append(stmtArr, x)
+			case *ast.RangeStmt:
+				InitStmts = append(InitStmts, x) // the entire range statement becomes a part of initstatement list,
+				// the left side of the := becomes a part of the init statement
 				stmtArr = append(stmtArr, x)
 			case *ast.CommClause:
 				if x.Comm != nil {
 					InitStmts = append(InitStmts, x.Comm)
 				}
 				stmtArr = append(stmtArr, x)
+			case *ast.LabeledStmt:
+				stmtArr = append(stmtArr, x)
+				stmtArr = append(stmtArr, x.Stmt)
 			case *ast.ReturnStmt:
 				r.Log.Error("RETURN statement cannot be extracted.")
 			default:
@@ -697,6 +757,7 @@ func (r *ExtractFunc) returnUse(stmtArr []ast.Stmt) []*types.Var {
 		}
 	}
 	sort.Sort(typeVar(useArr))
+
 	return useArr
 }
 
@@ -704,9 +765,10 @@ func (r *ExtractFunc) returnUse(stmtArr []ast.Stmt) []*types.Var {
 func (r *ExtractFunc) returnEntryLiveVar(funcCFG *cfg.CFG, node *ast.BlockStmt) []*types.Var {
 	var aliveFirst []*types.Var
 	in, _ := dataflow.LiveVars(funcCFG, r.selectedNodePkg)
+
 	startStmt := r.findStartPosition(node)
 	for key, value := range in {
-		if key.Pos() == startStmt.Pos() {
+		if key.Pos() == startStmt.Pos() { // something is wrong figure it our
 			for valKey, _ := range value {
 				if !valKey.IsField() {
 					aliveFirst = append(aliveFirst, valKey)
@@ -902,7 +964,7 @@ func isIntersection(s1 []*types.Var, s2 []*types.Var) ([]*types.Var, bool) {
 	var flag bool = false
 	for i := 0; i < len(s2); i++ {
 		for j := 0; j < len(s1); j++ {
-			if s2[i].Name() == s1[j].Name() {
+			if s2[i].Name() == s1[j].Name() { //&& s2[i].Type() == s1[i].Type() { // when trying to make sure they have the same variables types, throws error ????
 				flag = true
 				result = append(result, s2[i])
 				break
@@ -1365,20 +1427,17 @@ func (r *ExtractFunc) WriteSignature(buf *bytes.Buffer, this *types.Package, sig
 
 func (r *ExtractFunc) writeSignature(buf *bytes.Buffer, this *types.Package, sig *types.Signature, visited []types.Type) {
 	r.writeTuple(buf, this, sig.Params(), sig.Variadic(), visited)
-
 	n := sig.Results().Len()
 	if n == 0 {
 		// no result
 		return
 	}
-
 	buf.WriteByte(' ')
 	if n == 1 && sig.Results().At(0).Name() == "" {
 		// single unnamed result
 		r.writeType(buf, this, sig.Results().At(0).Type(), visited)
 		return
 	}
-
 	// multiple or named result(s)
 	r.writeTuple(buf, this, sig.Results(), false, visited)
 }
