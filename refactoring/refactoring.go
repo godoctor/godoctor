@@ -297,12 +297,13 @@ func createLoader(config *Config, errorHandler func(error)) (*loader.Program, er
 	}
 	buildContext.ReadDir = config.FileSystem.ReadDir
 	buildContext.OpenFile = config.FileSystem.OpenFile
+	buildContext.CgoEnabled = false
 
 	var lconfig loader.Config
 	lconfig.Build = &buildContext
 	lconfig.ParserMode = parser.ParseComments | parser.DeclarationErrors
 	lconfig.AllowErrors = true
-	lconfig.SourceImports = true
+	lconfig.ImportFromBinary = false
 	lconfig.TypeChecker.Error = errorHandler
 
 	rest, err := lconfig.FromArgs(config.Scope, true)

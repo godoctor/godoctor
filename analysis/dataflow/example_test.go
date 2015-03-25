@@ -36,8 +36,7 @@ func ExampleReachingDefs() {
 	if err != nil {
 		return // probably don't proceed
 	}
-	pkg := loader.CreatePkg{"testing", []*ast.File{f}}
-	config.CreatePkgs = []loader.CreatePkg{pkg}
+	config.CreateFromFiles("testing", f)
 	prog, err := config.Load()
 	if err != nil {
 		return
@@ -80,8 +79,7 @@ func ExampleLiveVars() {
 	if err != nil {
 		return // probably don't proceed
 	}
-	pkg := loader.CreatePkg{"testing", []*ast.File{f}}
-	config.CreatePkgs = []loader.CreatePkg{pkg}
+	config.CreateFromFiles("testing", f)
 	prog, err := config.Load()
 	if err != nil {
 		return

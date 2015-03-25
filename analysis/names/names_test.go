@@ -28,7 +28,7 @@ func setup(t *testing.T) *loader.Program {
 	lconfig.Build = &build
 	lconfig.ParserMode = parser.ParseComments | parser.DeclarationErrors
 	lconfig.AllowErrors = false
-	lconfig.SourceImports = true
+	lconfig.ImportFromBinary = false
 	lconfig.TypeChecker.Error = func(err error) {
 		t.Fatal(err)
 	}
