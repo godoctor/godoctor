@@ -394,8 +394,7 @@ func BenchmarkReaching(b *testing.B) {
 		b.FailNow()
 	}
 
-	pkg := loader.CreatePkg{"testing", []*ast.File{f}}
-	config.CreatePkgs = []loader.CreatePkg{pkg}
+	config.CreateFromFiles("testing", f)
 
 	prog, err := config.Load()
 
@@ -414,11 +413,8 @@ func BenchmarkReaching(b *testing.B) {
 
 func BenchmarkMain(b *testing.B) {
 	var config loader.Config
-	err := config.CreateFromFilenames("main", "../../main.go")
-	if err != nil {
-		b.Error(err.Error())
-		b.FailNow()
-	}
+
+	config.CreateFromFilenames("main", "../../main.go")
 
 	prog, err := config.Load()
 
@@ -459,8 +455,7 @@ func getWrapper(t *testing.T, str string) *CFGWrapper {
 		return nil
 	}
 
-	pkg := loader.CreatePkg{"testing", []*ast.File{f}}
-	config.CreatePkgs = []loader.CreatePkg{pkg}
+	config.CreateFromFiles("testing", f)
 
 	prog, err := config.Load()
 
