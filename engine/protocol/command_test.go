@@ -1,6 +1,14 @@
+// Copyright 2015 Auburn University. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package protocol
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/godoctor/godoctor/engine"
+)
 
 func TestAboutValidatePass(t *testing.T) {
 	// about requires state > 0 to pass validation
@@ -47,7 +55,7 @@ func TestAboutRunPass(t *testing.T) {
 		if reply.Params["reply"] != "OK" {
 			t.Fatal("About.Run: reply does not indicate command was successful")
 		}
-		if reply.Params["text"] != "Go Doctor about text" {
+		if reply.Params["text"] != engine.Name() {
 			t.Fatal("About.Run: reply has incorrect about text")
 		}
 	}

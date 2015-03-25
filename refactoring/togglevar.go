@@ -1,4 +1,4 @@
-// Copyright 2014 Auburn University. All rights reserved.
+// Copyright 2015 Auburn University. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -16,9 +16,9 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/godoctor/godoctor/text"
 	"golang.org/x/tools/astutil"
 	"golang.org/x/tools/go/types"
-	"github.com/godoctor/godoctor/text"
 )
 
 // A ToggleVar refactoring converts between explicitly-typed variable

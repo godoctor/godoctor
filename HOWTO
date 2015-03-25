@@ -30,10 +30,10 @@ To run tests for refactorings only:
 UPDATE GO.TOOLS----------------------------------------------------------------
 
 The easy way:
-    go get -u code.google.com/p/go.tools
+    go get -u golang.org/x/tools
 
 The less easy way:
-    cd $GOPATH/src/code.google.com/p/go.tools
+    cd $GOPATH/src/golang.org/x/tools
     hg pull
     hg update
 
