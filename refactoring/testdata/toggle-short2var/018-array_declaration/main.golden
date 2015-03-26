@@ -4,7 +4,7 @@ package main
 import "fmt"
 
 func main() {
-	var array [5]int = [...]int {1,2,3,4,5}
-	slice1:= array[2:5]
-	fmt.Println("slice1 is :",slice1)
+	var array [5]int = [...]int{1, 2, 3, 4, 5}
+	slice1 := array[2:5]
+	fmt.Println("slice1 is :", slice1)
 }

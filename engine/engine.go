@@ -27,6 +27,7 @@ func init() {
 	refactoringsInOrder = []string{}
 
 	AddRefactoring("rename", new(refactoring.Rename))
+	AddRefactoring("extract", new(refactoring.ExtractFunc))
 	AddRefactoring("toggle", new(refactoring.ToggleVar))
 	AddRefactoring("godoc", new(refactoring.AddGoDoc))
 	AddRefactoring("debug", new(refactoring.Debug))
