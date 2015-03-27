@@ -1,9 +1,9 @@
 // Copyright 2015 Auburn University. All rights reserved.
 // Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+// license that can be found in the LICENSE File.
 
-// This file defines a refactoring that adds GoDoc comments to all exported
-// top-level declarations in a file.
+// This File defines a refactoring that adds GoDoc comments to all exported
+// top-level declarations in a File.
 
 package refactoring
 
@@ -14,9 +14,9 @@ import (
 )
 
 // The AddGoDoc refactoring adds GoDoc comments to all exported top-level
-// declarations in a file.
+// declarations in a File.
 type AddGoDoc struct {
-	refactoringBase
+	base RefactoringBase
 }
 
 func (r *AddGoDoc) Description() *Description {
@@ -31,29 +31,29 @@ func (r *AddGoDoc) Description() *Description {
 }
 
 func (r *AddGoDoc) Run(config *Config) *Result {
-	r.refactoringBase.Run(config)
-	r.Log.ChangeInitialErrorsToWarnings()
-	if r.Log.ContainsErrors() {
-		return &r.Result
+	r.base.Run(config)
+	r.base.Log.ChangeInitialErrorsToWarnings()
+	if r.base.Log.ContainsErrors() {
+		return &r.base.Result
 	}
-	if !validateArgs(config, r.Description(), r.Log) {
-		return &r.Result
+	if !ValidateArgs(config, r.Description(), r.base.Log) {
+		return &r.base.Result
 	}
 
 	r.removeSemicolons()
 	r.addComments()
-	r.formatFileInEditor()
-	return &r.Result
+	r.base.FormatFileInEditor()
+	return &r.base.Result
 }
 
-// removeSemicolons iterates through the top-level declarations in a file and
+// removeSemicolons iterates through the top-level declarations in a File and
 // the specs of general declarations, and if two consecutive declarations occur
 // on the same line, splits them onto separate lines.  The intention is to
 // split semicolon-separated declarations onto separate lines.
 func (r *AddGoDoc) removeSemicolons() {
-	for i, d := range r.file.Decls {
+	for i, d := range r.base.File.Decls {
 		if i > 0 {
-			r.removeSemicolonBetween(r.file.Decls[i-1], r.file.Decls[i], "\n\n")
+			r.removeSemicolonBetween(r.base.File.Decls[i-1], r.base.File.Decls[i], "\n\n")
 		}
 		if decl, ok := d.(*ast.GenDecl); ok {
 			for j, spec := range decl.Specs {
@@ -70,23 +70,23 @@ func (r *AddGoDoc) removeSemicolons() {
 
 func (r *AddGoDoc) removeSemicolonBetween(node1, node2 ast.Node, replacement string) {
 	// Check if the 2 declarations are on the same line
-	line1 := r.program.Fset.Position(node1.Pos()).Line
-	line2 := r.program.Fset.Position(node2.Pos()).Line
+	line1 := r.base.Program.Fset.Position(node1.Pos()).Line
+	line2 := r.base.Program.Fset.Position(node2.Pos()).Line
 	if line1 == line2 {
 		// Replace text between the end of the first declaration and
 		// the start of the second declaration with the given
 		// separators.  If there are comments, they will be eliminated,
 		// but this should occur rarely enough we'll ignore it for now.
-		offset := r.program.Fset.Position(node1.End()).Offset
-		length := r.program.Fset.Position(node2.Pos()).Offset - offset
-		r.Edits[r.filename].Add(&text.Extent{offset, length}, replacement)
+		offset := r.base.Program.Fset.Position(node1.End()).Offset
+		length := r.base.Program.Fset.Position(node2.Pos()).Offset - offset
+		r.base.Edits[r.base.Filename].Add(&text.Extent{offset, length}, replacement)
 	}
 }
 
 // addComments inserts a comment immediately before all exported top-level
 // declarations that do not already have an associated doc comment
 func (r *AddGoDoc) addComments() {
-	for _, d := range r.file.Decls {
+	for _, d := range r.base.File.Decls {
 		switch decl := d.(type) {
 		case *ast.FuncDecl: // function or method declaration
 			if ast.IsExported(decl.Name.Name) && decl.Doc == nil {
@@ -116,6 +116,6 @@ func (r *AddGoDoc) addComment(decl ast.Node, comment string) { //, count int) {
 	//} else if count == 2 {
 	//	comment = "\n// " + comment + " TODO: NEEDS COMMENT INFO\n"
 	//}
-	insertOffset := r.program.Fset.Position(decl.Pos()).Offset
-	r.Edits[r.filename].Add(&text.Extent{insertOffset, 0}, comment)
+	insertOffset := r.base.Program.Fset.Position(decl.Pos()).Offset
+	r.base.Edits[r.base.Filename].Add(&text.Extent{insertOffset, 0}, comment)
 }

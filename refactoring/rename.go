@@ -25,9 +25,9 @@ import (
 // Rename is a refactoring that changes the names of variables, functions,
 // methods, types, interfaces, and packages in Go programs.  It attempts to
 // prevent name changes that will introduce syntactic or semantic errors into
-// the program.
+// the Program.
 type Rename struct {
-	refactoringBase
+	base    RefactoringBase
 	newName string // New name to be given to the selected identifier
 }
 
@@ -47,64 +47,64 @@ func (r *Rename) Description() *Description {
 }
 
 func (r *Rename) Run(config *Config) *Result {
-	r.refactoringBase.Run(config)
-	if !validateArgs(config, r.Description(), r.Log) {
-		return &r.Result
+	r.base.Run(config)
+	if !ValidateArgs(config, r.Description(), r.base.Log) {
+		return &r.base.Result
 	}
-	r.Log.ChangeInitialErrorsToWarnings()
-	if r.Log.ContainsErrors() {
-		return &r.Result
+	r.base.Log.ChangeInitialErrorsToWarnings()
+	if r.base.Log.ContainsErrors() {
+		return &r.base.Result
 	}
 
-	if r.selectedNode == nil {
-		r.Log.Error("Please select an identifier to rename.")
-		r.Log.AssociatePos(r.selectionStart, r.selectionEnd)
-		return &r.Result
+	if r.base.SelectedNode == nil {
+		r.base.Log.Error("Please select an identifier to rename.")
+		r.base.Log.AssociatePos(r.base.SelectionStart, r.base.SelectionEnd)
+		return &r.base.Result
 	}
 
 	r.newName = config.Args[0].(string)
 	if r.newName == "" {
-		r.Log.Error("newName cannot be empty")
-		return &r.Result
+		r.base.Log.Error("newName cannot be empty")
+		return &r.base.Result
 	}
 	if !isIdentifierValid(r.newName) {
-		r.Log.Errorf("The new name \"%s\" is not a valid Go identifier", r.newName)
-		return &r.Result
+		r.base.Log.Errorf("The new name \"%s\" is not a valid Go identifier", r.newName)
+		return &r.base.Result
 	}
 	if isReservedWord(r.newName) {
-		r.Log.Errorf("The new name \"%s\" is a reserved word", r.newName)
-		return &r.Result
+		r.base.Log.Errorf("The new name \"%s\" is a reserved word", r.newName)
+		return &r.base.Result
 	}
 
-	switch ident := r.selectedNode.(type) {
+	switch ident := r.base.SelectedNode.(type) {
 	case *ast.Ident:
 
 		// FIXME: Check if main function (not type/var/etc.) -JO
-		if ident.Name == "main" && r.selectedNodePkg.Pkg.Name() == "main" {
-			r.Log.Error("The \"main\" function in the \"main\" package cannot be renamed: it will eliminate the program entrypoint")
-			r.Log.AssociateNode(ident)
-			return &r.Result
+		if ident.Name == "main" && r.base.SelectedNodePkg.Pkg.Name() == "main" {
+			r.base.Log.Error("The \"main\" function in the \"main\" package cannot be renamed: it will eliminate the program entrypoint")
+			r.base.Log.AssociateNode(ident)
+			return &r.base.Result
 		}
 
 		if isPredeclaredIdentifier(ident.Name) {
-			r.Log.Errorf("selected predeclared  identifier \"%s\" , it cannot be renamed", ident.Name)
-			r.Log.AssociateNode(ident)
-			return &r.Result
+			r.base.Log.Errorf("selected predeclared  identifier \"%s\" , it cannot be renamed", ident.Name)
+			r.base.Log.AssociateNode(ident)
+			return &r.base.Result
 		}
 
 		if ast.IsExported(ident.Name) && !ast.IsExported(r.newName) {
-			r.Log.Warn("Renaming an exported name to an unexported name will introduce errors outside the package in which it is declared.")
+			r.base.Log.Warn("Renaming an exported name to an unexported name will introduce errors outside the package in which it is declared.")
 		}
 
-		r.rename(ident, r.selectedNodePkg)
-		r.updateLog(config, false)
-		return &r.Result
+		r.rename(ident, r.base.SelectedNodePkg)
+		r.base.UpdateLog(config, false)
+		return &r.base.Result
 
 	default:
-		r.Log.Errorf("Please select an identifier to rename. "+
+		r.base.Log.Errorf("Please select an identifier to rename. "+
 			"(Selected node: %s)", reflect.TypeOf(ident))
-		r.Log.AssociatePos(r.selectionStart, r.selectionEnd)
-		return &r.Result
+		r.base.Log.AssociatePos(r.base.SelectionStart, r.base.SelectionEnd)
+		return &r.base.Result
 	}
 }
 
@@ -127,46 +127,46 @@ func (r *Rename) rename(ident *ast.Ident, pkgInfo *loader.PackageInfo) {
 	obj := pkgInfo.ObjectOf(ident)
 
 	if obj == nil && r.selectedTypeSwitchVar() == nil {
-		r.Log.Errorf("Package renaming is not supported")
-		r.Log.AssociateNode(ident)
+		r.base.Log.Errorf("Package renaming is not supported")
+		r.base.Log.AssociateNode(ident)
 		return
 	}
 
-	if obj != nil && isInGoRoot(r.program.Fset.Position(obj.Pos()).Filename) {
-		r.Log.Errorf("%s is defined in $GOROOT and cannot be renamed",
+	if obj != nil && isInGoRoot(r.base.Program.Fset.Position(obj.Pos()).Filename) {
+		r.base.Log.Errorf("%s is defined in $GOROOT and cannot be renamed",
 			ident.Name)
-		r.Log.AssociateNode(ident)
+		r.base.Log.AssociateNode(ident)
 		return
 	}
 	if conflict := names.FindConflict(obj, r.newName); conflict != nil {
-		r.Log.Errorf("Renaming %s to %s may cause conflicts with an existing declaration", ident.Name, r.newName)
-		r.Log.AssociatePos(conflict.Pos(), conflict.Pos())
+		r.base.Log.Errorf("Renaming %s to %s may cause conflicts with an existing declaration", ident.Name, r.newName)
+		r.base.Log.AssociatePos(conflict.Pos(), conflict.Pos())
 	}
 	var idents map[*ast.Ident]bool
 	if ts := r.selectedTypeSwitchVar(); ts != nil {
-		idents = names.FindTypeSwitchVarOccurrences(ts, r.selectedNodePkg, r.program)
+		idents = names.FindTypeSwitchVarOccurrences(ts, r.base.SelectedNodePkg, r.base.Program)
 	} else {
-		idents = names.FindOccurrences(obj, r.program)
+		idents = names.FindOccurrences(obj, r.base.Program)
 	}
 
-	r.addOccurrences(ident.Name, r.extents(idents, r.program.Fset))
+	r.addOccurrences(ident.Name, r.extents(idents, r.base.Program.Fset))
 }
 
 func (r *Rename) selectedTypeSwitchVar() *ast.TypeSwitchStmt {
-	obj := r.selectedNodePkg.ObjectOf(r.selectedNode.(*ast.Ident))
+	obj := r.base.SelectedNodePkg.ObjectOf(r.base.SelectedNode.(*ast.Ident))
 
-	for _, n := range r.pathEnclosingSelection {
+	for _, n := range r.base.PathEnclosingSelection {
 		if typeSwitch, ok := n.(*ast.TypeSwitchStmt); ok {
 			if asgt, ok := typeSwitch.Assign.(*ast.AssignStmt); ok {
 				if len(asgt.Lhs) == 1 &&
 					asgt.Tok == token.DEFINE &&
-					asgt.Lhs[0] == r.selectedNode {
+					asgt.Lhs[0] == r.base.SelectedNode {
 					return typeSwitch
 				}
 			}
 			for _, stmt := range typeSwitch.Body.List {
 				cc := stmt.(*ast.CaseClause)
-				if r.selectedNodePkg.Implicits[cc] == obj {
+				if r.base.SelectedNodePkg.Implicits[cc] == obj {
 					return typeSwitch
 				}
 			}
@@ -199,22 +199,22 @@ func (r *Rename) addOccurrences(name string, allOccurrences map[string][]*text.E
 		if isInGoRoot(filename) {
 			hasOccsInGoRoot = true
 		} else {
-			if r.Edits[filename] == nil {
-				r.Edits[filename] = text.NewEditSet()
+			if r.base.Edits[filename] == nil {
+				r.base.Edits[filename] = text.NewEditSet()
 			}
 			for _, occurrence := range occurrences {
-				r.Edits[filename].Add(occurrence, r.newName)
+				r.base.Edits[filename].Add(occurrence, r.newName)
 			}
 			_, file := r.fileNamed(filename)
 			commentOccurrences := names.FindInComments(
-				name, file, r.program.Fset)
+				name, file, r.base.Program.Fset)
 			for _, occurrence := range commentOccurrences {
-				r.Edits[filename].Add(occurrence, r.newName)
+				r.base.Edits[filename].Add(occurrence, r.newName)
 			}
 		}
 	}
 	if hasOccsInGoRoot {
-		r.Log.Warnf("Occurrences were found in files under $GOROOT, but these will not be renamed")
+		r.base.Log.Warnf("Occurrences were found in files under $GOROOT, but these will not be renamed")
 	}
 }
 
@@ -228,9 +228,9 @@ func isInGoRoot(absPath string) bool {
 
 func (r *Rename) fileNamed(filename string) (*loader.PackageInfo, *ast.File) {
 	absFilename, _ := filepath.Abs(filename)
-	for _, pkgInfo := range r.program.AllPackages {
+	for _, pkgInfo := range r.base.Program.AllPackages {
 		for _, f := range pkgInfo.Files {
-			thisFile := r.program.Fset.Position(f.Pos()).Filename
+			thisFile := r.base.Program.Fset.Position(f.Pos()).Filename
 			if thisFile == filename || thisFile == absFilename {
 				return pkgInfo, f
 			}
