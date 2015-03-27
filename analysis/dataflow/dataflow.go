@@ -29,7 +29,7 @@ func ReferencedVars(stmts []ast.Stmt, info *loader.PackageInfo) (def, use map[*t
 		}
 		for _, u := range uses(stmt, info) {
 			use[u] = struct{}{}
-			
+
 		}
 	}
 	return def, use
@@ -90,7 +90,9 @@ func defs(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 	// should all map to types.Var's, if not we don't want anyway
 	for i, _ := range idnts {
 		if v, ok := info.ObjectOf(i).(*types.Var); ok {
-			vars = append(vars, v)
+			if v.Pkg() == info.Pkg {
+				vars = append(vars, v)
+			}
 		}
 	}
 	return vars
@@ -134,28 +136,28 @@ func uses(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 			}
 		case *ast.BlockStmt: // no uses, skip - should not appear in cfg
 		case *ast.BranchStmt: // no uses, skip
-		case *ast.CaseClause: 
-			for _, i := range stmt.List{
+		case *ast.CaseClause:
+			for _, i := range stmt.List {
 				idnts = union(idnts, idents(i))
 			}
 		case *ast.CommClause: // no uses, skip
 		case *ast.DeclStmt: // no uses, skip
 		case *ast.DeferStmt:
-			idnts = union(idnts,idents(stmt.Call))
+			idnts = union(idnts, idents(stmt.Call))
 		case *ast.ForStmt:
-			idnts = union(idnts,idents(stmt.Cond))
+			idnts = union(idnts, idents(stmt.Cond))
 		case *ast.IfStmt:
-			idnts = union(idnts,idents(stmt.Cond))
+			idnts = union(idnts, idents(stmt.Cond))
 		case *ast.LabeledStmt: // no uses, skip
 		case *ast.RangeStmt: // list in _, _ = range [ list ]
-			idnts = union(idnts,idents(stmt.X))
+			idnts = union(idnts, idents(stmt.X))
 		case *ast.SelectStmt: // no uses, skip
 		case *ast.SwitchStmt:
-			idnts = union(idnts,idents(stmt.Tag))
-		case *ast.TypeSwitchStmt: 
-			idnts = union(idnts,idents(stmt.Assign))
+			idnts = union(idnts, idents(stmt.Tag))
+		case *ast.TypeSwitchStmt:
+			idnts = union(idnts, idents(stmt.Assign))
 		case ast.Stmt: // everything else is all uses
-			idnts = union(idnts,idents(stmt))
+			idnts = union(idnts, idents(stmt))
 
 		}
 		return true
@@ -163,11 +165,12 @@ func uses(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 
 	var vars []*types.Var
 
-	
 	// should all map to types.Var's, if not we don't want anyway
 	for i, _ := range idnts {
 		if v, ok := info.ObjectOf(i).(*types.Var); ok {
-			vars = append(vars, v)
+			if v.Pkg() == info.Pkg {
+				vars = append(vars, v)
+			}
 		}
 	}
 	return vars
