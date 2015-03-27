@@ -10,7 +10,7 @@ package refactoring
 
 // A Null refactoring makes no changes to a program.
 type Null struct {
-	refactoringBase
+	base RefactoringBase
 }
 
 func (r *Null) Description() *Description {
@@ -29,24 +29,20 @@ func (r *Null) Description() *Description {
 }
 
 func (r *Null) Run(config *Config) *Result {
-	r.refactoringBase.Run(config)
+	r.base.Run(config)
 
-	if !validateArgs(config, r.Description(), r.Log) {
-		return &r.Result
+	if !ValidateArgs(config, r.Description(), r.base.Log) {
+		return &r.base.Result
 	}
 
 	if config.Args[0].(bool) {
-		r.Log.ChangeInitialErrorsToWarnings()
+		r.base.Log.ChangeInitialErrorsToWarnings()
 	}
 
-	if r.Log.ContainsErrors() {
-		return &r.Result
+	if r.base.Log.ContainsErrors() {
+		return &r.base.Result
 	}
 
-	if !validateArgs(config, r.Description(), r.Log) {
-		return &r.Result
-	}
-
-	r.updateLog(config, false)
-	return &r.Result
+	r.base.UpdateLog(config, false)
+	return &r.base.Result
 }
