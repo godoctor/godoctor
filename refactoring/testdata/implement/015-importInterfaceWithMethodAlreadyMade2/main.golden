@@ -1,0 +1,46 @@
+package main // <<<<< stubInterface,1,1,1,1,os.FileInfo,FileInfoStruct,pass
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	fmt.Println("works")
+	os.Exit(0)
+}
+
+type Queue interface {
+	Enqueue(x int)
+	Dequeue() int
+	ThreeQueue(x int) int
+}
+
+type Apple struct {
+
+}
+
+func (s *Apple) Sys() interface{} {
+	return nil
+}
+
+func (s *Apple) Size() int64 {
+	return 0
+}
+
+func (s *Apple) Name() string {
+	var eString string
+	return eString
+}
+
+func (s *Apple) Mode() os.FileMode {
+	return nil
+}
+
+func (s *Apple) ModTime() time.Time {
+	return nil
+}
+
+func (s *Apple) IsDir() bool {
+	return false
+}
