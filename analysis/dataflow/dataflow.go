@@ -13,8 +13,7 @@ package dataflow
 import (
 	"go/ast"
 	"go/token"
-	//"fmt"
-	//"reflect"
+
 	"golang.org/x/tools/go/loader"
 	"golang.org/x/tools/go/types"
 )
@@ -25,12 +24,10 @@ func ReferencedVars(stmts []ast.Stmt, info *loader.PackageInfo) (def, use map[*t
 	def = make(map[*types.Var]struct{})
 	use = make(map[*types.Var]struct{})
 	for _, stmt := range stmts {
-		// fmt.Println("statement being read is",reflect.TypeOf(stmt)) // reads only the assignment statement why not for loop ????
 		for _, d := range defs(stmt, info) {
 			def[d] = struct{}{}
 		}
 		for _, u := range uses(stmt, info) {
-			// fmt.Println("U",u,reflect.TypeOf(stmt))
 			use[u] = struct{}{}
 			
 		}
@@ -111,7 +108,6 @@ func typeCaseVar(info *loader.PackageInfo, cc *ast.CaseClause) *types.Var {
 
 // uses extracts local variables whose values are used in the given statement.
 func uses(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
-//fmt.Println("This uses function is called")
 	idnts := make(map[*ast.Ident]struct{})
 
 	ast.Inspect(stmt, func(n ast.Node) bool {
@@ -150,12 +146,9 @@ func uses(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 			idnts = union(idnts,idents(stmt.Cond))
 		case *ast.IfStmt:
 			idnts = union(idnts,idents(stmt.Cond))
-		case *ast.LabeledStmt: // no uses, skip // why does it skip the statement following it ?????????
-			// idnts = idents(stmt.Stmt) // what I am adding 
-			//fmt.Println("FOUND statement of LabeledStmt!",reflect.TypeOf(stmt.Stmt), stmt.Stmt.(*ast.RangeStmt).X)
+		case *ast.LabeledStmt: // no uses, skip
 		case *ast.RangeStmt: // list in _, _ = range [ list ]
 			idnts = union(idnts,idents(stmt.X))
-			//fmt.Println("FOUND RANGESTATEMENT!",stmt.X)
 		case *ast.SelectStmt: // no uses, skip
 		case *ast.SwitchStmt:
 			idnts = union(idnts,idents(stmt.Tag))
@@ -174,14 +167,9 @@ func uses(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 	// should all map to types.Var's, if not we don't want anyway
 	for i, _ := range idnts {
 		if v, ok := info.ObjectOf(i).(*types.Var); ok {
-			// fmt.Println(v)
 			vars = append(vars, v)
 		}
 	}
-//	fmt.Println("USEARR Vars")
-	// for _,a:= range vars{
-	// 	fmt.Println(a.Name())
-	// }
 	return vars
 }
 

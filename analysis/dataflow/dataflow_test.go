@@ -252,7 +252,7 @@ func TestVarsRangeAndIf(t *testing.T){
 		func tripleNum(num float64) float64{
 			return num*3
 		}`)
-	c.printStmts()
+	// c.printStmts()
 	c.expectLive(t,START)
 	c.expectLive(t,1,"xs")
 	c.expectLive(t,2,"total","xs")
@@ -299,7 +299,7 @@ func TestVarsRangeAndIf2(t *testing.T){
 		func tripleNum(num float64) float64{
 			return num*3
 		}`)
-	c.printStmts()
+	// c.printStmts()
 	c.expectLive(t,START)
 	c.expectLive(t,1,"xs")
 	c.expectLive(t,2,"xs","total")

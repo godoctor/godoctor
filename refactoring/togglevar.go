@@ -81,8 +81,6 @@ func (r *ToggleVar) short2var(assign *ast.AssignStmt) {
 	}
 }
 
-// this function reads the variables/expression on the right side of the assignment operator
-// and stores it in a string array
 func (r *ToggleVar) rhsExprs(assign *ast.AssignStmt) []string {
 	rhsValue := make([]string, len(assign.Rhs))
 	for j, rhs := range assign.Rhs {
