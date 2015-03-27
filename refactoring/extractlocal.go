@@ -14,7 +14,7 @@ import (
 
 	"github.com/godoctor/godoctor/text"
 
-	"golang.org/x/tools/astutil"
+	"golang.org/x/tools/go/ast/astutil"
 )
 
 type ExtractLocal struct {
