@@ -34,11 +34,11 @@ type State struct {
 	Filesystem filesystem.FileSystem
 }
 
-func Run(aboutText string, args []string) {
+func Run(writer io.Writer, aboutText string, args []string) {
 
 	// single command console
 	if len(args) == 0 {
-		runSingle(aboutText)
+		runSingle(writer, aboutText)
 		return
 	}
 
@@ -48,26 +48,26 @@ func Run(aboutText string, args []string) {
 		// read command list from stdin
 		bytes, err := ioutil.ReadAll(os.Stdin)
 		if err != nil {
-			printReply(Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}})
+			printReply(writer, Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}})
 			return
 		}
 		err = json.Unmarshal(bytes, &argJson)
 		if err != nil {
-			printReply(Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}})
+			printReply(writer, Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}})
 			return
 		}
 	} else {
 		// assemble command list from args
 		err := json.Unmarshal([]byte(args[0]), &argJson)
 		if err != nil {
-			printReply(Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}})
+			printReply(writer, Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}})
 			return
 		}
 	}
-	runList(aboutText, argJson)
+	runList(writer, aboutText, argJson)
 }
 
-func runSingle(aboutText string) {
+func runSingle(writer io.Writer, aboutText string) {
 	cmdList := setup(aboutText)
 	var state = State{0, "", "", nil}
 	var inputJson map[string]interface{}
@@ -78,18 +78,18 @@ func runSingle(aboutText string) {
 			// exit
 			break
 		} else if err != nil {
-			printReply(Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}})
+			printReply(writer, Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}})
 			continue
 		}
 		err = json.Unmarshal(input, &inputJson)
 		if err != nil {
-			printReply(Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}})
+			printReply(writer, Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}})
 			continue
 		}
 		// check command key exists
 		cmd, found := inputJson["command"]
 		if !found {
-			printReply(Reply{map[string]interface{}{"reply": "Error", "message": "Invalid JSON command"}})
+			printReply(writer, Reply{map[string]interface{}{"reply": "Error", "message": "Invalid JSON command"}})
 			continue
 		}
 		// if close command, just exit
@@ -98,38 +98,38 @@ func runSingle(aboutText string) {
 		}
 		// check command is one we support
 		if _, found := cmdList[cmd.(string)]; !found {
-			printReply(Reply{map[string]interface{}{"reply": "Error", "message": "Invalid JSON command"}})
+			printReply(writer, Reply{map[string]interface{}{"reply": "Error", "message": "Invalid JSON command"}})
 			continue
 		}
 		// everything good to run command
 		result, _ := cmdList[cmd.(string)].Run(&state, inputJson) // run the command
-		printReply(result)
+		printReply(writer, result)
 	}
 }
 
-func runList(aboutText string, argJson []map[string]interface{}) {
+func runList(writer io.Writer, aboutText string, argJson []map[string]interface{}) {
 	cmdList := setup(aboutText)
 	var state = State{1, "", "", nil}
 	for i, cmdObj := range argJson {
 		// has command?
 		cmd, found := cmdObj["command"]
 		if !found { // no command
-			printReply(Reply{map[string]interface{}{"reply": "Error", "message": "Invalid JSON command"}})
+			printReply(writer, Reply{map[string]interface{}{"reply": "Error", "message": "Invalid JSON command"}})
 			return
 		}
 		// valid command?
 		if _, found := cmdList[cmd.(string)]; found {
 			resultReply, err := cmdList[cmd.(string)].Run(&state, cmdObj)
 			if err != nil {
-				printReply(resultReply)
+				printReply(writer, resultReply)
 				return
 			}
 			// last command?
 			if i == len(argJson)-1 {
-				printReply(resultReply)
+				printReply(writer, resultReply)
 			}
 		} else {
-			printReply(Reply{map[string]interface{}{"reply": "Error", "message": "Invalid JSON command"}})
+			printReply(writer, Reply{map[string]interface{}{"reply": "Error", "message": "Invalid JSON command"}})
 			return
 		}
 	}
@@ -148,6 +148,6 @@ func setup(aboutText string) map[string]Command {
 	return cmds
 }
 
-func printReply(reply Reply) {
-	fmt.Printf("%s\n", reply)
+func printReply(writer io.Writer, reply Reply) {
+	fmt.Fprintf(writer, "%s\n", reply)
 }

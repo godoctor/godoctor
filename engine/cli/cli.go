@@ -251,7 +251,7 @@ func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, 
 			return 1
 		}
 		// Invoked as "godoctor -json [args]
-		protocol.Run(aboutText, args)
+		protocol.Run(os.Stdout, aboutText, args)
 		return 0
 	}
 
