@@ -86,6 +86,9 @@ type Description struct {
 	//     ----+----1----+----2----+----3----+----4----+----5
 	//     <new_name> [<rename_in_comments?>]
 	Usage string
+	// HTML doumentation for this refactoring, which can be embedded into
+	// the User's Guide.
+	HTMLDoc string
 	// Multifile is set to true only if this refactoring may change files
 	// other than the File containing the selection.  For example, renaming
 	// an exported identifier may cause references to be updated in several

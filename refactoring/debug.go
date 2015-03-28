@@ -49,6 +49,7 @@ func (r *Debug) Description() *Description {
 		Name:      "Debug Refactoring",
 		Synopsis:  "Provides assorted debugging outputs",
 		Usage:     "<command>",
+		HTMLDoc:   "",
 		Multifile: false,
 		Params: []Parameter{Parameter{
 			Label:        "Command",

@@ -36,6 +36,7 @@ func (r *Rename) Description() *Description {
 		Name:      "Rename",
 		Synopsis:  "Changes the name of an identifier",
 		Usage:     "<new_name>",
+		HTMLDoc:   renameDoc,
 		Multifile: true,
 		Params: []Parameter{Parameter{
 			Label:        "New Name:",
@@ -238,3 +239,81 @@ func (r *Rename) fileNamed(filename string) (*loader.PackageInfo, *ast.File) {
 	}
 	return nil, nil
 }
+
+const renameDoc = `
+  <h4>Purpose</h4>
+  <p>The Rename refactoring is used to change the names of variables,
+  functions, methods, and types.  Package renaming is not currently
+  supported.</p>
+
+  <h4>Usage</h4>
+  <ol>
+    <li>Select an identifier to be renamed.</li>
+    <li>Activate the Rename refactoring.</li>
+    <li>Enter a new name for the identifier.</li>
+  </ol>
+
+  <p>An error or warning will be reported if:</p>
+  <ul>
+    <li>The renaming could introduce errors (e.g., two functions would have the
+    same name).</li>
+    <li>The necessary changes cannot be made (e.g., the renaming would change 
+    the name of a function in the Go standard library).</li>
+  </ul>
+
+  <h4>Example</h4>
+  <p>The example below demonstrates the effect of renaming the highlighted
+  occurrence of <tt>hello</tt> to <tt>goodnight</tt>.  Note that there are two
+  different variables named <tt>hello</tt>; since the local identifier was
+  selected, only references to that variable are renamed, as shown.</p>
+  <table cellspacing="5" cellpadding="15" style="border: 0;">
+    <tr>
+      <th>Before</th><th>&nbsp;</th><th>After</th>
+    </tr>
+    <tr>
+      <td class="dotted">
+        <pre>package main
+import "fmt"
+
+var hello = ":-("
+
+func main() {
+    hello = ":-)"
+    var hello string = "hello"
+    var world string = "world"
+    hello = <span class="highlight">hello</span> + ", " + world
+    hello += "!"
+    fmt.Println(hello)
+}</pre>
+      </td>
+      <td>&nbsp;&nbsp;&rArr;&nbsp&nbsp;</td>
+      <td class="dotted">
+        <pre>package main
+import "fmt"
+
+var hello = ":-("
+
+func main() {
+    hello = ":-)"
+    var <span class="highlight">goodnight</span> string = "hello"
+    var world string = "world"
+    <span class="highlight">goodnight</span> = <span class="highlight">goodnight</span> + ", " + world
+    <span class="highlight">goodnight</span> += "!"
+    fmt.Println(goodnight)
+}</pre>
+      </td>
+    </tr>
+  </table>
+
+  <h4>Limitations</h4>
+  <ul>
+    <li><b>Package renaming is not currently supported.</b>  Package renaming
+    requires renaming directories, which causes files to move on the file
+    system.  When the refactoring is activated from a text editor (e.g., Vim),
+    the editor needs to be notified of such changes and respond appropriately.
+    Additional work is needed to support this behavior.</li>
+    <li><b>Name collision detection is overly conservative.</b>  If renaming
+    will introduce shadowing, this is reported as an error, even if it will not
+    change the program's semantics.</li>
+  </ul>
+`

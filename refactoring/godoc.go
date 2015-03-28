@@ -24,6 +24,7 @@ func (r *AddGoDoc) Description() *Description {
 		Name:      "Add GoDoc",
 		Synopsis:  "Adds stub GoDoc comments where they are missing",
 		Usage:     "",
+		HTMLDoc:   godocDoc,
 		Multifile: false,
 		Params:    nil,
 		Hidden:    false,
@@ -119,3 +120,69 @@ func (r *AddGoDoc) addComment(decl ast.Node, comment string) { //, count int) {
 	insertOffset := r.base.Program.Fset.Position(decl.Pos()).Offset
 	r.base.Edits[r.base.Filename].Add(&text.Extent{insertOffset, 0}, comment)
 }
+
+const godocDoc = `
+  <h4>Purpose</h4>
+  <p>This refactoring searches a file for exported declarations that do not have
+  GoDoc comments and adds TODO comment stubs to those declarations.</p>
+  <p>The refactored source code is formatted (similarly to gofmt).</p>
+
+  <h4>Usage</h4>
+  <p>This refactoring is applied to an entire file.  It does not require any
+  particular text to be selected, and it does not prompt for any additional user
+  input.</p>
+
+  <h4>Example</h4>
+  <p>In the following example, Exported, Shaper, and Rectangle are all
+  exported, but they do not have doc comments.  This refactoring adds a
+  TODO comment for each of these.</p>
+  <table cellspacing="5" cellpadding="15" style="border: 0;">
+    <tr>
+      <th>Before</th><th>&nbsp;</th><th>After</th>
+    </tr>
+    <tr>
+      <td class="dotted">
+  <pre>package main
+import "fmt"
+
+func main() {
+    Exported()
+}
+
+func Exported() {
+    fmt.Println("Hello, Go")
+}
+
+type Shaper interface {
+}
+ 
+type Rectangle struct {
+}
+  </pre>
+      </td>
+      <td>&nbsp;&nbsp;&rArr;&nbsp;&nbsp;</td>
+      <td class="dotted">
+      <pre>package main
+import "fmt"
+
+func main() {
+    Exported()
+}
+
+<span class="highlight">// Exported TODO: NEEDS COMMENT INFO</span>
+func Exported() {
+    fmt.Println("Hello, Go")
+}
+
+<span class="highlight">// Exported TODO: NEEDS COMMENT INFO</span>
+type Shaper interface {
+}
+  
+<span class="highlight">// Exported TODO: NEEDS COMMENT INFO</span>
+type Rectangle struct {
+}
+</pre>
+      </td>
+    </tr>
+  </table>
+`

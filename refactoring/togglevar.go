@@ -32,6 +32,7 @@ func (r *ToggleVar) Description() *Description {
 		Name:      "Toggle var <-> :=",
 		Synopsis:  "Toggles between a var declaration and := statement",
 		Usage:     "",
+		HTMLDoc:   toggleVarDoc,
 		Multifile: false,
 		Params:    nil,
 		Hidden:    false,
@@ -183,3 +184,5 @@ func (r *ToggleVar) varDeclLHS(decl *ast.GenDecl) string {
 func (r *ToggleVar) shortAssignString(decl *ast.GenDecl) string {
 	return (fmt.Sprintf("%s := ", r.varDeclLHS(decl)))
 }
+
+const toggleVarDoc = ``

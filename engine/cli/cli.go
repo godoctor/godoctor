@@ -16,6 +16,7 @@ import (
 
 	"strings"
 
+	"github.com/godoctor/godoctor/doc"
 	"github.com/godoctor/godoctor/engine"
 	"github.com/godoctor/godoctor/engine/protocol"
 	"github.com/godoctor/godoctor/filesystem"
@@ -53,107 +54,6 @@ To display usage information for a particular refactoring, such as rename, use:
 For complete usage information, see the user manual:  FIXME: URL`)
 }
 
-func printManPage(aboutText string, flags *flag.FlagSet, stdout io.Writer) {
-	// For conventions for writing a man page, see
-	// http://www.schweikhardt.net/man_page_howto.html
-	fmt.Fprintf(stdout, `.\" Save this as godoctor.1 and process using
-.\"     groff -man -Tascii godoctor.1
-.\" or for PostScript output:
-.\"     groff -t -mandoc -Tps godoctor.1 > godoctor.ps
-.\" or for HTML output:
-.\"     groff -t -mandoc -Thtml godoctor.1 > godoctor.1.html
-`)
-	fmt.Fprintf(stdout, ".TH godoctor 1 \"\" \"%s\" \"\"\n", aboutText)
-	fmt.Fprintf(stdout, `.SH NAME
-godoctor \- refactor Go source code
-.SH SYNOPSIS
-.B godoctor
-[
-.I flag
-.I ...
-.B ]
-.I refactoring
-[
-.I args
-.I ...
-.B ]
-.SH DESCRIPTION
-godoctor refactors Go Source code, outputting a patch file with the changes (unless the -w or -complete flag is specified).
-.PP
-The Go Doctor can be run from the command line, but it is more easily used from an editor like Vim.
-.PP
-For more information and detailed instructions, see the complete documentation at http://gorefactor.org
-`)
-	fmt.Fprintf(stdout, `.SH OPTIONS
-The following
-.I flags
-control the behavior of the godoctor:
-`)
-	flags.VisitAll(func(flag *flag.Flag) {
-		fmt.Fprintf(stdout, ".TP\n.B -%s\n%s\n",
-			flag.Name,
-			flag.Usage)
-	})
-	fmt.Fprintf(stdout, `.PP
-The
-.I refactoring
-determines the refactoring to perform:
-`)
-	for _, key := range engine.AllRefactoringNames() {
-		r := engine.GetRefactoring(key)
-		if !r.Description().Hidden {
-			fmt.Fprintf(stdout, ".TP\n.B %s\n%s\n",
-				key, r.Description().Synopsis)
-		}
-	}
-	fmt.Fprintf(stdout, `.PP
-The
-.I args
-are specific to each refactoring.  For a list of the arguments a particular refactoring expects, run that refactoring without any arguments.  For example:
-.B godoctor
-rename
-`)
-	fmt.Fprintf(stdout, `.SH EXAMPLES
-.TP
-Display a list of available refactorings:
-.B godoctor
--list
-.PP
-.TP
-Display usage information for the Rename refactoring:
-.B godoctor
-rename
-.PP
-.TP
-Rename the identifier in main.go at line 5, column 6 to bar, outputting a patch file:
-.B godoctor
--pos 5,6:5,6
--file main.go
-rename
-bar
-.PP
-.TP
-Toy example: Pipe a file to the godoctor and rename n to foo, displaying the result:
-echo 'package main; import "fmt"; func main() { n := 1; fmt.Println(n) }' | godoctor -pos 1,43:1,43 -w rename foo
-.PP
-.SH EXIT STATUS
-.TP
-0
-Success
-.TP
-1
-One or more command line arguments were invalid
-.TP
-2
-Help/usage information was displayed; no commands were executed
-.TP
-3
-The refactoring could not be completed; output contains a detailed error log
-.SH AUTHOR
-See http://gorefactor.org
-`)
-}
-
 // Run runs the Go Doctor command-line interface.  Typical usage is
 //     os.Exit(cli.Run(os.Stdin, os.Stdout, os.Stderr, os.Args))
 // All arguments must be non-nil, and args[0] is required.
@@ -187,8 +87,8 @@ func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, 
 	var jsonFlag = flags.Bool("json", false,
 		"Accept commands in OpenRefactory JSON protocol format")
 
-	var manFlag = flags.Bool("man", false,
-		"Output the godoctor man page and exit")
+	var docFlag = flags.String("doc", "",
+		"Output the user's guide (HTML) or man page and exit")
 
 	// Don't print full help unless -help was requested.
 	// Just gently remind users that it's there.
@@ -207,13 +107,22 @@ func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, 
 
 	args = flags.Args()
 
-	if *manFlag {
+	if *docFlag != "" {
 		if len(args) > 0 || flags.NFlag() != 1 {
-			fmt.Fprintln(stderr, "Error: The -man flag cannot "+
+			fmt.Fprintln(stderr, "Error: The -doc flag cannot "+
 				"be used with any other flags or arguments")
 			return 1
 		}
-		printManPage(aboutText, flags, stdout)
+		switch *docFlag {
+		case "man":
+			doc.PrintManPage(aboutText, flags, stdout)
+		case "user":
+			doc.PrintUserGuide(aboutText, flags, stdout)
+		default:
+			fmt.Fprintln(stderr, "Error: The -doc flag must be "+
+				"either \"man\" or \"user\"")
+			return 1
+		}
 		return 0
 	}
 
