@@ -34,11 +34,11 @@ type State struct {
 	Filesystem filesystem.FileSystem
 }
 
-func Run(args []string) {
+func Run(aboutText string, args []string) {
 
 	// single command console
 	if len(args) == 0 {
-		runSingle()
+		runSingle(aboutText)
 		return
 	}
 
@@ -64,11 +64,11 @@ func Run(args []string) {
 			return
 		}
 	}
-	runList(argJson)
+	runList(aboutText, argJson)
 }
 
-func runSingle() {
-	cmdList := setup()
+func runSingle(aboutText string) {
+	cmdList := setup(aboutText)
 	var state = State{0, "", "", nil}
 	var inputJson map[string]interface{}
 	ioreader := bufio.NewReader(os.Stdin)
@@ -107,8 +107,8 @@ func runSingle() {
 	}
 }
 
-func runList(argJson []map[string]interface{}) {
-	cmdList := setup()
+func runList(aboutText string, argJson []map[string]interface{}) {
+	cmdList := setup(aboutText)
 	var state = State{1, "", "", nil}
 	for i, cmdObj := range argJson {
 		// has command?
@@ -136,9 +136,9 @@ func runList(argJson []map[string]interface{}) {
 }
 
 // little helpers
-func setup() map[string]Command {
+func setup(aboutText string) map[string]Command {
 	cmds := make(map[string]Command)
-	cmds["about"] = &About{}
+	cmds["about"] = &About{aboutText: aboutText}
 	cmds["open"] = &Open{}
 	cmds["list"] = &List{}
 	cmds["setdir"] = &Setdir{}

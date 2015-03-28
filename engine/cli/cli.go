@@ -25,11 +25,11 @@ import (
 
 const useHelp = "Run 'godoctor -help' for more information.\n"
 
-func printHelp(flags *flag.FlagSet, stderr io.Writer) {
-	fmt.Fprintln(stderr, `Go source code refactoring tool (%s).
+func printHelp(aboutText string, flags *flag.FlagSet, stderr io.Writer) {
+	fmt.Fprintf(stderr, `%s - Go source code refactoring tool.
 Usage: godoctor [<flag> ...] <refactoring> [<args> ...]
 
-Each <flag> must be one of the following:`, engine.Name())
+Each <flag> must be one of the following:\n`, aboutText)
 	flags.VisitAll(func(flag *flag.Flag) {
 		fmt.Fprintf(stderr, "    -%-8s %s\n", flag.Name, flag.Usage)
 	})
@@ -52,7 +52,7 @@ To display usage information for a particular refactoring, such as rename, use:
 For complete usage information, see the user manual:  FIXME: URL`)
 }
 
-func printManPage(flags *flag.FlagSet, stdout io.Writer) {
+func printManPage(aboutText string, flags *flag.FlagSet, stdout io.Writer) {
 	// For conventions for writing a man page, see
 	// http://www.schweikhardt.net/man_page_howto.html
 	fmt.Fprintf(stdout, `.\" Save this as godoctor.1 and process using
@@ -62,7 +62,7 @@ func printManPage(flags *flag.FlagSet, stdout io.Writer) {
 .\" or for HTML output:
 .\"     groff -t -mandoc -Thtml godoctor.1 > godoctor.1.html
 `)
-	fmt.Fprintf(stdout, ".TH godoctor 1 \"\" \"%s\" \"\"\n", engine.Name())
+	fmt.Fprintf(stdout, ".TH godoctor 1 \"\" \"%s\" \"\"\n", aboutText)
 	fmt.Fprintf(stdout, `.SH NAME
 godoctor \- refactor Go source code
 .SH SYNOPSIS
@@ -156,7 +156,7 @@ See http://gorefactor.org
 // Run runs the Go Doctor command-line interface.  Typical usage is
 //     os.Exit(cli.Run(os.Stdin, os.Stdout, os.Stderr, os.Args))
 // All arguments must be non-nil, and args[0] is required.
-func Run(stdin io.Reader, stdout io.Writer, stderr io.Writer, args []string) int {
+func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, args []string) int {
 	var flags *flag.FlagSet = flag.NewFlagSet("godoctor", flag.ContinueOnError)
 
 	var fileFlag = flags.String("file", "",
@@ -198,7 +198,7 @@ func Run(stdin io.Reader, stdout io.Writer, stderr io.Writer, args []string) int
 		// (err has already been printed)
 		if err == flag.ErrHelp {
 			// Invoked as "godoctor [flags] -help"
-			printHelp(flags, stderr)
+			printHelp(aboutText, flags, stderr)
 			return 2
 		}
 		return 1
@@ -212,7 +212,7 @@ func Run(stdin io.Reader, stdout io.Writer, stderr io.Writer, args []string) int
 				"be used with any other flags or arguments")
 			return 1
 		}
-		printManPage(flags, stdout)
+		printManPage(aboutText, flags, stdout)
 		return 0
 	}
 
@@ -250,7 +250,7 @@ func Run(stdin io.Reader, stdout io.Writer, stderr io.Writer, args []string) int
 			return 1
 		}
 		// Invoked as "godoctor -json [args]
-		protocol.Run(args)
+		protocol.Run(aboutText, args)
 		return 0
 	}
 
@@ -262,7 +262,7 @@ func Run(stdin io.Reader, stdout io.Writer, stderr io.Writer, args []string) int
 
 	if len(args) == 0 || args[0] == "" || args[0] == "help" {
 		// Invoked as "godoctor [flags]" or "godoctor [flags] help"
-		printHelp(flags, stderr)
+		printHelp(aboutText, flags, stderr)
 		return 2
 	}
 
