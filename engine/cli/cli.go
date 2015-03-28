@@ -29,7 +29,8 @@ func printHelp(aboutText string, flags *flag.FlagSet, stderr io.Writer) {
 	fmt.Fprintf(stderr, `%s - Go source code refactoring tool.
 Usage: godoctor [<flag> ...] <refactoring> [<args> ...]
 
-Each <flag> must be one of the following:\n`, aboutText)
+Each <flag> must be one of the following:
+`, aboutText)
 	flags.VisitAll(func(flag *flag.Flag) {
 		fmt.Fprintf(stderr, "    -%-8s %s\n", flag.Name, flag.Usage)
 	})
