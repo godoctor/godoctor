@@ -29,7 +29,7 @@ type ToggleVar struct {
 
 func (r *ToggleVar) Description() *Description {
 	return &Description{
-		Name:      "Toggle var <-> :=",
+		Name:      "Toggle var ⇔ :=",
 		Synopsis:  "Toggles between a var declaration and := statement",
 		Usage:     "",
 		HTMLDoc:   toggleVarDoc,

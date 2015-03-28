@@ -22,6 +22,11 @@ func TestDoc(t *testing.T) {
 		t.Fatal("PrintManPage output does not contain .TH")
 	}
 
+	doc.PrintVimdoc("about", fs, &b)
+	if !strings.Contains(b.String(), ":GoRefactor") {
+		t.Fatal("PrintVimdoc output does not contain :GoRefactor")
+	}
+
 	doc.PrintUserGuide("about", fs, &b)
 	if !strings.Contains(b.String(), "<html") {
 		t.Fatal("PrintUserGuide output does not contain <html")

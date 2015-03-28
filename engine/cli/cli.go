@@ -54,42 +54,52 @@ To display usage information for a particular refactoring, such as rename, use:
 For complete usage information, see the user manual:  FIXME: URL`)
 }
 
+type CLIFlags struct {
+	*flag.FlagSet
+	fileFlag        *string
+	posFlag         *string
+	scopeFlag       *string
+	completeFlag    *bool
+	writeFlag       *bool
+	verboseFlag     *bool
+	veryVerboseFlag *bool
+	listFlag        *bool
+	jsonFlag        *bool
+	docFlag         *string
+}
+
+// Flags returns the flags supported by the godoctor command line tool.
+func Flags() *CLIFlags {
+	flags := CLIFlags{
+		FlagSet: flag.NewFlagSet("godoctor", flag.ContinueOnError)}
+	flags.fileFlag = flags.String("file", "",
+		"Filename containing an element to refactor (default: stdin)")
+	flags.posFlag = flags.String("pos", "1,1:1,1",
+		"Position of a syntax element to refactor (default: entire file)")
+	flags.scopeFlag = flags.String("scope", "",
+		"Package name(s), or source file containing a program entrypoint")
+	flags.completeFlag = flags.Bool("complete", false,
+		"Output entire modified source files instead of displaying a diff")
+	flags.writeFlag = flags.Bool("w", false,
+		"Modify source files on disk (write) instead of displaying a diff")
+	flags.verboseFlag = flags.Bool("v", false,
+		"Verbose: list affected files")
+	flags.veryVerboseFlag = flags.Bool("vv", false,
+		"Very verbose: list individual edits (implies -v)")
+	flags.listFlag = flags.Bool("list", false,
+		"List all refactorings and exit")
+	flags.jsonFlag = flags.Bool("json", false,
+		"Accept commands in OpenRefactory JSON protocol format")
+	flags.docFlag = flags.String("doc", "",
+		"Output the user's guide (HTML) or man page and exit")
+	return &flags
+}
+
 // Run runs the Go Doctor command-line interface.  Typical usage is
 //     os.Exit(cli.Run(os.Stdin, os.Stdout, os.Stderr, os.Args))
 // All arguments must be non-nil, and args[0] is required.
 func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, args []string) int {
-	var flags *flag.FlagSet = flag.NewFlagSet("godoctor", flag.ContinueOnError)
-
-	var fileFlag = flags.String("file", "",
-		"Filename containing an element to refactor (default: stdin)")
-
-	var posFlag = flags.String("pos", "1,1:1,1",
-		"Position of a syntax element to refactor (default: entire file)")
-
-	var scopeFlag = flags.String("scope", "",
-		"Package name(s), or source file containing a program entrypoint")
-
-	var completeFlag = flags.Bool("complete", false,
-		"Output entire modified source files instead of displaying a diff")
-
-	var writeFlag = flags.Bool("w", false,
-		"Modify source files on disk (write) instead of displaying a diff")
-
-	var verboseFlag = flags.Bool("v", false,
-		"Verbose: list affected files")
-
-	var veryVerboseFlag = flags.Bool("vv", false,
-		"Very verbose: list individual edits (implies -v)")
-
-	var listFlag = flags.Bool("list", false,
-		"List all refactorings and exit")
-
-	var jsonFlag = flags.Bool("json", false,
-		"Accept commands in OpenRefactory JSON protocol format")
-
-	var docFlag = flags.String("doc", "",
-		"Output the user's guide (HTML) or man page and exit")
-
+	flags := Flags()
 	// Don't print full help unless -help was requested.
 	// Just gently remind users that it's there.
 	flags.Usage = func() { fmt.Fprint(stderr, useHelp) }
@@ -99,7 +109,7 @@ func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, 
 		// (err has already been printed)
 		if err == flag.ErrHelp {
 			// Invoked as "godoctor [flags] -help"
-			printHelp(aboutText, flags, stderr)
+			printHelp(aboutText, flags.FlagSet, stderr)
 			return 2
 		}
 		return 1
@@ -107,32 +117,36 @@ func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, 
 
 	args = flags.Args()
 
-	if *docFlag != "" {
+	if *flags.docFlag != "" {
 		if len(args) > 0 || flags.NFlag() != 1 {
 			fmt.Fprintln(stderr, "Error: The -doc flag cannot "+
 				"be used with any other flags or arguments")
 			return 1
 		}
-		switch *docFlag {
+		switch *flags.docFlag {
 		case "man":
-			doc.PrintManPage(aboutText, flags, stdout)
+			doc.PrintManPage(aboutText, flags.FlagSet, stdout)
 		case "user":
-			doc.PrintUserGuide(aboutText, flags, stdout)
+			doc.PrintUserGuide(aboutText, flags.FlagSet, stdout)
+		case "vim":
+			doc.PrintVimdoc(aboutText, flags.FlagSet, stdout)
 		default:
 			fmt.Fprintln(stderr, "Error: The -doc flag must be "+
-				"either \"man\" or \"user\"")
+				"\"man\", \"user\", or \"vim\"")
 			return 1
 		}
 		return 0
 	}
 
-	if *listFlag {
+	if *flags.listFlag {
 		if len(args) > 0 {
 			fmt.Fprintln(stderr, "Error: The -list flag "+
 				"cannot be used with any arguments")
 			return 1
 		}
-		if *verboseFlag || *veryVerboseFlag || *writeFlag || *completeFlag || *jsonFlag {
+		if *flags.verboseFlag || *flags.veryVerboseFlag ||
+			*flags.writeFlag || *flags.completeFlag ||
+			*flags.jsonFlag {
 			fmt.Fprintln(stderr, "Error: The -list flag "+
 				"cannot be used with the -v, -vv, -w, "+
 				"-complete, or -json flags")
@@ -153,7 +167,7 @@ func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, 
 		return 0
 	}
 
-	if *jsonFlag {
+	if *flags.jsonFlag {
 		if flags.NFlag() != 1 {
 			fmt.Fprintln(stderr, "Error: The -json flag "+
 				"cannot be used with any other flags")
@@ -164,7 +178,7 @@ func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, 
 		return 0
 	}
 
-	if *writeFlag && *completeFlag {
+	if *flags.writeFlag && *flags.completeFlag {
 		fmt.Fprintln(stderr, "Error: The -w and -complete flags "+
 			"cannot both be present")
 		return 1
@@ -172,7 +186,7 @@ func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, 
 
 	if len(args) == 0 || args[0] == "" || args[0] == "help" {
 		// Invoked as "godoctor [flags]" or "godoctor [flags] help"
-		printHelp(aboutText, flags, stderr)
+		printHelp(aboutText, flags.FlagSet, stderr)
 		return 2
 	}
 
@@ -197,8 +211,8 @@ func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, 
 
 	var fileName string
 	var fileSystem filesystem.FileSystem
-	if *fileFlag != "" && *fileFlag != "-" {
-		fileName = *fileFlag
+	if *flags.fileFlag != "" && *flags.fileFlag != "-" {
+		fileName = *flags.fileFlag
 		fileSystem = &filesystem.LocalFileSystem{}
 	} else {
 		// Filename is - or no filename given; read from standard input
@@ -222,29 +236,29 @@ func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, 
 		}
 	}
 
-	selection, err := text.NewSelection(fileName, *posFlag)
+	selection, err := text.NewSelection(fileName, *flags.posFlag)
 	if err != nil {
 		fmt.Fprintf(stderr, "Error: %s.\n", err)
 		return 1
 	}
 
 	var scope []string
-	if *scopeFlag == "" {
+	if *flags.scopeFlag == "" {
 		// If no scope provided, let refactoring.go guess the scope
 		scope = nil
-	} else if *scopeFlag == "-" && stdinPath != "" {
+	} else if *flags.scopeFlag == "-" && stdinPath != "" {
 		// Use -scope=- to indicate "stdin file (not package) scope"
 		scope = []string{stdinPath}
 	} else {
 		// Use -scope=a,b,c to specify multiple files/packages
-		scope = strings.Split(*scopeFlag, ",")
+		scope = strings.Split(*flags.scopeFlag, ",")
 	}
 
 	verbosity := 0
-	if *verboseFlag {
+	if *flags.verboseFlag {
 		verbosity = 1
 	}
-	if *veryVerboseFlag {
+	if *flags.veryVerboseFlag {
 		verbosity = 2
 	}
 
@@ -273,9 +287,9 @@ func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, 
 		}
 	}
 
-	if *writeFlag {
+	if *flags.writeFlag {
 		err = writeToDisk(result, fileSystem)
-	} else if *completeFlag {
+	} else if *flags.completeFlag {
 		err = writeFileContents(stdout, result.Edits, fileSystem)
 	} else {
 		err = writeDiff(stdout, result.Edits, fileSystem)
