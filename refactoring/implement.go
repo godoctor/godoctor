@@ -12,12 +12,12 @@ import (
 	"path"
 	"strings"
 
-	"golang.org/x/tools/go/types"
+	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/types"
 	"github.com/godoctor/godoctor/text"
 )
 
 type ImplementIface struct {
-	refactoringBase
+	RefactoringBase
 	// interface to get methods for
 	interfaceName string
 	// name used to create a struct
@@ -42,12 +42,12 @@ func (r *ImplementIface) Description() *Description {
 	}
 }
 func (r *ImplementIface) Run(config *Config) *Result {
-	r.refactoringBase.Run(config)
+	r.RefactoringBase.Run(config)
 	r.Log.ChangeInitialErrorsToWarnings()
 	if r.Log.ContainsErrors() {
 		return &r.Result
 	}
-	if !validateArgs(config, r.Description(), r.Log) {
+	if !ValidateArgs(config, r.Description(), r.Log) {
 		return &r.Result
 	}
 	r.interfaceName = config.Args[0].(string)
@@ -81,7 +81,7 @@ func (r *ImplementIface) fLoader() {
 	splitString := strings.Split(r.interfaceName, ".")
 	fileName := splitString[0]
 	interfaceName := splitString[1]
-	if pkg, ok := r.program.ImportMap[fileName]; ok {
+	if pkg, ok := r.Program.ImportMap[fileName]; ok {
 		obj := pkg.Scope().Lookup(interfaceName)
 		if obj != nil {
 			r.msSearchnMake(obj)
@@ -92,7 +92,7 @@ func (r *ImplementIface) fLoader() {
 
 // use coding from go.tools for initial file interface is in
 func (r *ImplementIface) fLoader2() {
-	for _, pkgInfo := range r.program.AllPackages {
+	for _, pkgInfo := range r.Program.AllPackages {
 		if pkgInfo != nil {
 			obj := pkgInfo.Pkg.Scope().Lookup(r.interfaceName)
 			if obj != nil {
@@ -103,7 +103,7 @@ func (r *ImplementIface) fLoader2() {
 }
 
 // looks for methods and structs to see if they exist already for
-// the selected interface and if not then creates them in the r.file
+// the selected interface and if not then creates them in the r.File
 func (r *ImplementIface) msSearchnMake(obj types.Object) {
 	structNameIfFound := ""
 	typ := obj.Type().Underlying()
@@ -114,8 +114,8 @@ func (r *ImplementIface) msSearchnMake(obj types.Object) {
 		if structNameIfFound != "" || structCheck {
 		} else {
 			newStruct := "\n\ntype " + r.structureName + " struct {\n}"
-			endOffset := r.program.Fset.Position(r.file.End()).Offset
-			r.Edits[r.filename].Add(&text.Extent{endOffset, 0}, newStruct)
+			endOffset := r.Program.Fset.Position(r.File.End()).Offset
+			r.Edits[r.Filename].Add(&text.Extent{endOffset, 0}, newStruct)
 		}
 	}
 }
@@ -151,7 +151,7 @@ func (r *ImplementIface) methodchecknCreate(iface *types.Interface, structNameIf
 func (r *ImplementIface) checkForCreatedMethods(methodName string) (bool, string) {
 	found := false
 	structForMethod := ""
-	for _, n := range r.file.Decls {
+	for _, n := range r.File.Decls {
 		switch funcName := n.(type) {
 		case *ast.FuncDecl:
 			if methodName == funcName.Name.Name {
@@ -196,10 +196,10 @@ func (r *ImplementIface) getParamsnResults(method *types.Func, structNameIfFound
 }
 
 // check to see if the structure the user inputs
-// is already created in the r.file
+// is already created in the r.File
 func (r *ImplementIface) checkIfStructThere() bool {
 	found := false
-	for _, n := range r.file.Decls {
+	for _, n := range r.File.Decls {
 		switch structName := n.(type) {
 		case *ast.GenDecl:
 			for _, spec := range structName.Specs {
@@ -251,8 +251,8 @@ func (r *ImplementIface) createImportInterfaceMethods(parameters []*types.Var, r
 			}
 		}
 	}
-	endOffset := r.program.Fset.Position(r.file.End()).Offset
-	r.Edits[r.filename].Add(&text.Extent{endOffset, 0}, newMethod)
+	endOffset := r.Program.Fset.Position(r.File.End()).Offset
+	r.Edits[r.Filename].Add(&text.Extent{endOffset, 0}, newMethod)
 }
 
 // create parameters string
