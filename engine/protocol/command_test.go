@@ -4,11 +4,7 @@
 
 package protocol
 
-import (
-	"testing"
-
-	"github.com/godoctor/godoctor/engine"
-)
+import "testing"
 
 func TestAboutValidatePass(t *testing.T) {
 	// about requires state > 0 to pass validation
@@ -47,7 +43,7 @@ func TestAboutRunFail(t *testing.T) {
 
 func TestAboutRunPass(t *testing.T) {
 	state := State{State: 1}
-	about := About{}
+	about := About{aboutText: "Test About Text"}
 
 	if reply, err := about.Run(&state, nil); err != nil {
 		t.Fatal("About.Run: should pass validate with state of 1")
@@ -55,7 +51,7 @@ func TestAboutRunPass(t *testing.T) {
 		if reply.Params["reply"] != "OK" {
 			t.Fatal("About.Run: reply does not indicate command was successful")
 		}
-		if reply.Params["text"] != engine.Name() {
+		if reply.Params["text"] != "Test About Text" {
 			t.Fatal("About.Run: reply has incorrect about text")
 		}
 	}

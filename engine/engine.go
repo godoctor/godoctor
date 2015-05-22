@@ -11,10 +11,6 @@ import (
 	"github.com/godoctor/godoctor/refactoring"
 )
 
-// Go Doctor version number.  This is overridden in official builds using:
-// go build -ldflags "-X engine.version 0.1" cmd/godoctor
-var version string = "(unofficial source build)"
-
 // All available refactorings, keyed by a unique, one-word, all-lowercase name
 var refactorings map[string]refactoring.Refactoring
 
@@ -59,10 +55,4 @@ func AddRefactoring(shortName string, newRefac refactoring.Refactoring) error {
 	refactorings[shortName] = newRefac
 	refactoringsInOrder = append(refactoringsInOrder, shortName)
 	return nil
-}
-
-// Name returns the name and version number of the refactoring engine, as a
-// string.  The string is not guaranteed to have any particular format.
-func Name() string {
-	return fmt.Sprintf("Go Doctor %s", version)
 }

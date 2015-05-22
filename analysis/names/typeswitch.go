@@ -7,8 +7,8 @@ package names
 import (
 	"go/ast"
 
-	"golang.org/x/tools/go/loader"
-	"golang.org/x/tools/go/types"
+	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/loader"
+	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/types"
 )
 
 // FindTypeSwitchVarOccurrences returns the set of all identifiers that refer
