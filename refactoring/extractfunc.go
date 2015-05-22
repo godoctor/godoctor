@@ -17,10 +17,10 @@ import (
 
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"github.com/godoctor/godoctor/analysis/dataflow"
+	"github.com/godoctor/godoctor/internal/golang.org/x/tools/astutil"
+	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/loader"
+	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/types"
 	"github.com/godoctor/godoctor/text"
-	"golang.org/x/tools/go/ast/astutil"
-	"golang.org/x/tools/go/loader"
-	"golang.org/x/tools/go/types"
 )
 
 // The ExtractFunc refactoring is used to break down larger functions into
@@ -28,7 +28,7 @@ import (
 // The user is expected to extract a part of code from the function and enter a valid name
 
 type ExtractFunc struct {
-	refactoringBase
+	RefactoringBase
 	funcName string
 }
 
@@ -44,7 +44,7 @@ func (r *ExtractFunc) Description() *Description {
 }
 
 func (r *ExtractFunc) Run(config *Config) *Result {
-	if r.refactoringBase.Run(config); r.Log.ContainsErrors() {
+	if r.RefactoringBase.Run(config); r.Log.ContainsErrors() {
 		return &r.Result
 	}
 	if len(config.Args) != 1 {
@@ -58,13 +58,13 @@ func (r *ExtractFunc) Run(config *Config) *Result {
 		return &r.Result
 	}
 
-	if r.selectedNode == nil {
+	if r.SelectedNode == nil {
 		r.Log.Error("The selection cannot be null.Please make a valid selection!")
-		r.Log.AssociatePos(r.selectionStart, r.selectionEnd)
+		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
 		return &r.Result
 	}
-	path, _ := astutil.PathEnclosingInterval(r.file, r.selectionStart, r.selectedNode.End())
-	switch node := r.selectedNode.(type) {
+	path, _ := astutil.PathEnclosingInterval(r.File, r.SelectionStart, r.SelectedNode.End())
+	switch node := r.SelectedNode.(type) {
 	case *ast.BlockStmt:
 		flag := r.checkForAnonymousFns(path)
 		if flag {
@@ -80,8 +80,8 @@ func (r *ExtractFunc) Run(config *Config) *Result {
 			r.Log.Error("Code cannot contain Anonymous Function (OR) Code Cannot be extracted from Anonymous Function")
 		}
 	}
-	r.formatFileInEditor()
-	r.updateLog(config, true)
+	r.FormatFileInEditor()
+	r.UpdateLog(config, true)
 	r.Log.ChangeInitialErrorsToWarnings()
 	return &r.Result
 }
@@ -102,7 +102,7 @@ func (r *ExtractFunc) checkForAnonymousFns(path []ast.Node) bool {
 // check for anonymous function by performing ast.inspect
 func (r *ExtractFunc) checkForAnonymousFnsInCode() bool {
 	flag := true
-	ast.Inspect(r.selectedNode, func(n ast.Node) bool {
+	ast.Inspect(r.SelectedNode, func(n ast.Node) bool {
 		if _, ok := n.(*ast.FuncLit); ok {
 			r.Log.Error("There is an anonymous function in the code")
 			flag = false
@@ -128,10 +128,10 @@ func (r *ExtractFunc) findStartPosition(node *ast.BlockStmt) ast.Stmt {
 	for _, s := range node.List {
 		ast.Inspect(s, func(n ast.Node) bool {
 			if a, ok := n.(ast.Stmt); ok {
-				if r.selectionStart == a.Pos() {
+				if r.SelectionStart == a.Pos() {
 					stmt = a
 					return false
-				} else if r.selectionStart >= a.Pos() && r.selectionStart < a.End() {
+				} else if r.SelectionStart >= a.Pos() && r.SelectionStart < a.End() {
 					stmt = a
 				}
 			}
@@ -147,7 +147,7 @@ func (r *ExtractFunc) findEndPosition(node *ast.BlockStmt) ast.Stmt {
 	for _, s := range node.List {
 		ast.Inspect(s, func(n ast.Node) bool {
 			if s, ok := n.(ast.Stmt); ok {
-				if s.Pos() >= r.selectionStart && s.Pos() <= r.selectionEnd { // since there can be one to many statements
+				if s.Pos() >= r.SelectionStart && s.Pos() <= r.SelectionEnd { // since there can be one to many statements
 					stmt = s
 					return false
 				}
@@ -163,9 +163,9 @@ func (r *ExtractFunc) findEndPosition(node *ast.BlockStmt) ast.Stmt {
 func (r *ExtractFunc) callEditset(node *ast.BlockStmt, path []ast.Node) {
 	if r.findEndPosition(node) != nil && r.findStartPosition(node) != nil {
 		replacement_str, funcCall_str := r.createNewFunction(node, path)
-		length := r.program.Fset.Position(r.findEndPosition(node).End()).Offset - r.program.Fset.Position(r.findStartPosition(node).Pos()).Offset
-		r.Edits[r.filename].Add(&text.Extent{r.program.Fset.Position(r.findStartPosition(node).Pos()).Offset, length}, funcCall_str)
-		r.Edits[r.filename].Add(&text.Extent{r.program.Fset.Position(r.file.End()).Offset, 0}, replacement_str)
+		length := r.Program.Fset.Position(r.findEndPosition(node).End()).Offset - r.Program.Fset.Position(r.findStartPosition(node).Pos()).Offset
+		r.Edits[r.Filename].Add(&text.Extent{r.Program.Fset.Position(r.findStartPosition(node).Pos()).Offset, length}, funcCall_str)
+		r.Edits[r.Filename].Add(&text.Extent{r.Program.Fset.Position(r.File.End()).Offset, 0}, replacement_str)
 	} else {
 		r.Log.Error("A valid selection was not made!")
 	}
@@ -202,10 +202,10 @@ func (r *ExtractFunc) checkForReceiver(path []ast.Node) (string, string, types.T
 				switch a := s.Recv.List[0].Type.(type) {
 				case *ast.StarExpr:
 					receiverType = "*" + a.X.(*ast.Ident).Name
-					rType = r.selectedNodePkg.TypeOf(a)
+					rType = r.SelectedNodePkg.TypeOf(a)
 				case ast.Expr:
 					receiverType = a.(*ast.Ident).Name
-					rType = r.selectedNodePkg.TypeOf(a)
+					rType = r.SelectedNodePkg.TypeOf(a)
 				}
 			}
 		}
@@ -296,7 +296,7 @@ func (r *ExtractFunc) extractCode(node *ast.BlockStmt) string {
 	for i := 0; i < len(node.List); i++ {
 		if r.findStartPosition(node) != nil {
 			if node.List[i].Pos() >= r.findStartPosition(node).Pos() {
-				read_str = string(r.fileContents[r.program.Fset.Position(r.findStartPosition(node).Pos()).Offset:r.program.Fset.Position(r.findEndPosition(node).End()).Offset])
+				read_str = string(r.FileContents[r.Program.Fset.Position(r.findStartPosition(node).Pos()).Offset:r.Program.Fset.Position(r.findEndPosition(node).End()).Offset])
 			}
 		} else {
 			r.Log.Error("The  start positon of the extracted code is not right !")
@@ -326,8 +326,8 @@ func (r *ExtractFunc) checkValidSelection(stmtArr []ast.Stmt) bool {
 		firstStmt := stmtArr[0]
 		sort.Sort(nodeEnd(stmtArr)) // sorted based on the ascending order of node.End() value
 		endStmt := stmtArr[len(stmtArr)-1]
-		path1, _ := astutil.PathEnclosingInterval(r.file, firstStmt.Pos(), firstStmt.End())
-		path2, _ := astutil.PathEnclosingInterval(r.file, endStmt.Pos(), endStmt.End())
+		path1, _ := astutil.PathEnclosingInterval(r.File, firstStmt.Pos(), firstStmt.End())
+		path2, _ := astutil.PathEnclosingInterval(r.File, endStmt.Pos(), endStmt.End())
 		for i, _ := range path1 {
 			if aa, ok := path1[i].(ast.Stmt); ok {
 				if _, ok := path1[i].(*ast.LabeledStmt); ok {
@@ -418,29 +418,29 @@ func (r *ExtractFunc) parseCode(node *ast.BlockStmt, path []ast.Node) ([]*types.
 			for _, v := range a.Lhs { // get the list of variables that are declared in the init of for loop
 				switch tempv := v.(type) {
 				case *ast.Ident:
-					if i, ok := r.selectedNodePkg.ObjectOf(tempv).(*types.Var); ok {
+					if i, ok := r.SelectedNodePkg.ObjectOf(tempv).(*types.Var); ok {
 						initVars = append(initVars, i)
 					}
 				case *ast.IndexExpr:
-					if i, ok := r.selectedNodePkg.ObjectOf(tempv.X.(*ast.Ident)).(*types.Var); ok { // name of the array
+					if i, ok := r.SelectedNodePkg.ObjectOf(tempv.X.(*ast.Ident)).(*types.Var); ok { // name of the array
 						initVars = append(initVars, i)
 					}
-					if i, ok := r.selectedNodePkg.ObjectOf(tempv.Index.(*ast.Ident)).(*types.Var); ok { // index variable
+					if i, ok := r.SelectedNodePkg.ObjectOf(tempv.Index.(*ast.Ident)).(*types.Var); ok { // index variable
 						initVars = append(initVars, i)
 					}
 				case *ast.StarExpr:
-					if i, ok := r.selectedNodePkg.ObjectOf(tempv.X.(*ast.Ident)).(*types.Var); ok {
+					if i, ok := r.SelectedNodePkg.ObjectOf(tempv.X.(*ast.Ident)).(*types.Var); ok {
 						initVars = append(initVars, i)
 					}
 				}
 			}
 		case *ast.RangeStmt: // HERE WHEN YOU COME ACROSS RANGE STATEMENTS, THOSE VARIABLES TOTHE LEFT OF THE := ARE PART OF THE INIT STATATEMENTS
-			if i, ok := r.selectedNodePkg.ObjectOf(a.Key.(*ast.Ident)).(*types.Var); ok {
+			if i, ok := r.SelectedNodePkg.ObjectOf(a.Key.(*ast.Ident)).(*types.Var); ok {
 				if i.Name() != "_" {
 					initVars = append(initVars, i)
 				}
 			}
-			if i, ok := r.selectedNodePkg.ObjectOf(a.Value.(*ast.Ident)).(*types.Var); ok {
+			if i, ok := r.SelectedNodePkg.ObjectOf(a.Value.(*ast.Ident)).(*types.Var); ok {
 				if i.Name() != "_" {
 					initVars = append(initVars, i)
 				}
@@ -451,8 +451,8 @@ func (r *ExtractFunc) parseCode(node *ast.BlockStmt, path []ast.Node) ([]*types.
 	if breakConditionCheck && valid == true {
 		aliveFirst := r.returnEntryLiveVar(funcCFG, node)
 		useArr := r.returnUse(stmtArr)
-		assign = r.returnAssigned(stmtArr, r.selectedNodePkg)
-		defined = r.returnDefined(stmtArr, r.selectedNodePkg)
+		assign = r.returnAssigned(stmtArr, r.SelectedNodePkg)
+		defined = r.returnDefined(stmtArr, r.SelectedNodePkg)
 		defArr = r.removeDuplicates(unionOp(assign, defined))
 		aliveLast := r.returnExitLiveVar(stmtArr, funcCFG, node)
 		aliveFirst = differenceOp(aliveFirst, initVars) // incase of a for loop
@@ -537,7 +537,7 @@ func (r *ExtractFunc) returnStmtArray(funcCFG *cfg.CFG, node *ast.BlockStmt) ([]
 	}
 	if len(stmtArr) == 1 {
 		if _, ok := stmtArr[0].(*ast.AssignStmt); ok {
-			path, _ := astutil.PathEnclosingInterval(r.file, stmtArr[0].Pos(), stmtArr[0].End())
+			path, _ := astutil.PathEnclosingInterval(r.File, stmtArr[0].Pos(), stmtArr[0].End())
 			switch path[1].(type) {
 			case *ast.IfStmt, *ast.SwitchStmt, *ast.TypeSwitchStmt, *ast.ForStmt, *ast.CommClause:
 				r.Log.Error("The Assignment statement extracted is not a valid statement ")
@@ -740,7 +740,7 @@ func (r *ExtractFunc) labelComparison(xLabelArr, zLabelArr []string) bool {
 func (r *ExtractFunc) setShortAssignmentFlag(stmtArr []ast.Stmt, returnVarList []*types.Var) bool {
 	var flagShortAssign bool = false
 	var define []*types.Var
-	define = r.returnDefined(stmtArr, r.selectedNodePkg)
+	define = r.returnDefined(stmtArr, r.SelectedNodePkg)
 	if _, ok := isIntersection(returnVarList, define); ok {
 		flagShortAssign = true
 	}
@@ -749,7 +749,7 @@ func (r *ExtractFunc) setShortAssignmentFlag(stmtArr []ast.Stmt, returnVarList [
 
 // returns the defs and uses variables from the analysis code
 func (r *ExtractFunc) returnUse(stmtArr []ast.Stmt) []*types.Var {
-	_, use := dataflow.ReferencedVars(stmtArr, r.selectedNodePkg) // passing only the extracted statements
+	_, use := dataflow.ReferencedVars(stmtArr, r.SelectedNodePkg) // passing only the extracted statements
 	var useArr []*types.Var
 	for key, _ := range use {
 		if !key.IsField() { // removes the field Vars
@@ -764,7 +764,7 @@ func (r *ExtractFunc) returnUse(stmtArr []ast.Stmt) []*types.Var {
 // returns variables that are live at the first line of the extracted code
 func (r *ExtractFunc) returnEntryLiveVar(funcCFG *cfg.CFG, node *ast.BlockStmt) []*types.Var {
 	var aliveFirst []*types.Var
-	in, _ := dataflow.LiveVars(funcCFG, r.selectedNodePkg)
+	in, _ := dataflow.LiveVars(funcCFG, r.SelectedNodePkg)
 
 	startStmt := r.findStartPosition(node)
 	for key, value := range in {
@@ -784,7 +784,7 @@ func (r *ExtractFunc) returnEntryLiveVar(funcCFG *cfg.CFG, node *ast.BlockStmt) 
 func (r *ExtractFunc) returnExitLiveVar(stmtArr []ast.Stmt, funcCFG *cfg.CFG, node *ast.BlockStmt) []*types.Var {
 	var aliveLast []*types.Var
 	var flagForExit bool = false
-	in, out := dataflow.LiveVars(funcCFG, r.selectedNodePkg)
+	in, out := dataflow.LiveVars(funcCFG, r.SelectedNodePkg)
 	sort.Sort(nodeEnd(stmtArr))
 	for key, value := range out {
 		if key.End() == stmtArr[len(stmtArr)-1].End() {
