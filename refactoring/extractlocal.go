@@ -18,7 +18,7 @@ import (
 )
 
 type ExtractLocal struct {
-	refactoringBase
+	RefactoringBase
 	varName string
 }
 
@@ -41,16 +41,16 @@ func (r *ExtractLocal) Description() *Description {
 
 // this run function will run the program
 func (r *ExtractLocal) Run(config *Config) *Result {
-	r.refactoringBase.Run(config)
+	r.RefactoringBase.Run(config)
 	r.Log.ChangeInitialErrorsToWarnings()
 	if r.Log.ContainsErrors() {
 		return &r.Result
 	}
 	// get first variable
 	// check if there was a selected node from refactoring
-	if r.selectedNode == nil {
+	if r.SelectedNode == nil {
 		r.Log.Error("Please select an expression to extract.")
-		r.Log.AssociatePos(r.selectionStart, r.selectionEnd)
+		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
 		return &r.Result
 	}
 	// get second variable to choose whether single extraction
@@ -61,8 +61,8 @@ func (r *ExtractLocal) Run(config *Config) *Result {
 	// new variable to replace the expression
 	r.varName = config.Args[0].(string)
 	r.singleExtract()
-	r.formatFileInEditor()
-	r.updateLog(config, false)
+	r.FormatFileInEditor()
+	r.UpdateLog(config, false)
 	return &r.Result
 }
 
@@ -78,9 +78,9 @@ func (r *ExtractLocal) sChoice(config *Config) *Result {
 
 // selectionCheck checks if the selection is empty or not
 func (r *ExtractLocal) selectionCheck() *Result {
-	if r.selectedNode == nil {
+	if r.SelectedNode == nil {
 		r.Log.Error("Please select an identifier to extract.")
-		r.Log.AssociatePos(r.selectionStart, r.selectionEnd)
+		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
 		return &r.Result
 	}
 	return &r.Result
@@ -95,7 +95,7 @@ func (r *ExtractLocal) singleExtract() {
 	var parentNode, switchNode, fini, fcond, fpost, ifInitAssign, ifElse, condition, assign ast.Node
 	found, isBranchStmt, isLabelStmt := false, false, false
 	errorType := ""
-	ast.Inspect(r.file, func(n ast.Node) bool {
+	ast.Inspect(r.File, func(n ast.Node) bool {
 		switch selectedNode := n.(type) {
 		case *ast.FuncDecl:
 			if selectedNode.Type.Params != nil {
@@ -140,16 +140,16 @@ func (r *ExtractLocal) singleExtract() {
 			} else if assignment, ok := selectedNode.(*ast.AssignStmt); ok {
 				lhs, rhs = assignment.Lhs, assignment.Rhs
 			} else if block, ok := selectedNode.(*ast.BlockStmt); ok {
-				if block == r.selectedNode {
+				if block == r.SelectedNode {
 					errorType = "blockSelected"
 					found = true
 				}
 			} else if branch, ok := selectedNode.(*ast.BranchStmt); ok {
-				if branch == r.selectedNode || branch.Label == r.selectedNode || r.posLine(branch) == r.posLine(r.selectedNode) {
+				if branch == r.SelectedNode || branch.Label == r.SelectedNode || r.posLine(branch) == r.posLine(r.SelectedNode) {
 					isBranchStmt = true
 				}
 			} else if label, ok := selectedNode.(*ast.LabeledStmt); ok {
-				if label == r.selectedNode {
+				if label == r.SelectedNode {
 					isLabelStmt = true
 				}
 			}
@@ -206,14 +206,14 @@ func (r *ExtractLocal) singleExtract() {
 				errorType = "labelStmt"
 				found = true
 			} else if isIdentInAssign {
-				newVar := r.createVar(r.selectedNode)
+				newVar := r.createVar(r.SelectedNode)
 				found = r.createParent(newVar)
-			} else if selectedNode == r.selectedNode {
+			} else if selectedNode == r.SelectedNode {
 				typeCase := r.typeSwitchCheck(typeSwitchFound, condition, assign)
 				isIfMult := r.ifMultLeftCheck(ifInitAssign, selectedNode)
 				isSwitchCase := r.switchCheck(switchList, selectedNode)
 				line1 := r.endLine(selectedNode)
-				line2 := r.endLine(r.selectedNode)
+				line2 := r.endLine(r.SelectedNode)
 				//isIndexExpr := r.checkIndexExpr(selectedNode)
 				if isSwitchCase { // check for switch stmts
 					newVar := r.createVar(selectedNode)
@@ -247,16 +247,16 @@ func (r *ExtractLocal) singleExtract() {
 	r.errorCheck(errorType)
 }
 func (r *ExtractLocal) posOff(node ast.Node) int {
-	return r.program.Fset.Position(node.Pos()).Offset
+	return r.Program.Fset.Position(node.Pos()).Offset
 }
 func (r *ExtractLocal) endOff(node ast.Node) int {
-	return r.program.Fset.Position(node.End()).Offset
+	return r.Program.Fset.Position(node.End()).Offset
 }
 func (r *ExtractLocal) endLine(node ast.Node) int {
-	return r.program.Fset.Position(node.End()).Line
+	return r.Program.Fset.Position(node.End()).Line
 }
 func (r *ExtractLocal) posLine(node ast.Node) int {
-	return r.program.Fset.Position(node.Pos()).Line
+	return r.Program.Fset.Position(node.Pos()).Line
 }
 
 // switchCheck switch case check for switch version of extraction
@@ -273,8 +273,8 @@ func (r *ExtractLocal) switchCheck(switchList []ast.Stmt, selectedNode ast.Node)
 
 // forCheck for loop init/cond/post test
 func (r *ExtractLocal) forCheck() bool {
-	off1 := r.posLine(r.selectedNode)
-	enclosing, _ := astutil.PathEnclosingInterval(r.file, r.selectedNode.Pos(), r.selectedNode.End())
+	off1 := r.posLine(r.SelectedNode)
+	enclosing, _ := astutil.PathEnclosingInterval(r.File, r.SelectedNode.Pos(), r.SelectedNode.End())
 	for _, index2 := range enclosing {
 		if forparent, ok := index2.(*ast.ForStmt); ok {
 			if r.posLine(forparent) == off1 {
@@ -303,10 +303,10 @@ func (r *ExtractLocal) typeSwitchCheck(typeSwitchFound []ast.Stmt, condition ast
 		for _, index := range typeSwitchFound {
 			if caseClauses, ok := index.(*ast.CaseClause); ok {
 				for _, index2 := range caseClauses.List {
-					if index2 == r.selectedNode {
+					if index2 == r.SelectedNode {
 						return true
 					}
-					enclosing, _ := astutil.PathEnclosingInterval(r.file, r.selectedNode.Pos(), r.selectedNode.End())
+					enclosing, _ := astutil.PathEnclosingInterval(r.File, r.SelectedNode.Pos(), r.SelectedNode.End())
 					for _, index3 := range enclosing {
 						if index3 == index2 {
 							return true
@@ -316,13 +316,13 @@ func (r *ExtractLocal) typeSwitchCheck(typeSwitchFound []ast.Stmt, condition ast
 			}
 		}
 	}
-	if condition == r.selectedNode {
+	if condition == r.SelectedNode {
 		return true
 	} else if assign != nil {
 		if aStmt, ok := assign.(*ast.AssignStmt); ok {
-			if aStmt.Lhs != nil && aStmt.Lhs[0] == r.selectedNode {
+			if aStmt.Lhs != nil && aStmt.Lhs[0] == r.SelectedNode {
 				return true
-			} else if aStmt.Rhs != nil && aStmt.Rhs[0] == r.selectedNode {
+			} else if aStmt.Rhs != nil && aStmt.Rhs[0] == r.SelectedNode {
 				return true
 			}
 		}
@@ -336,7 +336,7 @@ func (r *ExtractLocal) funcInputCheck(plists []*ast.Field, rlists []*ast.Field, 
 	if len(plists) != 0 {
 		for _, index := range plists {
 			for _, name := range index.Names {
-				if name == r.selectedNode {
+				if name == r.SelectedNode {
 					return true
 				}
 			}
@@ -344,21 +344,21 @@ func (r *ExtractLocal) funcInputCheck(plists []*ast.Field, rlists []*ast.Field, 
 	}
 	if len(rlists) != 0 {
 		for _, index := range rlists {
-			if r.posLine(index) == r.posLine(r.selectedNode) {
+			if r.posLine(index) == r.posLine(r.SelectedNode) {
 				return true
 			}
 		}
 	}
 	if len(recLists) != 0 {
 		for _, index := range recLists {
-			if r.posLine(index) == r.posLine(r.selectedNode) {
+			if r.posLine(index) == r.posLine(r.SelectedNode) {
 				return true
-			} /*else if index == r.selectedNode {
+			} /*else if index == r.SelectedNode {
 				fmt.Printf("goes here")
 				return true
 			}
 			for _, names := range index.Names {
-				if names == r.selectedNode {
+				if names == r.SelectedNode {
 					fmt.Printf("goes here")
 					return true
 				}
@@ -371,7 +371,7 @@ func (r *ExtractLocal) funcInputCheck(plists []*ast.Field, rlists []*ast.Field, 
 // multiAssignVarCheck checks if it's a multi assign stmt ie  _, _ := _, _
 // and returns true if the selected node is on either side
 func (r *ExtractLocal) multiAssignVarCheck(lhs []ast.Expr, rhs []ast.Expr) bool {
-	if len(lhs) > 1 && r.posLine(lhs[0]) == r.posLine(r.selectedNode) {
+	if len(lhs) > 1 && r.posLine(lhs[0]) == r.posLine(r.SelectedNode) {
 		return true
 	}
 	return false
@@ -394,7 +394,7 @@ func (r *ExtractLocal) ifFmtWBinary(parentNode ast.Node, childNode ast.Node, sel
 // keyValueCheck checks if is a key value expr or a child of
 // a key value expr, so anything to do maps, or keys : values
 func (r *ExtractLocal) keyValueCheck() bool {
-	if _, ok := r.selectedNode.(*ast.KeyValueExpr); ok {
+	if _, ok := r.SelectedNode.(*ast.KeyValueExpr); ok {
 		return true
 	}
 	return false
@@ -403,7 +403,7 @@ func (r *ExtractLocal) keyValueCheck() bool {
 // varStmtCheck check if it's a declartion stmt, and return true
 // if it is ie var apple int or var handler http.Handler
 func (r *ExtractLocal) varStmtCheck() bool {
-	enclosing, _ := astutil.PathEnclosingInterval(r.file, r.selectedNode.Pos(), r.selectedNode.End())
+	enclosing, _ := astutil.PathEnclosingInterval(r.File, r.SelectedNode.Pos(), r.SelectedNode.End())
 	for _, index := range enclosing {
 		if _, ok := index.(*ast.DeclStmt); ok {
 			return true
@@ -412,17 +412,17 @@ func (r *ExtractLocal) varStmtCheck() bool {
 	return false
 }
 
-// lhsAssignVarCheck checks if r.selectedNode is on the lhs of an
+// lhsAssignVarCheck checks if r.SelectedNode is on the lhs of an
 // assign statement
 func (r *ExtractLocal) lhsAssignVarCheck() bool {
-	enclosing, _ := astutil.PathEnclosingInterval(r.file, r.selectedNode.Pos(), r.selectedNode.End())
+	enclosing, _ := astutil.PathEnclosingInterval(r.File, r.SelectedNode.Pos(), r.SelectedNode.End())
 	for _, index := range enclosing {
 		if assign, ok := index.(*ast.AssignStmt); ok {
 			for _, index2 := range assign.Lhs {
 				if _, ok := index2.(*ast.SelectorExpr); ok {
 					return true
 				}
-				if index2 == r.selectedNode {
+				if index2 == r.SelectedNode {
 					return true
 				}
 			}
@@ -436,26 +436,26 @@ func (r *ExtractLocal) lhsAssignVarCheck() bool {
 // inside the () of it should work)
 func (r *ExtractLocal) callCheck(selectedNode ast.Node) bool {
 	/*if call, ok := selectedNode.(*ast.CallExpr); ok {
-		if call == r.selectedNode {
+		if call == r.SelectedNode {
 			return true
 		} else if fun, ok := call.Fun.(*ast.SelectorExpr); ok {
-			if fun == r.selectedNode || fun.X == r.selectedNode || fun.Sel == r.selectedNode {
+			if fun == r.SelectedNode || fun.X == r.SelectedNode || fun.Sel == r.SelectedNode {
 				return true
 			}
 		} else if len(call.Args) != 0 {
 			for _, index := range call.Args {
 				if selector, ok := index.(*ast.SelectorExpr); ok {
-					if selector == r.selectedNode || selector.X == r.selectedNode || selector.Sel == r.selectedNode {
+					if selector == r.SelectedNode || selector.X == r.SelectedNode || selector.Sel == r.SelectedNode {
 						return true
 					}
 				} else if ident, ok := index.(*ast.Ident); ok {
-					if ident == r.selectedNode {
+					if ident == r.SelectedNode {
 						return false
 					}
 				}
 			}
 		} else {
-			enclosing, _ := astutil.PathEnclosingInterval(r.file, r.selectedNode.Pos(), r.selectedNode.End())
+			enclosing, _ := astutil.PathEnclosingInterval(r.File, r.SelectedNode.Pos(), r.SelectedNode.End())
 			if enclosing[1] != nil {
 				if _, ok := enclosing[1].(*ast.ExprStmt); ok {
 					return true
@@ -463,11 +463,11 @@ func (r *ExtractLocal) callCheck(selectedNode ast.Node) bool {
 			}
 		}
 	} */
-	enclosing, _ := astutil.PathEnclosingInterval(r.file, r.selectedNode.Pos(), r.selectedNode.End())
+	enclosing, _ := astutil.PathEnclosingInterval(r.File, r.SelectedNode.Pos(), r.SelectedNode.End())
 	for _, index := range enclosing {
 		if call, ok := index.(*ast.CallExpr); ok {
 			for _, index2 := range call.Args {
-				if index2 == r.selectedNode {
+				if index2 == r.SelectedNode {
 					return false
 				} else if _, ok := index2.(*ast.BinaryExpr); ok {
 					return false
@@ -482,10 +482,10 @@ func (r *ExtractLocal) callCheck(selectedNode ast.Node) bool {
 }
 
 // selectorCheck this will check the selector expr and see if the
-// sel part (which is the type) is the r.selectedNode
+// sel part (which is the type) is the r.SelectedNode
 func (r *ExtractLocal) selectorCheck(selectedNode ast.Node) bool {
 	if selector, ok := selectedNode.(*ast.SelectorExpr); ok {
-		if selector.Sel == r.selectedNode {
+		if selector.Sel == r.SelectedNode {
 			return true
 		}
 	}
@@ -496,7 +496,7 @@ func (r *ExtractLocal) selectorCheck(selectedNode ast.Node) bool {
 func (r *ExtractLocal) checkNil(selectedNode ast.Node) bool {
 
 	if name, ok := selectedNode.(*ast.Ident); ok {
-		if name == r.selectedNode {
+		if name == r.SelectedNode {
 			if name.Name == "nil" {
 				return true
 			}
@@ -505,10 +505,10 @@ func (r *ExtractLocal) checkNil(selectedNode ast.Node) bool {
 	return false
 }
 
-// checkComposite checks if r.selectedNode is a composite lit
+// checkComposite checks if r.SelectedNode is a composite lit
 // which should be handled by extract, not extract local
 func (r *ExtractLocal) checkComposite() bool {
-	if _, ok := r.selectedNode.(*ast.CompositeLit); ok {
+	if _, ok := r.SelectedNode.(*ast.CompositeLit); ok {
 		return true
 	}
 	return false
@@ -516,10 +516,10 @@ func (r *ExtractLocal) checkComposite() bool {
 
 /*// checkIndexExpr checks to see if it's an index expr
 func (r *ExtractLocal) checkIndexExpr(selectedNode ast.Node) bool {
-	enclosing, _ := astutil.PathEnclosingInterval(r.file, selectedNode.Pos(), selectedNode.End())
+	enclosing, _ := astutil.PathEnclosingInterval(r.File, selectedNode.Pos(), selectedNode.End())
 	for _, index := range enclosing {
 		if indexExpr, ok := index.(*ast.IndexExpr); ok {
-			if indexExpr.X == r.selectedNode || indexExpr.Index == r.selectedNode {
+			if indexExpr.X == r.SelectedNode || indexExpr.Index == r.SelectedNode {
 				return true
 			}
 		}
@@ -530,13 +530,13 @@ func (r *ExtractLocal) checkIndexExpr(selectedNode ast.Node) bool {
 // checkAssignIdents checks to see if an ident obj is inside an assign, which would be
 // allowed to be extracted
 func (r *ExtractLocal) checkAssignIdents() bool {
-	/*if ident, ok := r.selectedNode.(*ast.BasicLit); ok {
-		enclosing, _ := astutil.PathEnclosingInterval(r.file, ident.Pos(), ident.End())
+	/*if ident, ok := r.SelectedNode.(*ast.BasicLit); ok {
+		enclosing, _ := astutil.PathEnclosingInterval(r.File, ident.Pos(), ident.End())
 		for _, index := range enclosing {
 			if assign, ok := index.(*ast.AssignStmt); ok {
 				for _, index := range assign.Lhs {
 					if index == ident {
-						enclosing2, _ := astutil.PathEnclosingInterval(r.file, index.Pos(), index.End())
+						enclosing2, _ := astutil.PathEnclosingInterval(r.File, index.Pos(), index.End())
 						for _, index2 := range enclosing2 {
 							if _, ok := index2.(*ast.SelectorExpr); ok {
 								return true
@@ -550,13 +550,13 @@ func (r *ExtractLocal) checkAssignIdents() bool {
 				return true
 			}
 		}
-	} else*/if ident, ok := r.selectedNode.(*ast.Ident); ok {
-		enclosing, _ := astutil.PathEnclosingInterval(r.file, ident.Pos(), ident.End())
+	} else*/if ident, ok := r.SelectedNode.(*ast.Ident); ok {
+		enclosing, _ := astutil.PathEnclosingInterval(r.File, ident.Pos(), ident.End())
 		for _, index := range enclosing {
 			if assign, ok := index.(*ast.AssignStmt); ok {
 				for _, index := range assign.Rhs {
 					/*if index == ident {
-						enclosing2, _ := astutil.PathEnclosingInterval(r.file, index.Pos(), index.End())
+						enclosing2, _ := astutil.PathEnclosingInterval(r.File, index.Pos(), index.End())
 						for _, index2 := range enclosing2 {
 							if _, ok := index2.(*ast.SelectorExpr); ok {
 								return true
@@ -583,7 +583,7 @@ func (r *ExtractLocal) checkAssignIdents() bool {
 func (r *ExtractLocal) caseSelectorCheck(switchList []ast.Stmt) bool {
 	for _, index := range switchList {
 		if cases, ok := index.(*ast.CaseClause); ok {
-			if cases == r.selectedNode {
+			if cases == r.SelectedNode {
 				return true
 			}
 		}
@@ -593,9 +593,9 @@ func (r *ExtractLocal) caseSelectorCheck(switchList []ast.Stmt) bool {
 
 // function needed to detect if a reserved word is trying to be extracted (a predeclared Ident)
 func (r *ExtractLocal) isPreDeclaredIdent() bool {
-	pos1 := r.posOff(r.selectedNode)
-	pos2 := r.endOff(r.selectedNode)
-	selectedNodeName := string(r.fileContents[int(pos1):int(pos2)])
+	pos1 := r.posOff(r.SelectedNode)
+	pos2 := r.endOff(r.SelectedNode)
+	selectedNodeName := string(r.FileContents[int(pos1):int(pos2)])
 	result, _ := regexp.MatchString("^(bool|byte|complex64|complex128|error|float32|float64|int|int8|int16|int32|int64|rune|string|uint|uint8|uint16|uint32|uint64|uintptr|global|reflect)$", selectedNodeName)
 	return result
 }
@@ -603,10 +603,10 @@ func (r *ExtractLocal) isPreDeclaredIdent() bool {
 // addForSwitch switch extract function
 func (r *ExtractLocal) addForSwitch(switchNode ast.Node, selectedNode ast.Node, newVar string) bool {
 	pos3 := r.posOff(switchNode)
-	r.Edits[r.filename].Add(&text.Extent{pos3, 0}, newVar)
+	r.Edits[r.Filename].Add(&text.Extent{pos3, 0}, newVar)
 	pos1 := r.posOff(selectedNode)
 	pos2 := r.endOff(selectedNode) - pos1
-	r.Edits[r.filename].Add(&text.Extent{pos1, pos2}, r.varName)
+	r.Edits[r.Filename].Add(&text.Extent{pos1, pos2}, r.varName)
 	return true
 }
 
@@ -614,7 +614,7 @@ func (r *ExtractLocal) addForSwitch(switchNode ast.Node, selectedNode ast.Node, 
 func (r *ExtractLocal) createVar(selectedNode ast.Node) string {
 	pos1 := r.posOff(selectedNode)
 	pos2 := r.endOff(selectedNode)
-	newVar := r.varName + " := " + string(r.fileContents[int(pos1):int(pos2)]) + "\n"
+	newVar := r.varName + " := " + string(r.FileContents[int(pos1):int(pos2)]) + "\n"
 	return newVar
 }
 
@@ -624,7 +624,7 @@ func (r *ExtractLocal) createVar(selectedNode ast.Node) string {
 func (r *ExtractLocal) createVar2(selectedNode ast.Node) string {
 	pos1 := r.posOff(selectedNode)
 	pos2 := r.endOff(selectedNode)
-	newVar := "var " + r.varName + " " + string(r.fileContents[int(pos1):int(pos2)]) + "\n"
+	newVar := "var " + r.varName + " " + string(r.FileContents[int(pos1):int(pos2)]) + "\n"
 	return newVar
 } */
 
@@ -632,7 +632,7 @@ func (r *ExtractLocal) createVar2(selectedNode ast.Node) string {
 // function that inputs the newVar into the file at the parent spot and
 // at the selected node spot
 func (r *ExtractLocal) createParent(newVar string) bool {
-	enclosing, _ := astutil.PathEnclosingInterval(r.file, r.selectedNode.Pos(), r.selectedNode.End())
+	enclosing, _ := astutil.PathEnclosingInterval(r.File, r.SelectedNode.Pos(), r.SelectedNode.End())
 	found := false
 	var indexOfParent ast.Node
 	if len(enclosing) != 0 {
@@ -662,10 +662,10 @@ func (r *ExtractLocal) createParent(newVar string) bool {
 // addBeforeParent extract that puts the new var above the parent
 func (r *ExtractLocal) addBeforeParent(parentNode ast.Node, newVar string) bool {
 	off1 := r.posOff(parentNode)
-	off2 := r.posOff(r.selectedNode)
-	off3 := r.endOff(r.selectedNode) - off2
-	r.Edits[r.filename].Add(&text.Extent{off1, 0}, newVar)
-	r.Edits[r.filename].Add(&text.Extent{off2, off3}, r.varName)
+	off2 := r.posOff(r.SelectedNode)
+	off3 := r.endOff(r.SelectedNode) - off2
+	r.Edits[r.Filename].Add(&text.Extent{off1, 0}, newVar)
+	r.Edits[r.Filename].Add(&text.Extent{off2, off3}, r.varName)
 	return true
 }
 
