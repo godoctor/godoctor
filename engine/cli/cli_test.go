@@ -53,7 +53,8 @@ func runCLI(stdin string, args ...string) (exit int, stdout string, stderr strin
 
 	var stdoutBuf, stderrBuf bytes.Buffer
 	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	exit = cli.Run(strings.NewReader(stdin), &stdoutBuf, &stderrBuf, args)
+	exit = cli.Run("Go Doctor TEST", strings.NewReader(stdin),
+		&stdoutBuf, &stderrBuf, args)
 	stdout = stdoutBuf.String()
 	stderr = stderrBuf.String()
 	return
@@ -89,17 +90,17 @@ func TestInvalidFlag(t *testing.T) {
 	}
 }
 
-func TestMan(t *testing.T) {
-	exit, stdout, stderr := runCLI("", "-man")
+func TestDoc(t *testing.T) {
+	exit, stdout, stderr := runCLI("", "-doc=man")
 	if exit != 0 || stderr != "" || !strings.Contains(stdout, ".TH") {
-		t.Fatalf("-man expected man page with exit 0")
+		t.Fatalf("-doc=man expected man page with exit 0")
 	}
 
 	for _, flag := range []string{"-list", "-w", "-complete", "-json"} {
-		exit, stdout, stderr = runCLI("", flag, "-man")
+		exit, stdout, stderr = runCLI("", flag, "-doc=man")
 		if exit != 1 || stdout != "" || !strings.Contains(stderr,
-			"-man flag cannot be used with") {
-			t.Fatalf("-man should fail and exit 1 if used with %s", flag)
+			"-doc flag cannot be used with") {
+			t.Fatalf("-doc should fail and exit 1 if used with %s", flag)
 		}
 	}
 }
@@ -110,7 +111,7 @@ func TestList(t *testing.T) {
 		t.Fatalf("-list expected refactoring list with exit 0")
 	}
 
-	for _, flag := range []string{"-man", "-w", "-complete", "-json"} {
+	for _, flag := range []string{"-doc=man", "-w", "-complete", "-json"} {
 		exit, stdout, stderr = runCLI("", flag, "-list")
 		if exit != 1 || stdout != "" || !strings.Contains(stderr,
 			"cannot be used with") {
@@ -124,25 +125,25 @@ func TestInvalidCombos(t *testing.T) {
 		// complete file json list man pos scope verbose write
 		[]string{"-complete", "-json"},
 		[]string{"-complete", "-list"},
-		[]string{"-complete", "-man"},
+		[]string{"-complete", "-doc=man"},
 		[]string{"-complete", "-w"},
 		[]string{"-file=-", "-json"},
-		[]string{"-file=-", "-man"},
+		[]string{"-file=-", "-doc=man"},
 		[]string{"-json", "-list"},
-		[]string{"-json", "-man"},
+		[]string{"-json", "-doc=man"},
 		[]string{"-json", "-pos=1,1:1,1"},
 		[]string{"-json", "-scope=golang.org/x/tools"},
 		[]string{"-json", "-v"},
 		[]string{"-json", "-w"},
-		[]string{"-list", "-man"},
+		[]string{"-list", "-doc=man"},
 		[]string{"-list", "-v"},
 		[]string{"-list", "-w"},
 		[]string{"-list", "somearg"},
-		[]string{"-man", "-pos=1,1:1,1"},
-		[]string{"-man", "-scope=golang.org/x/tools"},
-		[]string{"-man", "-v"},
-		[]string{"-man", "-w"},
-		[]string{"-man", "somearg"},
+		[]string{"-doc=man", "-pos=1,1:1,1"},
+		[]string{"-doc=man", "-scope=golang.org/x/tools"},
+		[]string{"-doc=man", "-v"},
+		[]string{"-doc=man", "-w"},
+		[]string{"-doc=man", "somearg"},
 	}
 	for _, flags := range invalid {
 		exit, stdout, stderr := runCLI("", flags...)

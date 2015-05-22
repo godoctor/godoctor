@@ -1,11 +1,11 @@
 // Copyright 2015 Auburn University. All rights reserved.
 // Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+// license that can be found in the LICENSE File.
 
-// This file defines a "debug" refactoring, which is not really a refactoring
+// This File defines a "debug" refactoring, which is not really a refactoring
 // at all.  It does not change any files; rather, it is invoked to print
 // information about the Go refactoring engine and its internals.  For example,
-// it can display the AST for a file, output a GraphViz DOT file with a file's
+// it can display the AST for a File, output a GraphViz DOT File with a File's
 // control flow graphs, display what package(s) are loaded, or display what
 // identifiers resolve to what objects.
 
@@ -21,8 +21,8 @@ import (
 	"sort"
 	"strings"
 
-	"golang.org/x/tools/go/loader"
-	"golang.org/x/tools/go/types"
+	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/loader"
+	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/types"
 
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"github.com/godoctor/godoctor/analysis/dataflow"
@@ -41,7 +41,7 @@ where <options> can be any or all of:
     showreferences    Show all direct references to the selected identifier`
 
 type Debug struct {
-	refactoringBase
+	base RefactoringBase
 }
 
 func (r *Debug) Description() *Description {
@@ -49,6 +49,7 @@ func (r *Debug) Description() *Description {
 		Name:      "Debug Refactoring",
 		Synopsis:  "Provides assorted debugging outputs",
 		Usage:     "<command>",
+		HTMLDoc:   "",
 		Multifile: false,
 		Params: []Parameter{Parameter{
 			Label:        "Command",
@@ -60,20 +61,20 @@ func (r *Debug) Description() *Description {
 }
 
 func (r *Debug) Run(config *Config) *Result {
-	r.refactoringBase.Run(config)
+	r.base.Run(config)
 
-	r.Log.ChangeInitialErrorsToWarnings()
-	if r.Log.ContainsErrors() {
-		return &r.Result
+	r.base.Log.ChangeInitialErrorsToWarnings()
+	if r.base.Log.ContainsErrors() {
+		return &r.base.Result
 	}
 
 	if len(config.Args) == 0 {
-		r.Log.Error(usage)
-		return &r.Result
+		r.base.Log.Error(usage)
+		return &r.base.Result
 	}
 
-	if !validateArgs(config, r.Description(), r.Log) {
-		return &r.Result
+	if !ValidateArgs(config, r.Description(), r.base.Log) {
+		return &r.base.Result
 	}
 	command := strings.ToLower(strings.TrimSpace(config.Args[0].(string)))
 
@@ -94,35 +95,35 @@ func (r *Debug) Run(config *Config) *Result {
 	case "showreferences":
 		r.showReferences(&b)
 	default:
-		r.Log.Errorf("Unknown option %s", command)
-		return &r.Result
+		r.base.Log.Errorf("Unknown option %s", command)
+		return &r.base.Result
 	}
-	if !r.Log.ContainsErrors() && command != "fmt" {
+	if !r.base.Log.ContainsErrors() && command != "fmt" {
 		insert := &text.Extent{0, 0}
-		r.Edits[r.filename].Add(insert, b.String())
+		r.base.Edits[r.base.Filename].Add(insert, b.String())
 	}
-	return &r.Result
+	return &r.base.Result
 }
 
 func (r *Debug) fmt() {
 	// Find the smallest formattable node enclosing the selection
-	_, nodes, _ := r.program.PathEnclosingInterval(r.selectionStart, r.selectionEnd)
+	_, nodes, _ := r.base.Program.PathEnclosingInterval(r.base.SelectionStart, r.base.SelectionEnd)
 	for _, node := range nodes {
 		if canFormat(node) {
 			cnode := &printer.CommentedNode{
 				Node:     node,
-				Comments: r.file.Comments}
+				Comments: r.base.File.Comments}
 			printConfig := &printer.Config{
 				Mode:     printer.UseSpaces | printer.TabIndent,
 				Tabwidth: 8}
 			var b bytes.Buffer
-			err := printConfig.Fprint(&b, r.program.Fset, cnode)
+			err := printConfig.Fprint(&b, r.base.Program.Fset, cnode)
 			if err != nil {
-				r.Log.Error(err)
+				r.base.Log.Error(err)
 				return
 			}
 
-			r.Edits[r.filename].Add(r.extent(node), b.String())
+			r.base.Edits[r.base.Filename].Add(r.base.Extent(node), b.String())
 			return
 		}
 	}
@@ -149,19 +150,19 @@ func canFormat(node interface{}) bool {
 func (r *Debug) showAffected(out io.Writer) {
 	errorMsg := "Please select an identifier for showaffected"
 
-	if r.selectedNode == nil {
-		r.Log.Error(errorMsg)
-		r.Log.AssociatePos(r.selectionStart, r.selectionEnd)
+	if r.base.SelectedNode == nil {
+		r.base.Log.Error(errorMsg)
+		r.base.Log.AssociatePos(r.base.SelectionStart, r.base.SelectionEnd)
 		return
 	}
-	switch id := r.selectedNode.(type) {
+	switch id := r.base.SelectedNode.(type) {
 	case *ast.Ident:
 		fmt.Fprintf(out, "Affected Declarations:\n")
-		obj := r.selectedNodePkg.ObjectOf(id)
-		searchResult := names.FindDeclarationsAcrossInterfaces(obj, r.program)
+		obj := r.base.SelectedNodePkg.ObjectOf(id)
+		searchResult := names.FindDeclarationsAcrossInterfaces(obj, r.base.Program)
 		result := []string{}
 		for obj := range searchResult {
-			p := r.program.Fset.Position(obj.Pos())
+			p := r.base.Program.Fset.Position(obj.Pos())
 			result = append(result,
 				fmt.Sprintf("  %s - %s, Line %d\n",
 					obj.Name(), p.Filename, p.Line))
@@ -171,18 +172,18 @@ func (r *Debug) showAffected(out io.Writer) {
 			fmt.Fprintf(out, line)
 		}
 	default:
-		r.Log.Error(errorMsg)
-		r.Log.AssociatePos(r.selectionStart, r.selectionEnd)
+		r.base.Log.Error(errorMsg)
+		r.base.Log.AssociatePos(r.base.SelectionStart, r.base.SelectionEnd)
 		return
 	}
 }
 
 func (r *Debug) showAST(out io.Writer) {
-	ast.Fprint(out, r.program.Fset, r.file, nil)
+	ast.Fprint(out, r.base.Program.Fset, r.base.File, nil)
 }
 
 func (r *Debug) showCFG(out io.Writer) {
-	ast.Inspect(r.file, func(n ast.Node) bool {
+	ast.Inspect(r.base.File, func(n ast.Node) bool {
 		switch x := n.(type) {
 		case *ast.FuncDecl:
 			if x.Name != nil {
@@ -191,7 +192,7 @@ func (r *Debug) showCFG(out io.Writer) {
 				fmt.Fprintf(out, "// (anonymous)\n")
 			}
 			cfg := cfg.FromFunc(x)
-			cfg.PrintDot(out, r.program.Fset, r.describeDefsUses)
+			cfg.PrintDot(out, r.base.Program.Fset, r.describeDefsUses)
 		}
 		return true
 	})
@@ -199,7 +200,7 @@ func (r *Debug) showCFG(out io.Writer) {
 
 func (r *Debug) describeDefsUses(stmt ast.Stmt) string {
 	var buf bytes.Buffer
-	defs, uses := dataflow.ReferencedVars([]ast.Stmt{stmt}, r.selectedNodePkg)
+	defs, uses := dataflow.ReferencedVars([]ast.Stmt{stmt}, r.base.SelectedNodePkg)
 	if len(defs) > 0 {
 		fmt.Fprintf(&buf, "Defs: %s\n", listNames(defs))
 	}
@@ -224,7 +225,7 @@ func listNames(vars map[*types.Var]struct{}) string {
 }
 
 func (r *Debug) showIdentifiers(out io.Writer) {
-	for _, pkgInfo := range r.program.InitialPackages() {
+	for _, pkgInfo := range r.base.Program.InitialPackages() {
 		for _, file := range pkgInfo.Files {
 			r.showIdentifiersInFile(pkgInfo, file, out)
 		}
@@ -233,20 +234,20 @@ func (r *Debug) showIdentifiers(out io.Writer) {
 
 func (r *Debug) showIdentifiersInFile(pkgInfo *loader.PackageInfo, file *ast.File, out io.Writer) {
 	fmt.Fprintf(out, "=====%s=====\n",
-		r.program.Fset.Position(file.Pos()).Filename)
+		r.base.Program.Fset.Position(file.Pos()).Filename)
 	ast.Inspect(file, func(n ast.Node) bool {
 		id, ok := n.(*ast.Ident)
 		if !ok {
 			return true
 		}
 
-		position := r.program.Fset.Position(id.Pos())
+		position := r.base.Program.Fset.Position(id.Pos())
 		fmt.Fprintf(out, "%s\t(Line %d)", id.Name, position.Line)
 		if obj := pkgInfo.ObjectOf(id); obj == nil {
 			fmt.Fprintf(out, " does not reference an object\n")
 		} else {
 			fmt.Fprintf(out, " is a reference to %s (%s)\n",
-				obj.Id(), r.program.Fset.Position(obj.Pos()))
+				obj.Id(), r.base.Program.Fset.Position(obj.Pos()))
 		}
 		return true
 	})
@@ -259,10 +260,10 @@ func (r *Debug) showLoadedPackagesAndFiles(out io.Writer) {
 	fmt.Fprintf(out, "Working directory is %s\n", cwd)
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "Packages/files loaded:")
-	for _, pkgInfo := range r.program.AllPackages {
+	for _, pkgInfo := range r.base.Program.AllPackages {
 		fmt.Fprintf(out, "\t%s\n", pkgInfo.Pkg.Name())
 		for _, file := range pkgInfo.Files {
-			filename := r.program.Fset.Position(file.Pos()).Filename
+			filename := r.base.Program.Fset.Position(file.Pos()).Filename
 			fmt.Fprintf(out, "\t\t%s\n", filename)
 		}
 	}
@@ -271,20 +272,20 @@ func (r *Debug) showLoadedPackagesAndFiles(out io.Writer) {
 func (r *Debug) showReferences(out io.Writer) {
 	errorMsg := "Please select an identifier for showreferences"
 
-	if r.selectedNode == nil {
-		r.Log.Error(errorMsg)
-		r.Log.AssociatePos(r.selectionStart, r.selectionEnd)
+	if r.base.SelectedNode == nil {
+		r.base.Log.Error(errorMsg)
+		r.base.Log.AssociatePos(r.base.SelectionStart, r.base.SelectionEnd)
 		return
 	}
-	switch id := r.selectedNode.(type) {
+	switch id := r.base.SelectedNode.(type) {
 	case *ast.Ident:
 		fmt.Fprintf(out, "References to %s:\n", id.Name)
-		ids := names.FindOccurrences(r.selectedNodePkg.ObjectOf(id), r.program)
+		ids := names.FindOccurrences(r.base.SelectedNodePkg.ObjectOf(id), r.base.Program)
 		strs := []string{}
 		for id, _ := range ids {
 			description := fmt.Sprintf("  %s: %s",
-				r.program.Fset.Position(id.Pos()).Filename,
-				r.extent(id).String())
+				r.base.Program.Fset.Position(id.Pos()).Filename,
+				r.base.Extent(id).String())
 			strs = append(strs, description)
 		}
 		sort.Strings(strs)
@@ -292,8 +293,8 @@ func (r *Debug) showReferences(out io.Writer) {
 			fmt.Fprintln(out, s)
 		}
 	default:
-		r.Log.Error(errorMsg)
-		r.Log.AssociatePos(r.selectionStart, r.selectionEnd)
+		r.base.Log.Error(errorMsg)
+		r.base.Log.AssociatePos(r.base.SelectionStart, r.base.SelectionEnd)
 		return
 	}
 }
