@@ -14,7 +14,7 @@ import (
 	"io"
 	"strings"
 
-	"golang.org/x/tools/go/ast/astutil"
+	"github.com/godoctor/godoctor/internal/golang.org/x/tools/astutil"
 )
 
 // This package can be used to construct a control flow graph from an abstract syntax tree (go/ast).

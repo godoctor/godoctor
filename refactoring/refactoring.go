@@ -28,8 +28,8 @@ import (
 
 	"github.com/godoctor/godoctor/filesystem"
 	"github.com/godoctor/godoctor/text"
-	"golang.org/x/tools/go/loader"
-	"golang.org/x/tools/go/types"
+	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/loader"
+	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/types"
 )
 
 // The maximum number of errors from the go/loader that will be reported
@@ -86,6 +86,9 @@ type Description struct {
 	//     ----+----1----+----2----+----3----+----4----+----5
 	//     <new_name> [<rename_in_comments?>]
 	Usage string
+	// HTML doumentation for this refactoring, which can be embedded into
+	// the User's Guide.
+	HTMLDoc string
 	// Multifile is set to true only if this refactoring may change files
 	// other than the File containing the selection.  For example, renaming
 	// an exported identifier may cause references to be updated in several
@@ -303,7 +306,7 @@ func createLoader(config *Config, errorHandler func(error)) (*loader.Program, er
 	lconfig.Build = &buildContext
 	lconfig.ParserMode = parser.ParseComments | parser.DeclarationErrors
 	lconfig.AllowErrors = true
-	lconfig.ImportFromBinary = false
+	lconfig.SourceImports = true
 	lconfig.TypeChecker.Error = errorHandler
 
 	rest, err := lconfig.FromArgs(config.Scope, true)

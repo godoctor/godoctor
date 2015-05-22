@@ -17,8 +17,8 @@ import (
 	"strings"
 
 	"github.com/godoctor/godoctor/text"
-	"golang.org/x/tools/go/ast/astutil"
-	"golang.org/x/tools/go/types"
+	"github.com/godoctor/godoctor/internal/golang.org/x/tools/astutil"
+	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/types"
 )
 
 // A ToggleVar refactoring converts between explicitly-typed variable
@@ -29,9 +29,10 @@ type ToggleVar struct {
 
 func (r *ToggleVar) Description() *Description {
 	return &Description{
-		Name:      "Toggle var <-> :=",
+		Name:      "Toggle var ⇔ :=",
 		Synopsis:  "Toggles between a var declaration and := statement",
 		Usage:     "",
+		HTMLDoc:   toggleVarDoc,
 		Multifile: false,
 		Params:    nil,
 		Hidden:    false,
@@ -183,3 +184,5 @@ func (r *ToggleVar) varDeclLHS(decl *ast.GenDecl) string {
 func (r *ToggleVar) shortAssignString(decl *ast.GenDecl) string {
 	return (fmt.Sprintf("%s := ", r.varDeclLHS(decl)))
 }
+
+const toggleVarDoc = ``

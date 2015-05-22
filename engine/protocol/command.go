@@ -27,15 +27,12 @@ type Command interface {
 
 // -=-= About =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-// TODO fix about text
-
 type About struct {
 	aboutText string
 }
 
 func (a *About) Run(state *State, input map[string]interface{}) (Reply, error) {
 	if valid, err := a.Validate(state, input); valid {
-		a.aboutText = engine.Name()
 		return Reply{map[string]interface{}{"reply": "OK", "text": a.aboutText}}, nil
 	} else {
 		//err := errors.New("The about command requires a state of non-zero")
