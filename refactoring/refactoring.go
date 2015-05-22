@@ -27,9 +27,9 @@ import (
 	"sync"
 
 	"github.com/godoctor/godoctor/filesystem"
-	"github.com/godoctor/godoctor/text"
 	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/loader"
 	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/types"
+	"github.com/godoctor/godoctor/text"
 )
 
 // The maximum number of errors from the go/loader that will be reported
@@ -134,6 +134,9 @@ type Config struct {
 	// The GOPATH.  If this is set to the empty string, the GOPATH is
 	// determined from the environment.
 	GoPath string
+	// The GOROOT.  If this is set to the empty string, the GOROOT is
+	// determined from the environment.
+	GoRoot string
 }
 
 // The Refactoring interface identifies methods common to all refactorings.
@@ -297,6 +300,15 @@ func createLoader(config *Config, errorHandler func(error)) (*loader.Program, er
 	}
 	if config.GoPath != "" {
 		buildContext.GOPATH = config.GoPath
+	}
+	if os.Getenv("GOROOT") != "" {
+		// When the Go Doctor Web demo is running on App Engine, the
+		// GOROOT environment variable will be set since the default
+		// GOROOT is not readable.
+		buildContext.GOROOT = os.Getenv("GOROOT")
+	}
+	if config.GoRoot != "" {
+		buildContext.GOROOT = config.GoRoot
 	}
 	buildContext.ReadDir = config.FileSystem.ReadDir
 	buildContext.OpenFile = config.FileSystem.OpenFile
