@@ -17,8 +17,8 @@ import (
 	"strings"
 
 	"github.com/godoctor/godoctor/text"
-	"golang.org/x/tools/go/ast/astutil"
-	"golang.org/x/tools/go/types"
+	"github.com/godoctor/godoctor/internal/golang.org/x/tools/astutil"
+	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/types"
 )
 
 // A ToggleVar refactoring converts between explicitly-typed variable
