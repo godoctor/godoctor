@@ -10,6 +10,7 @@ package refactoring
 import (
 	"go/ast"
 	"go/token"
+	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -220,7 +221,11 @@ func (r *Rename) addOccurrences(name string, allOccurrences map[string][]*text.E
 }
 
 func isInGoRoot(absPath string) bool {
-	goRoot := runtime.GOROOT()
+	goRoot := os.Getenv("GOROOT")
+	if goRoot == "" {
+		goRoot = runtime.GOROOT()
+	}
+
 	if !strings.HasSuffix(goRoot, string(filepath.Separator)) {
 		goRoot += string(filepath.Separator)
 	}
