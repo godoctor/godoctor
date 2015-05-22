@@ -15,8 +15,8 @@ import (
 	"github.com/godoctor/godoctor/analysis/names"
 	"github.com/godoctor/godoctor/text"
 
-	"golang.org/x/tools/go/loader"
-	"golang.org/x/tools/go/types"
+	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/loader"
+	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/types"
 )
 
 // -=- Utility Functions -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -28,7 +28,7 @@ func setup(t *testing.T) *loader.Program {
 	lconfig.Build = &build
 	lconfig.ParserMode = parser.ParseComments | parser.DeclarationErrors
 	lconfig.AllowErrors = false
-	lconfig.ImportFromBinary = false
+	lconfig.SourceImports = true
 	lconfig.TypeChecker.Error = func(err error) {
 		t.Fatal(err)
 	}
