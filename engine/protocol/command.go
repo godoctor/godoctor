@@ -478,10 +478,7 @@ func parseSelection(state *State, input map[string]interface{}) (text.Selection,
 	// determine if offset/length or line/col
 	offset, offsetFound := input["offset"]
 	length, lengthFound := input["length"]
-
-	if !offsetFound || !lengthFound {
-		return nil, fmt.Errorf("invalid offset/length combo: value(s) missing")
-	} else {
+	if offsetFound && lengthFound {
 		// validate
 		if reflect.TypeOf(offset).Kind() != reflect.Float64 ||
 			reflect.TypeOf(length).Kind() != reflect.Float64 {
@@ -501,11 +498,12 @@ func parseSelection(state *State, input map[string]interface{}) (text.Selection,
 	el, elfound := input["endline"]
 	ec, ecfound := input["endcol"]
 
-	if !slfound || !scfound || !elfound || !ecfound {
-		return nil, fmt.Errorf("invalid line/col combo: value(s) missing")
-	} else {
+	if slfound && scfound && elfound && ecfound {
 		// validate
-		if reflect.TypeOf(sl).Kind() != reflect.Int || reflect.TypeOf(sc).Kind() != reflect.Int || reflect.TypeOf(el).Kind() != reflect.Int || reflect.TypeOf(ec).Kind() != reflect.Int {
+		if reflect.TypeOf(sl).Kind() != reflect.Float64 ||
+			reflect.TypeOf(sc).Kind() != reflect.Float64 ||
+			reflect.TypeOf(el).Kind() != reflect.Float64 ||
+			reflect.TypeOf(ec).Kind() != reflect.Float64 {
 			return nil, fmt.Errorf("invalid type(s) given for line/col combo")
 		}
 		pos := fmt.Sprintf("%d,%d:%d,%d", int(sl.(float64)), int(sc.(float64)), int(el.(float64)), int(ec.(float64)))
@@ -516,4 +514,5 @@ func parseSelection(state *State, input map[string]interface{}) (text.Selection,
 		return ts, nil
 	}
 
+	return nil, fmt.Errorf("invalid selection (offset/length or line/col")
 }
