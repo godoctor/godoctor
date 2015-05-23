@@ -282,10 +282,12 @@ func (r *RefactoringBase) Run(config *Config) *Result {
 		return &r.Result
 	}
 
-	r.Log.Infof("Selection is \"%s\" (offsets %d–%d)",
-		r.TextFromPosRange(r.SelectionStart, r.SelectionEnd),
-		r.OffsetOfPos(r.SelectionStart),
-		r.OffsetOfPos(r.SelectionEnd))
+	/*
+		r.Log.Infof("Selection is \"%s\" (offsets %d–%d)",
+			r.TextFromPosRange(r.SelectionStart, r.SelectionEnd),
+			r.OffsetOfPos(r.SelectionStart),
+			r.OffsetOfPos(r.SelectionEnd))
+	*/
 
 	r.Edits = map[string]*text.EditSet{
 		r.Filename: text.NewEditSet(),
