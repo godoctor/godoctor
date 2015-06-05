@@ -14,7 +14,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"github.com/godoctor/godoctor/analysis/dataflow"
 	"github.com/godoctor/godoctor/internal/golang.org/x/tools/astutil"
@@ -66,15 +65,13 @@ func (r *ExtractFunc) Run(config *Config) *Result {
 	path, _ := astutil.PathEnclosingInterval(r.File, r.SelectionStart, r.SelectedNode.End())
 	switch node := r.SelectedNode.(type) {
 	case *ast.BlockStmt:
-		flag := r.checkForAnonymousFns(path)
-		if flag {
+		if r.checkForAnonymousFns(path) {
 			r.callEditset(node, path)
 		} else {
 			r.Log.Error("Code cannot be extracted from anonymous functions.")
 		}
 	default:
-		flag := r.checkForAnonymousFns(path)
-		if flag {
+		if r.checkForAnonymousFns(path) {
 			r.checkForBlockStmt(node, path)
 		} else {
 			r.Log.Error("Code cannot contain Anonymous Function (OR) Code Cannot be extracted from Anonymous Function")
@@ -95,16 +92,14 @@ func (r *ExtractFunc) checkForAnonymousFns(path []ast.Node) bool {
 			return flag
 		}
 	}
-	anonymousFlag := r.checkForAnonymousFnsInCode()
-	return flag && anonymousFlag
+	return flag && r.checkForAnonymousFnsInCode()
 }
 
-// check for anonymous function by performing ast.inspect
+// check for anonymous function by performing ast.Inspect
 func (r *ExtractFunc) checkForAnonymousFnsInCode() bool {
 	flag := true
 	ast.Inspect(r.SelectedNode, func(n ast.Node) bool {
 		if _, ok := n.(*ast.FuncLit); ok {
-			r.Log.Error("There is an anonymous function in the code")
 			flag = false
 		}
 		return true
@@ -248,6 +243,11 @@ func (r *ExtractFunc) returnNameType(varList []*types.Var, path1 []ast.Node, rTy
 						if !a.IsField() && a.Name() != "_" && boolVar == true {
 							varName = append(varName, a.Name())
 							varType = append(varType, "*"+b.Elem().(*types.Basic).Name())
+						}
+					}else{
+						if !a.IsField() && a.Name() != "_" {
+							varName = append(varName, a.Name())
+							varType = append(varType, a.Type().String())
 						}
 					}
 				case *types.Named:
@@ -407,7 +407,7 @@ func (r *ExtractFunc) parseCode(node *ast.BlockStmt, path []ast.Node) ([]*types.
 	for _, n := range path {
 		switch a := n.(type) {
 		case *ast.FuncDecl:
-			funcCFG = cfg.FromFunc(a)
+			funcCFG = cfg.FromFunc(a) // builds a control flow graph from a function 
 		}
 	}
 	breakConditionCheck, stmtArr, InitStmts := r.checkEntryExitCondtion(funcCFG, node) // returns the initStmt slice as well
@@ -434,7 +434,7 @@ func (r *ExtractFunc) parseCode(node *ast.BlockStmt, path []ast.Node) ([]*types.
 					}
 				}
 			}
-		case *ast.RangeStmt: // HERE WHEN YOU COME ACROSS RANGE STATEMENTS, THOSE VARIABLES TOTHE LEFT OF THE := ARE PART OF THE INIT STATATEMENTS
+		case *ast.RangeStmt: // HERE WHEN YOU COME ACROSS RANGE STATEMENTS, THOSE VARIABLES TO THE LEFT OF THE := ARE PART OF THE INIT STATATEMENTS
 			if i, ok := r.SelectedNodePkg.ObjectOf(a.Key.(*ast.Ident)).(*types.Var); ok {
 				if i.Name() != "_" {
 					initVars = append(initVars, i)
@@ -539,7 +539,7 @@ func (r *ExtractFunc) returnStmtArray(funcCFG *cfg.CFG, node *ast.BlockStmt) ([]
 		if _, ok := stmtArr[0].(*ast.AssignStmt); ok {
 			path, _ := astutil.PathEnclosingInterval(r.File, stmtArr[0].Pos(), stmtArr[0].End())
 			switch path[1].(type) {
-			case *ast.IfStmt, *ast.SwitchStmt, *ast.TypeSwitchStmt, *ast.ForStmt, *ast.CommClause:
+			case *ast.IfStmt, *ast.SwitchStmt, *ast.TypeSwitchStmt, *ast.ForStmt, *ast.CommClause,*ast.RangeStmt:
 				r.Log.Error("The Assignment statement extracted is not a valid statement ")
 			}
 		}
