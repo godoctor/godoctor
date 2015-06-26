@@ -110,11 +110,6 @@ func runAllTestsInDirectory(directory string, t *testing.T) {
 	files, err := recursiveReadDir(directory)
 	failIfError(err, t)
 
-	absolutePath, err := filepath.Abs(directory)
-	failIfError(err, t)
-	err = os.Setenv("GOPATH", absolutePath)
-	failIfError(err, t)
-
 	runTestsInFiles(directory, files, t)
 }
 
@@ -204,13 +199,15 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 
 	args := refactoring.InterpretArgs(remainder, r)
 
+	gopath, _ := filepath.Abs(directory)
+
 	fileSystem := &filesystem.LocalFileSystem{}
 	config := &refactoring.Config{
 		FileSystem: fileSystem,
 		Scope:      []string{mainFile},
 		Selection:  selection,
 		Args:       args,
-		GoPath:     "", // FIXME(jeff): GOPATH
+		GoPath:     gopath,
 	}
 	result := r.Run(config)
 	if shouldPass && result.Log.ContainsErrors() {

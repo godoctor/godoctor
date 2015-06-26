@@ -27,9 +27,9 @@ import (
 	"sync"
 
 	"github.com/godoctor/godoctor/filesystem"
-	"github.com/godoctor/godoctor/text"
 	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/loader"
 	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/types"
+	"github.com/godoctor/godoctor/text"
 )
 
 // The maximum number of errors from the go/loader that will be reported
@@ -300,7 +300,6 @@ func createLoader(config *Config, errorHandler func(error)) (*loader.Program, er
 	}
 	buildContext.ReadDir = config.FileSystem.ReadDir
 	buildContext.OpenFile = config.FileSystem.OpenFile
-	buildContext.CgoEnabled = false
 
 	var lconfig loader.Config
 	lconfig.Build = &buildContext

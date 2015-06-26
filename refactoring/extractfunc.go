@@ -9,10 +9,10 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
-	"io"
 	"path"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"github.com/godoctor/godoctor/analysis/dataflow"
@@ -47,7 +47,7 @@ func (r *ExtractFunc) Run(config *Config) *Result {
 		return &r.Result
 	}
 	if len(config.Args) != 1 {
-		r.Log.Error("(Internal Error) Invalid arguments")
+		r.Log.Error(errInvalidArgs("expected one argument, got: " + strconv.Itoa(len(config.Args))))
 		return &r.Result
 	}
 
@@ -58,7 +58,7 @@ func (r *ExtractFunc) Run(config *Config) *Result {
 	}
 
 	if r.SelectedNode == nil {
-		r.Log.Error("The selection cannot be null.Please make a valid selection!")
+		r.Log.Error(errInvalidSelection("no position specified"))
 		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
 		return &r.Result
 	}
@@ -107,7 +107,7 @@ func (r *ExtractFunc) checkForAnonymousFnsInCode() bool {
 	return flag
 }
 
-//parses throught the parent nodes of extracted node and returns the immediate *ast.BlockStmt
+// parses through the parent nodes of extracted node and returns the immediate *ast.BlockStmt
 func (r *ExtractFunc) checkForBlockStmt(node ast.Node, path []ast.Node) {
 	for _, parentNode := range path {
 		if node, ok := parentNode.(*ast.BlockStmt); ok {
@@ -118,15 +118,26 @@ func (r *ExtractFunc) checkForBlockStmt(node ast.Node, path []ast.Node) {
 }
 
 // If the users start selection is in the midway of a node, then the entire node is selected as the starting node
+// TODO reduce the calls of this, store a more useful version of it inside of our *ExtractFunc
 func (r *ExtractFunc) findStartPosition(node *ast.BlockStmt) ast.Stmt {
-	var stmt ast.Stmt = nil
+	var stmt ast.Stmt
+	line := r.Program.Fset.Position(r.SelectionStart).Line
 	for _, s := range node.List {
 		ast.Inspect(s, func(n ast.Node) bool {
 			if a, ok := n.(ast.Stmt); ok {
 				if r.SelectionStart == a.Pos() {
 					stmt = a
 					return false
-				} else if r.SelectionStart >= a.Pos() && r.SelectionStart < a.End() {
+				} else if r.Program.Fset.Position(a.Pos()).Line == line && // if it's on same line
+					r.SelectionStart < a.End() && // and less than end
+					(r.SelectionStart > a.Pos() || // and we're either in the middle of a node
+						stmt == nil || // or we haven't found anything
+						a.Pos()-r.SelectionStart < stmt.Pos()-r.SelectionStart) { // or closer than what we have found
+					// NOTE: [I] do not trust this approximation very much. it attempts to fudge the beginning of the
+					// selection to the right, b/c in the case that they selected the beginning of a line, we want to find
+					// the first statement, and skews left in the case that they made a selection in the middle of the node.
+					// the only case of invalid input I can think of is selecting _only_ whitespace, which should be
+					// guarded against by checking the end boundary coupled with there not being an ast.Stmt there. bueller?
 					stmt = a
 				}
 			}
@@ -137,6 +148,7 @@ func (r *ExtractFunc) findStartPosition(node *ast.BlockStmt) ast.Stmt {
 }
 
 // If the users end selection is in the midway of a node, then the entire node is selected as the last node
+// TODO reduce the calls of this, store a more useful version of it inside of our *ExtractFunc
 func (r *ExtractFunc) findEndPosition(node *ast.BlockStmt) ast.Stmt {
 	var stmt ast.Stmt = nil
 	for _, s := range node.List {
@@ -156,14 +168,17 @@ func (r *ExtractFunc) findEndPosition(node *ast.BlockStmt) ast.Stmt {
 // to call the editset function to update the function call and the function definition
 // throws an error if the start node or the end node is nil
 func (r *ExtractFunc) callEditset(node *ast.BlockStmt, path []ast.Node) {
-	if r.findEndPosition(node) != nil && r.findStartPosition(node) != nil {
-		replacement_str, funcCall_str := r.createNewFunction(node, path)
-		length := r.Program.Fset.Position(r.findEndPosition(node).End()).Offset - r.Program.Fset.Position(r.findStartPosition(node).Pos()).Offset
-		r.Edits[r.Filename].Add(&text.Extent{r.Program.Fset.Position(r.findStartPosition(node).Pos()).Offset, length}, funcCall_str)
-		r.Edits[r.Filename].Add(&text.Extent{r.Program.Fset.Position(r.File.End()).Offset, 0}, replacement_str)
-	} else {
-		r.Log.Error("A valid selection was not made!")
+	start := r.findStartPosition(node)
+	end := r.findEndPosition(node)
+	if start == nil || end == nil {
+		r.Log.Error(errInvalidSelection("could not find specified bounds"))
+		return
 	}
+
+	replace, funcCall := r.createNewFunction(node, path)
+	length := r.Program.Fset.Position(end.End()).Offset - r.Program.Fset.Position(start.Pos()).Offset
+	r.Edits[r.Filename].Add(&text.Extent{r.Program.Fset.Position(start.Pos()).Offset, length}, funcCall)
+	r.Edits[r.Filename].Add(&text.Extent{r.Program.Fset.Position(r.File.End()).Offset, 0}, replace)
 }
 
 // this function returns the func Call and func Definition strings
@@ -279,32 +294,39 @@ func (r *ExtractFunc) returnNameType(varList []*types.Var, path1 []ast.Node, rTy
 func (r *ExtractFunc) checkParameters(receieverName string, varName []string, varDeclName []string) {
 	for _, a := range varName {
 		if a == receieverName {
-			r.Log.Error("The method receiever name and the parameters passed cannot have the same name!")
+			r.Log.Error("The method receiever name and the parameters passed cannot have the same name")
 		}
 	}
 	for _, a := range varDeclName {
 		if a == receieverName {
-			r.Log.Error("The method receiever name and the parameters declared cannot have the same name!")
+			r.Log.Error("The method receiever name and the parameters declared cannot have the same name")
 		}
 	}
 }
 
 // returns the string representation of the code
-func (r *ExtractFunc) extractCode(node *ast.BlockStmt) string {
-	var buf bytes.Buffer
-	var read_str string
-	for i := 0; i < len(node.List); i++ {
-		if r.findStartPosition(node) != nil {
-			if node.List[i].Pos() >= r.findStartPosition(node).Pos() {
-				read_str = string(r.FileContents[r.Program.Fset.Position(r.findStartPosition(node).Pos()).Offset:r.Program.Fset.Position(r.findEndPosition(node).End()).Offset])
-			}
-		} else {
-			r.Log.Error("The  start positon of the extracted code is not right !")
+func (r *ExtractFunc) extractCode(node *ast.BlockStmt) []byte {
+	start := r.findStartPosition(node)
+	end := r.findEndPosition(node)
+	// TODO(reed): these find[Start|End]Position functions seem used too frequently,
+	// and all calls appear to be on the same 'node' which we got from PathEnclosingInterval,
+	// which is supposed to already put us around the correct spot. we should, at least,
+	// call these early in Run and store as fields in our *ExtractFunc. In the best case,
+	// we should stop passing the opaque 'node' around and use a more useful section of the ast.
+	if start == nil || end == nil {
+		r.Log.Error("The start positon of the extracted code is not right")
+		return nil // TODO this should be verified before this func is ever run
+	}
 
+	// TODO(reed): can we just use a more meaningful subset of []ast.Stmt instead of the entire block?
+	for i := 0; i < len(node.List); i++ {
+		if node.List[i].Pos() >= start.Pos() {
+			a := r.Program.Fset.Position(start.Pos()).Offset
+			b := r.Program.Fset.Position(end.End()).Offset
+			return r.FileContents[a:b]
 		}
 	}
-	io.WriteString(&buf, read_str)
-	return buf.String()
+	return nil // logged that we got issues
 }
 
 // This function schecks if the selection is valid by using the following technique:
@@ -463,7 +485,7 @@ func (r *ExtractFunc) parseCode(node *ast.BlockStmt, path []ast.Node) ([]*types.
 		varDecl = differenceOp(varDecl, initVars)
 
 	} else {
-		r.Log.Error("The code cannot be extracted since the 'Single Entry/Single Exit' conditon failed (OR) a Valid selection wasn't made!")
+		r.Log.Error("The code cannot be extracted since the 'Single Entry/Single Exit' conditon failed (OR) a Valid selection wasn't made")
 	}
 	return paramVarList, returnVarList, differenceOp(varDecl, defined), r.setShortAssignmentFlag(stmtArr, returnVarList)
 }
@@ -604,14 +626,14 @@ func (r *ExtractFunc) checkBranchCondition(stmtArr []ast.Stmt) bool {
 			}
 		case *ast.ReturnStmt:
 			exitValid = false
-			r.Log.Error("The RETURN statement is not extracted right!")
+			r.Log.Error("The RETURN statement is not extracted right")
 			r.Log.AssociateNode(x)
 		default:
 			continue
 		}
 	}
 	if r.labelComparison(xLabelArr, zLabelArr) == false {
-		r.Log.Error("The Single Entry/Single Exit condition failed in goto statement!")
+		r.Log.Error("The Single Entry/Single Exit condition failed in goto statement")
 		exitValid = false
 	} else {
 		exitValid = true
@@ -658,7 +680,7 @@ func (r *ExtractFunc) handleBreakStmt(x *ast.BranchStmt, stmtArr []ast.Stmt, i i
 	}
 	if errorFlag == true {
 		exitValid = false
-		r.Log.Error("The BREAK statement is not extracted right!")
+		r.Log.Error("The BREAK statement is not extracted right")
 		r.Log.AssociateNode(x)
 		exitValid = false
 	}
@@ -704,7 +726,7 @@ func (r *ExtractFunc) handleContinueStmt(x *ast.BranchStmt, stmtArr []ast.Stmt, 
 	}
 	if errorFlag == true {
 		exitValid = false
-		r.Log.Error("The CONTINUE statement is not extracted right!")
+		r.Log.Error("The CONTINUE statement is not extracted right")
 		r.Log.AssociateNode(x)
 	}
 	return exitValid
@@ -853,10 +875,9 @@ func (r *ExtractFunc) findBeforeAfterNodes(funcCFG *cfg.CFG, node *ast.BlockStmt
 //	1. function call
 //	2. function definition
 func (r *ExtractFunc) createEditString(varDecString, passstr, funcdefparamstr, retstr string, retfuncdefparamstr string,
-	retVarLen int, read_str string, receieverName, receiverType string, flagShortAssign bool) (string, string) {
-
-	var replacement_str string
-	var funcCall_str string
+	retVarLen int, readStr []byte, receieverName, receiverType string, flagShortAssign bool) (string, string) {
+	var replacementStr string
+	var funcCallStr string
 	var varStr string = ""
 	var retString string = ""
 	var assignSymbol string = " = "
@@ -880,17 +901,17 @@ func (r *ExtractFunc) createEditString(varDecString, passstr, funcdefparamstr, r
 			funcDefStr = fmt.Sprintf("(%s %s) %s(%s)", receieverName, receiverType, r.funcName, funcdefparamstr)
 		}
 		if retstr == "" {
-			replacement_str = fmt.Sprintf("\nfunc %s {\n%s%s\n}\n", funcDefStr, varStr, read_str)
-			funcCall_str = fmt.Sprintf("%s", bracketStr)
+			replacementStr = fmt.Sprintf("\nfunc %s {\n%s%s\n}\n", funcDefStr, varStr, readStr)
+			funcCallStr = fmt.Sprintf("%s", bracketStr)
 		} else {
 			if retVarLen > 1 {
-				replacement_str = fmt.Sprintf("\nfunc %s(%s) {\n%s%s\n%s%s\n}\n",
-					funcDefStr, retfuncdefparamstr, varStr, read_str, retString, retstr)
-				funcCall_str = fmt.Sprintf("%s%s%s", retstr, assignSymbol, bracketStr)
+				replacementStr = fmt.Sprintf("\nfunc %s(%s) {\n%s%s\n%s%s\n}\n",
+					funcDefStr, retfuncdefparamstr, varStr, readStr, retString, retstr)
+				funcCallStr = fmt.Sprintf("%s%s%s", retstr, assignSymbol, bracketStr)
 			} else {
-				replacement_str = fmt.Sprintf("\nfunc %s %s {\n%s%s\n%s%s\n}\n",
-					funcDefStr, retfuncdefparamstr, varStr, read_str, retString, retstr)
-				funcCall_str = fmt.Sprintf("%s%s%s", retstr, assignSymbol, bracketStr)
+				replacementStr = fmt.Sprintf("\nfunc %s %s {\n%s%s\n%s%s\n}\n",
+					funcDefStr, retfuncdefparamstr, varStr, readStr, retString, retstr)
+				funcCallStr = fmt.Sprintf("%s%s%s", retstr, assignSymbol, bracketStr)
 			}
 		}
 	} else {
@@ -899,21 +920,21 @@ func (r *ExtractFunc) createEditString(varDecString, passstr, funcdefparamstr, r
 			funcDefStr = fmt.Sprintf("%s(%s)", r.funcName, funcdefparamstr)
 		}
 		if retstr == "" {
-			replacement_str = fmt.Sprintf("\nfunc %s {\n%s%s\n}\n", funcDefStr, varStr, read_str)
-			funcCall_str = fmt.Sprintf("%s", bracketStr)
+			replacementStr = fmt.Sprintf("\nfunc %s {\n%s%s\n}\n", funcDefStr, varStr, readStr)
+			funcCallStr = fmt.Sprintf("%s", bracketStr)
 		} else {
 			if retVarLen > 1 {
-				replacement_str = fmt.Sprintf("\nfunc %s(%s) {\n%s%s\n%s%s\n}\n",
-					funcDefStr, retfuncdefparamstr, varStr, read_str, retString, retstr)
-				funcCall_str = fmt.Sprintf("%s%s%s", retstr, assignSymbol, bracketStr)
+				replacementStr = fmt.Sprintf("\nfunc %s(%s) {\n%s%s\n%s%s\n}\n",
+					funcDefStr, retfuncdefparamstr, varStr, readStr, retString, retstr)
+				funcCallStr = fmt.Sprintf("%s%s%s", retstr, assignSymbol, bracketStr)
 			} else {
-				replacement_str = fmt.Sprintf("\nfunc %s %s {\n%s%s\n%s%s\n}\n",
-					funcDefStr, retfuncdefparamstr, varStr, read_str, retString, retstr)
-				funcCall_str = fmt.Sprintf("%s%s%s", retstr, assignSymbol, bracketStr)
+				replacementStr = fmt.Sprintf("\nfunc %s %s {\n%s%s\n%s%s\n}\n",
+					funcDefStr, retfuncdefparamstr, varStr, readStr, retString, retstr)
+				funcCallStr = fmt.Sprintf("%s%s%s", retstr, assignSymbol, bracketStr)
 			}
 		}
 	}
-	return replacement_str, funcCall_str
+	return replacementStr, funcCallStr
 }
 
 func (r *ExtractFunc) createString(strarr []string, typearr []string, flagVar bool) string {
