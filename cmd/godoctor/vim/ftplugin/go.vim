@@ -107,7 +107,7 @@ endfun
 func! s:parsefiles(output)
   let result = {}
   let pattern = '@@@@@ \([^@]\+\) @@@@@ \(\d\+\) @@@@@\(\|\r\)\n'
-  let start = 0
+  let start = match(a:output, pattern, 0)
 
   " Repeatedly find a @@@@@ line
   while start >= 0
