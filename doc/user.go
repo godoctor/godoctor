@@ -42,7 +42,8 @@ func PrintUserGuideAsGiven(aboutText string, flags *flag.FlagSet, ctnt *UserGuid
 			"<body>", "</body>")
 	}
 	if ctnt.VimdocHTML == "" {
-		ctnt.VimdocHTML = fmt.Sprintf("<pre>\n%s\n</pre>",
+		ctnt.VimdocHTML = fmt.Sprintf(
+			"<pre>\n%s\n</pre>",
 			printVimdoc(aboutText, flags))
 	}
 
@@ -480,7 +481,9 @@ const userGuide = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "htt
   <a href="#godoctor-vim" onClick="show('godoctor-vim');">Show&nbsp;&raquo;</a>
 </div>
 <div id="godoctor-vim" class="showable">
+  <div class="vimdoc">
   {{.VimdocHTML}}
+  </div>
 </div>
 <a name="license"></a>
 <h3>License</h3>

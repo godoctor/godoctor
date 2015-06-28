@@ -68,7 +68,16 @@ func (lc *LineColSelection) Convert(fset *token.FileSet) (token.Pos, token.Pos, 
 		return 0, 0, err
 	}
 
+	// The end position should be exclusive, so set it to the offset of the
+	// next character the end.  We may need to move more than one byte
+	// ahead if the last character is non-ASCII.
+	// (Unfortunately, the column information in Positions seems to be
+	// incorrect for UTF-8 characters, but this should work if that's
+	// fixed eventually...)
 	endPos := lastPos + 1
+	for file.Position(endPos).Column == file.Position(lastPos).Column {
+		endPos++
+	}
 	if endPos < startPos {
 		return 0, 0, fmt.Errorf("Invalid selection (end < start)")
 	}
@@ -196,6 +205,16 @@ func lineColToPos(file *token.File, line int, column int) (token.Pos, error) {
 	// the position at the correct column
 	difference := file.Position(file.Pos(mid)).Column - column
 	pos := file.Pos(mid - difference)
+
+	// The difference may have been underestimated if the line contains
+	// non-ASCII characters
+	for file.Position(pos-1).Column >= column {
+		pos--
+	}
+	for file.Position(pos).Column < column {
+		pos++
+	}
+
 	p := file.Position(pos)
 	if p.Line != line || p.Column != column {
 		return pos, fmt.Errorf("Invalid position: line %d, column %d",
