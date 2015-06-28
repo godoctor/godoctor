@@ -1,5 +1,5 @@
 // Copyright 2015 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
+// Use of this source code is governed by recvTypeExpr BSD-style
 // license that can be found in the LICENSE file.
 
 package refactoring
@@ -9,11 +9,10 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
-	"path"
-	"regexp"
+	"reflect"
 	"sort"
 	"strconv"
-	"strings"
+
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"github.com/godoctor/godoctor/analysis/dataflow"
 	"github.com/godoctor/godoctor/internal/golang.org/x/tools/astutil"
@@ -22,13 +21,550 @@ import (
 	"github.com/godoctor/godoctor/text"
 )
 
+/* -=-=- Types for Sorting -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
+
+// type for sorting []*types.Var variables alphabetically by name
+type typeVar []*types.Var
+
+func (t typeVar) Len() int           { return len(t) }
+func (t typeVar) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
+func (t typeVar) Less(i, j int) bool { return t[i].Name() < t[j].Name() }
+
+// type for sorting statements by their statring positions in the source code
+type nodeStmt []ast.Stmt
+
+func (n nodeStmt) Len() int           { return len(n) }
+func (n nodeStmt) Swap(i, j int)      { n[i], n[j] = n[j], n[i] }
+func (n nodeStmt) Less(i, j int) bool { return n[i].Pos() < n[j].Pos() }
+
+/* -=-=- stmtRange -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
+
+// stmtRange represents a sequence of consecutive statements in the body of a
+// BlockStmt, CaseClause, or CommClause.
+type stmtRange struct {
+	// The sequence of ancestor nodes for the statement sequence from the
+	// enclosing BlockStmt/CaseClause/CommClause upward through the root of
+	// the AST.  pathToRoot[0] will be an instace of *ast.BlockStmt,
+	// *ast.CaseClause, or *ast.CommClause, and
+	// pathToRoot[len(pathToRoot)-1] will be an instance of *ast.File.
+	pathToRoot []ast.Node
+	// The start and ending indices (inclusive) of the first and last
+	// statements if this sequence in the list of children for the
+	// enclosing BlockStmt/CaseClause/CommClause.
+	firstIdx, lastIdx int
+	// Control flow graph for the enclosing function
+	cfg *cfg.CFG
+	// CFG blocks inside the selected statement range
+	blocksInRange []ast.Stmt
+	// For each block in the CFG, variables that are live at its entry
+	liveIn map[ast.Stmt]map[*types.Var]struct{}
+	// PackageInfo used to bind variable names to *types.Var objects
+	pkgInfo *loader.PackageInfo
+}
+
+// newStmtRange creates a stmtRange corresponding to a selected region of a
+// file.  If the selected range of characters does not enclose complete
+// statements, the stmtRange is adjusted (if possible) to the closest legal
+// selection.  The given pkgInfo is used to determine the types and bindings of
+// variables in the selection.
+func newStmtRange(file *ast.File, start, end token.Pos, pkgInfo *loader.PackageInfo) (*stmtRange, error) {
+	startPath, _ := astutil.PathEnclosingInterval(file, start, start)
+	endPath, _ := astutil.PathEnclosingInterval(file, end-1, end-1)
+
+	// Work downward from the root of the AST, counting the number of nodes
+	// that enclose both the start and end of the selection
+	deepestCommonAncestorDepth := -1
+	for i := 0; i < min(len(startPath), len(endPath)); i++ {
+		if startPath[len(startPath)-1-i] == endPath[len(endPath)-1-i] {
+			deepestCommonAncestorDepth++
+		} else {
+			break
+		}
+	}
+
+	// Find the depth of the deepest BlockStmt, CaseClause, or CommClause
+	// enclosing both the start and end of the selection.  If the user
+	// selected the initialization statement in an if-statement (or
+	// something similar), raise an error; it cannot be extracted.
+	blockDepth := deepestCommonAncestorDepth
+	body := []ast.Stmt{}
+loop:
+	for blockDepth > 0 {
+		switch node := startPath[len(startPath)-1-blockDepth].(type) {
+		case *ast.BlockStmt:
+			body = node.List
+			break loop
+		case *ast.CaseClause:
+			body = node.Body
+			break loop
+		case *ast.CommClause:
+			body = node.Body
+			break loop
+		case *ast.IfStmt, *ast.SwitchStmt, *ast.TypeSwitchStmt, *ast.ForStmt, *ast.RangeStmt: // removed *ast.CommClause
+			if blockDepth != deepestCommonAncestorDepth {
+				// We are inside one of these constructs, but
+				// we haven't yet found an enclosing block/etc.
+				return nil, errInvalidSelection("The initialization statement in an if, switch, type switch, for, or range statement cannot be extracted.")
+			}
+			blockDepth--
+		default:
+			blockDepth--
+		}
+	}
+
+	if blockDepth <= 0 {
+		return nil, errInvalidSelection("Please select a sequence of statements inside a block.")
+	}
+
+	// pathToRoot is the list of ancestor nodes common to all of the
+	// statements in the selection, from the enclosing
+	// BlockStmt/CaseClause/CommClause up through the root
+	pathToRoot := startPath[len(startPath)-1-blockDepth:]
+
+	var enclosingFunc *ast.FuncDecl
+	for _, node := range pathToRoot {
+		if f, ok := node.(*ast.FuncDecl); ok {
+			enclosingFunc = f
+			break
+		}
+	}
+	if enclosingFunc == nil {
+		return nil, errInvalidSelection("Please select a sequence of statements inside a function declaration.")
+	}
+	cfg := cfg.FromFunc(enclosingFunc)
+
+	// Find the indices of the first and last statements whose positions
+	// overlap the selection
+	firstIdx := -1
+	lastIdx := -1
+	for i, stmt := range body {
+		overlapStart := maxPos(start, stmt.Pos())
+		overlapEnd := minPos(end, stmt.End())
+		inSelection := overlapStart < overlapEnd
+		if inSelection && firstIdx < 0 {
+			// We found the first statement in the selection
+			firstIdx = i
+			lastIdx = i
+		} else if inSelection && firstIdx >= 0 {
+			// We found a subsequent statement in the selection
+			lastIdx = i
+		} else if !inSelection && lastIdx >= 0 {
+			// We are beyond the end of the selection; no need to
+			// check any more statements
+			break
+		}
+	}
+
+	if firstIdx < 0 || lastIdx < 0 {
+		// There are no statements in the block.  Most likely, the user
+		// selected an empty block, {}.
+		return nil, errInvalidSelection("An empty block cannot be extracted")
+	}
+
+	liveIn, _ := dataflow.LiveVars(cfg, pkgInfo)
+
+	result := &stmtRange{
+		pathToRoot:    pathToRoot,
+		firstIdx:      firstIdx,
+		lastIdx:       lastIdx,
+		cfg:           cfg,
+		blocksInRange: nil,
+		liveIn:        liveIn,
+		pkgInfo:       pkgInfo}
+
+	// Determine the subset of blocks in the CFG that correspond to
+	// statements within the selected region.
+	blocksInRange := []ast.Stmt{}
+	for _, stmt := range cfg.Blocks() {
+		if result.Contains(stmt) {
+			blocksInRange = append(blocksInRange, stmt)
+		}
+	}
+	result.blocksInRange = blocksInRange
+
+	return result, nil
+}
+
+// min returns the minimum of two integers.
+func min(m, n int) int {
+	if m < n {
+		return m
+	}
+	return n
+}
+
+// minPos returns the minimum of two token positions
+// (equivalently, the position that appears first)
+func minPos(m, n token.Pos) token.Pos {
+	if m < n {
+		return m
+	}
+	return n
+}
+
+// maxPos returns the maximum of two token positions
+// (equivalently, the position that appears last)
+func maxPos(m, n token.Pos) token.Pos {
+	if m > n {
+		return m
+	}
+	return n
+}
+
+// EnclosingFunc returns the (named) function containing the selected
+// statements.
+func (r *stmtRange) EnclosingFunc() *ast.FuncDecl {
+	for _, node := range r.pathToRoot {
+		if funcDecl, ok := node.(*ast.FuncDecl); ok {
+			return funcDecl
+		}
+	}
+	panic("no FuncDecl in path to root")
+}
+
+// selectedStmts returns the children of the enclosing
+// BlockStmt/CaseClause/CommClause that comprise the selected region.  Note
+// that this only includes immediate children; to visit nested statements, use
+// Inspect.
+func (r *stmtRange) selectedStmts() []ast.Stmt {
+	list := []ast.Stmt{}
+	switch node := r.pathToRoot[0].(type) {
+	case *ast.BlockStmt:
+		list = node.List
+	case *ast.CaseClause:
+		list = node.Body
+	case *ast.CommClause:
+		list = node.Body
+	default:
+		panic("unexpected node type")
+	}
+	return list[r.firstIdx : r.lastIdx+1]
+}
+
+// Inspect traverses the selected statements and their children.
+func (r *stmtRange) Inspect(f func(ast.Node) bool) {
+	for _, node := range r.selectedStmts() {
+		ast.Inspect(node, f)
+	}
+}
+
+// IsInAnonymousFunc returns true if the selected statements have at least one
+// ancestor that is a FuncLit, i.e., an anonymous function.
+func (r *stmtRange) IsInAnonymousFunc() bool {
+	for _, node := range r.pathToRoot {
+		if _, ok := node.(*ast.FuncLit); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// ContainsAnonymousFunc returns true if a FuncLit node (i.e., an anonymous
+// function) appears as a descendent of any of the selected statements.
+func (r *stmtRange) ContainsAnonymousFunc() bool {
+	flag := false
+	r.Inspect(func(n ast.Node) bool {
+		if _, ok := n.(*ast.FuncLit); ok {
+			flag = true
+			return false
+		}
+		return true
+	})
+	return flag
+}
+
+// ContainsDefer returns true if any of the selected statements, or any of
+// their desdendents, are defer statements (DeferStmt nodes).
+func (r *stmtRange) ContainsDefer() bool {
+	flag := false
+	r.Inspect(func(n ast.Node) bool {
+		if _, ok := n.(*ast.DeferStmt); ok {
+			flag = true
+			return false
+		}
+		return true
+	})
+	return flag
+}
+
+// ContainsReturn returns true if any of the selected statements, or any of
+// their desdendents, are return statements (ReturnStmt nodes).
+func (r *stmtRange) ContainsReturn() bool {
+	flag := false
+	r.Inspect(func(n ast.Node) bool {
+		if _, ok := n.(*ast.ReturnStmt); ok {
+			flag = true
+			return false
+		}
+		return true
+	})
+	return flag
+}
+
+// Contains returns true if the given node lies (lexically) within the region
+// of text corresponding to the selected statements.  Equivalently, it will
+// return true if the given node is either a selected statement or a descendent
+// of a selected statement.
+func (r *stmtRange) Contains(node ast.Node) bool {
+	stmts := r.selectedStmts()
+	firstStmt := stmts[0]
+	lastStmt := stmts[len(stmts)-1]
+	return node.Pos() >= firstStmt.Pos() && node.End() <= lastStmt.End()
+}
+
+// Pos returns the starting position of the first statement in the selection.
+func (r *stmtRange) Pos() token.Pos {
+	return r.selectedStmts()[0].Pos()
+}
+
+// End returns the ending position (exclusive) of the last statement in the
+// selection.
+func (r *stmtRange) End() token.Pos {
+	stmts := r.selectedStmts()
+	return stmts[len(stmts)-1].End()
+}
+
+// EntryPoints returns the CFG block(s) corresponding to the statement(s)
+// within the selected region that will be the first to execute, before any
+// other statements in the selection.
+func (r *stmtRange) EntryPoints() []ast.Stmt {
+	entrySet := map[ast.Stmt]struct{}{}
+	for _, b := range r.blocksInRange {
+		for _, pred := range r.cfg.Preds(b) {
+			if !r.Contains(pred) {
+				entrySet[b] = struct{}{}
+			}
+		}
+	}
+
+	entryPoints := []ast.Stmt{}
+	for b, _ := range entrySet {
+		entryPoints = append(entryPoints, b)
+	}
+
+	sort.Sort(nodeStmt(entryPoints))
+	return entryPoints
+}
+
+// ExitDestinations returns the CFG block(s) corresponding to the statement(s)
+// outside the selected region that could be the first to execute after the
+// statements in the selection have executed.
+func (r *stmtRange) ExitDestinations() []ast.Stmt {
+	exitSet := map[ast.Stmt]struct{}{}
+	for _, b := range r.blocksInRange {
+		for _, succ := range r.cfg.Succs(b) {
+			if !r.Contains(succ) {
+				exitSet[succ] = struct{}{}
+			}
+		}
+	}
+
+	exitTo := []ast.Stmt{}
+	for b, _ := range exitSet {
+		exitTo = append(exitTo, b)
+	}
+
+	sort.Sort(nodeStmt(exitTo))
+	return exitTo
+}
+
+// LocalsLiveAtEntry returns the local variables that are live at the
+// entrypoint(s) to the selected region.
+func (r *stmtRange) LocalsLiveAtEntry() []*types.Var {
+	entryPoints := r.EntryPoints()
+
+	liveEntry := []*types.Var{}
+	for _, entry := range entryPoints {
+		for variable, _ := range r.liveIn[entry] {
+			liveEntry = append(liveEntry, variable)
+		}
+	}
+	sort.Sort(typeVar(liveEntry))
+	return liveEntry
+}
+
+// LocalsLiveAfterExit returns the local variables that are live at the exit
+// points from the selected region/at the entrypoints to the next statements
+// after the selected statements have executed.
+func (r *stmtRange) LocalsLiveAfterExit() []*types.Var {
+	exitTo := r.ExitDestinations()
+
+	liveExit := []*types.Var{}
+	for _, exit := range exitTo {
+		for variable, _ := range r.liveIn[exit] {
+			liveExit = append(liveExit, variable)
+		}
+	}
+	sort.Sort(typeVar(liveExit))
+	return liveExit
+}
+
+// LocalsReferenced returns the local variables that are accessed by one or
+// more of the selected statements.  It returns the variables that are
+// (1) assigned, i.e., whose values are completely overwritten;
+// (2) updated, i.e., a struct member or array element is modified;
+// (3) declared via a var declaration or := operator;
+// (4) used, i.e., whose values are read.
+// Variables may appear in multiple sets.
+func (r *stmtRange) LocalsReferenced() (asgt, updt, decl, use []*types.Var) {
+	asgtSet, updtSet, declSet, useSet := dataflow.ReferencedVars(r.blocksInRange, r.pkgInfo)
+	for v, _ := range asgtSet {
+		asgt = append(asgt, v)
+	}
+	for v, _ := range updtSet {
+		updt = append(updt, v)
+	}
+	for v, _ := range declSet {
+		decl = append(decl, v)
+	}
+	for v, _ := range useSet {
+		use = append(use, v)
+	}
+	sort.Sort(typeVar(asgt))
+	sort.Sort(typeVar(decl))
+	sort.Sort(typeVar(use))
+	return
+}
+
+func (r *stmtRange) String() string {
+	stmts := r.selectedStmts()
+
+	var b bytes.Buffer
+	b.WriteString("Statement sequence from ")
+	b.WriteString(reflect.TypeOf(stmts[0]).String())
+	b.WriteString(" through ")
+	b.WriteString(reflect.TypeOf(stmts[len(stmts)-1]).String())
+	return b.String()
+}
+
+/* -=-=- extractedFunc -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
+
+// extractedFunc encapsulates information about the new function that will be
+// created from the extracted code, along with how it should be called.
+type extractedFunc struct {
+	name          string       // name of the new function
+	recv          *types.Var   // receiver variable, or nil
+	params        []*types.Var // parameters for the new function
+	returns       []*types.Var // variables whose values will be returned
+	locals        []*types.Var // local variables to declare
+	declareResult bool         // true for x := f(), false for x = f()
+	code          []byte       // code to copy into the function body
+}
+
+// SourceCode returns source code for (1) the new function declaration that
+// should be inserted, and (2) the function call that should replace the
+// selected statements.
+func (f *extractedFunc) SourceCode() (funcDecl, funcCall string) {
+	paramNames, paramTypes := namesAndTypes(f.params)
+	funcDeclParams := createParamDecls(paramNames, paramTypes)
+	funcCallArgs := commaSeparated(paramNames)
+	if f.recv != nil {
+		recvType := types.TypeString(f.recv.Pkg(), f.recv.Type())
+		funcDecl = fmt.Sprintf("(%s %s) %s(%s)",
+			f.recv.Name(), recvType, f.name, funcDeclParams)
+		funcCall = fmt.Sprintf("%s.%s(%s)",
+			f.recv.Name(), f.name, funcCallArgs)
+	} else {
+		funcDecl = fmt.Sprintf("%s(%s)", f.name, funcDeclParams)
+		funcCall = fmt.Sprintf("%s(%s)", f.name, funcCallArgs)
+	}
+
+	localVarDecls := createVarDecls(namesAndTypes(f.locals))
+	if len(f.returns) == 0 {
+		funcDecl = fmt.Sprintf("\nfunc %s {\n%s%s\n}\n",
+			funcDecl, localVarDecls, f.code)
+		funcCall = fmt.Sprintf("%s", funcCall)
+	} else {
+		returnNames, returnTypes := namesAndTypes(f.returns)
+		returnExprs := commaSeparated(returnNames)
+		returnStmt := "return " + returnExprs
+
+		assignSymbol := " = "
+		if f.declareResult {
+			assignSymbol = " := "
+		}
+
+		funcDefReturnTypes := commaSeparated(returnTypes)
+		if len(returnNames) > 1 {
+			funcDecl = fmt.Sprintf("\nfunc %s(%s) {\n%s%s\n%s\n}\n",
+				funcDecl, funcDefReturnTypes, localVarDecls,
+				f.code, returnStmt)
+			funcCall = fmt.Sprintf("%s%s%s",
+				returnExprs, assignSymbol, funcCall)
+		} else {
+			funcDecl = fmt.Sprintf("\nfunc %s %s {\n%s%s\n%s\n}\n",
+				funcDecl, funcDefReturnTypes, localVarDecls,
+				f.code, returnStmt)
+			funcCall = fmt.Sprintf("%s%s%s",
+				returnExprs, assignSymbol, funcCall)
+		}
+	}
+
+	return funcDecl, funcCall
+}
+
+// namesAndTypes receives a list of variables and returns strings describing
+// their names and types, suitable for use in variable declarations.
+func namesAndTypes(vars []*types.Var) (names []string, typez []string) {
+	for _, a := range vars {
+		if a.Name() != "_" {
+			names = append(names, a.Name())
+			typez = append(typez, types.TypeString(a.Pkg(), a.Type()))
+		}
+	}
+	return
+}
+
+// createVarDecls returns source code for a sequence of var statements
+// declaring variables with the given names and types.
+func createVarDecls(names []string, types []string) string {
+	var buf bytes.Buffer
+	for i := 0; i < len(names); i++ {
+		buf.WriteString("var " + names[i] + " " + types[i])
+		if i > 1 || i <= len(names)-1 {
+			buf.WriteString("\n")
+		}
+	}
+	return buf.String()
+}
+
+// commaSeparated concatenates the given strings, separating them by ", "
+func commaSeparated(strings []string) string {
+	var buf bytes.Buffer
+	for k := 0; k < len(strings); k++ {
+		buf.WriteString(strings[k])
+		if k == len(strings)-1 {
+			break
+		}
+		if k > 1 || k < len(strings)-1 {
+			buf.WriteString(", ")
+		}
+	}
+	return buf.String()
+}
+
+// createParamDecls returns source code for a parameter list, declaring
+// function parameters with the given names and types.
+func createParamDecls(names []string, types []string) string {
+	var buf bytes.Buffer
+	for k := 0; k < len(names); k++ {
+		buf.WriteString(names[k] + " " + types[k])
+		if k > 1 || k < len(names)-1 {
+			buf.WriteString(", ")
+		}
+	}
+	return buf.String()
+}
+
+/* -=-=- ExtractFunc -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
+
 // The ExtractFunc refactoring is used to break down larger functions into
 // smaller functions such that the logic of the code remains unchanged.
-// The user is expected to extract a part of code from the function and enter a valid name
-
+// The user is expected to extract recvTypeExpr part of code from the function and enter recvTypeExpr valid name
 type ExtractFunc struct {
 	RefactoringBase
-	funcName string
+	funcName  string     // name of the extracted function
+	stmtRange *stmtRange // selected statements (to be extracted)
 }
 
 func (r *ExtractFunc) Description() *Description {
@@ -47,969 +583,197 @@ func (r *ExtractFunc) Run(config *Config) *Result {
 		return &r.Result
 	}
 	if len(config.Args) != 1 {
-		r.Log.Error(errInvalidArgs("expected one argument, got: " + strconv.Itoa(len(config.Args))))
+		r.Log.Error(errInvalidArgs("expected one argument, got: " +
+			strconv.Itoa(len(config.Args))))
 		return &r.Result
 	}
 
 	r.funcName = (config.Args[0]).(string)
-	if !r.isIdentifierValid(r.funcName) {
-		r.Log.Error("Please select a valid Go identifier")
+	if !isIdentifierValid(r.funcName) {
+		r.Log.Errorf("The name \"%s\" is not a valid Go identifier",
+			r.funcName)
 		return &r.Result
 	}
 
-	if r.SelectedNode == nil {
-		r.Log.Error(errInvalidSelection("no position specified"))
+	var err error
+	r.stmtRange, err = newStmtRange(r.File, r.SelectionStart, r.SelectionEnd, r.SelectedNodePkg)
+	if err != nil {
+		r.Log.Error(err)
 		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
 		return &r.Result
 	}
-	path, _ := astutil.PathEnclosingInterval(r.File, r.SelectionStart, r.SelectedNode.End())
-	switch node := r.SelectedNode.(type) {
-	case *ast.BlockStmt:
-		if r.checkForAnonymousFns(path) {
-			r.callEditset(node, path)
-		} else {
-			r.Log.Error("Code cannot be extracted from anonymous functions.")
-		}
-	default:
-		if r.checkForAnonymousFns(path) {
-			r.checkForBlockStmt(node, path)
-		} else {
-			r.Log.Error("Code cannot contain Anonymous Function (OR) Code Cannot be extracted from Anonymous Function")
-		}
+
+	if r.stmtRange.IsInAnonymousFunc() {
+		r.Log.Error("Code inside an anonymous function cannot be extracted.")
+		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+		return &r.Result
 	}
-	r.FormatFileInEditor()
-	r.UpdateLog(config, true)
+
+	// Errors from here onward are non-fatal: The extraction can proceed,
+	// but it may not preserve semantics.
+
+	if r.stmtRange.ContainsAnonymousFunc() {
+		r.Log.Error("Code containing anonymous functions may not extract correctly.")
+		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+	}
+
+	if r.stmtRange.ContainsDefer() {
+		r.Log.Error("Code containing defer statements may change behavior if it is extracted.")
+		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+	}
+
+	if r.stmtRange.ContainsReturn() {
+		r.Log.Error("Code containing return statements may change behavior if it is extracted.")
+		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+	}
+
+	// The next two checks determine if the single-entry-single-exit
+	// criterion is met.  The call to UpdateLog (below) will check the
+	// refactored code for errors.  If the SESE criterion is not met,
+	// that check will most likely point out the specific problems,
+	// so don't make too much effort to describe them here.
+
+	entryPoints := r.stmtRange.EntryPoints()
+	if len(entryPoints) > 1 {
+		r.Log.Error("There are multiple control flow paths into the selected statements.  Extraction will likely be incorrect.")
+		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+	}
+
+	exitDests := r.stmtRange.ExitDestinations()
+	if len(exitDests) > 1 {
+		r.Log.Error("There are multiple control flow paths out of the selected statements.  Extraction will likely be incorrect.")
+		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+	}
+
 	r.Log.ChangeInitialErrorsToWarnings()
+	r.addEdits()
+	r.FormatFileInEditor()
+	r.UpdateLog(config, true) // Check for errors in the refactored code
 	return &r.Result
 }
 
-// checks if the extracted code is part of anonymous functions, if so, then returns false
-func (r *ExtractFunc) checkForAnonymousFns(path []ast.Node) bool {
-	flag := true
-	for _, parentNode := range path {
-		if _, ok := parentNode.(*ast.FuncLit); ok {
-			flag = false
-			return flag
-		}
+// addEdits updates r.Edits, adding edits to insert a new function declaration
+// and replace the selected statements with a call to that function.
+func (r *ExtractFunc) addEdits() {
+	funcDecl, funcCall := r.createExtractedFunc().SourceCode()
+
+	// Replace the selected statements with a function call
+	offset := r.Program.Fset.Position(r.stmtRange.Pos()).Offset
+	length := r.Program.Fset.Position(r.stmtRange.End()).Offset - offset
+	r.Edits[r.Filename].Add(&text.Extent{offset, length}, funcCall)
+
+	// Insert the new function declaration
+	r.Edits[r.Filename].Add(&text.Extent{r.Program.Fset.Position(r.File.End()).Offset, 0}, funcDecl)
+}
+
+// createExtractedFunc returns an extractedFunc, which contains information
+// about the extracted function and how it should be called.  Source code can
+// be obtained from the extractedFunc object.
+func (r *ExtractFunc) createExtractedFunc() *extractedFunc {
+	recv, params, returns, locals, declareResult := r.analyzeVars()
+
+	startOffset := r.Program.Fset.Position(r.stmtRange.Pos()).Offset
+	endOffset := r.Program.Fset.Position(r.stmtRange.End()).Offset
+	code := r.FileContents[startOffset:endOffset]
+
+	return &extractedFunc{
+		name:          r.funcName,
+		recv:          recv,
+		params:        params,
+		returns:       returns,
+		locals:        locals,
+		declareResult: declareResult,
+		code:          code,
 	}
-	return flag && r.checkForAnonymousFnsInCode()
 }
 
-// check for anonymous function by performing ast.Inspect
-func (r *ExtractFunc) checkForAnonymousFnsInCode() bool {
-	flag := true
-	ast.Inspect(r.SelectedNode, func(n ast.Node) bool {
-		if _, ok := n.(*ast.FuncLit); ok {
-			flag = false
-		}
-		return true
-	})
-	return flag
-}
+// analyzeVars determines (1) whether the extracted function should be a method
+// and if so, what its receiver should be; (2) which local variables used in
+// the selected statements should be passed as arguments to the extracted
+// function; (3) which local variables' values must be returned from the
+// extracted function; (4) which local variables can be redeclared in the
+// extracted function (i.e., they do not need to be passed as arguments); and
+// (5) when the selected statements are replaced with a function call, whether
+// the call should have the form x := f() or x = f() -- i.e., whether the
+// result variables should be declared or simply assigned.
+func (r *ExtractFunc) analyzeVars() (recv *types.Var, params, returns, locals []*types.Var, declareResult bool) {
+	aliveFirst := r.stmtRange.LocalsLiveAtEntry()
+	aliveLast := r.stmtRange.LocalsLiveAfterExit()
+	assigned, updated, declared, used := r.stmtRange.LocalsReferenced()
+	defined := union(union(assigned, updated), declared)
 
-// parses through the parent nodes of extracted node and returns the immediate *ast.BlockStmt
-func (r *ExtractFunc) checkForBlockStmt(node ast.Node, path []ast.Node) {
-	for _, parentNode := range path {
-		if node, ok := parentNode.(*ast.BlockStmt); ok {
-			r.callEditset(node, path)
-			return
-		}
-	}
-}
+	// Params = LIVE_IN[Entry(selectionnode)] ⋂ USE[selection]
+	params = intersection(aliveFirst, used)
 
-// If the users start selection is in the midway of a node, then the entire node is selected as the starting node
-// TODO reduce the calls of this, store a more useful version of it inside of our *ExtractFunc
-func (r *ExtractFunc) findStartPosition(node *ast.BlockStmt) ast.Stmt {
-	var stmt ast.Stmt
-	line := r.Program.Fset.Position(r.SelectionStart).Line
-	for _, s := range node.List {
-		ast.Inspect(s, func(n ast.Node) bool {
-			if a, ok := n.(ast.Stmt); ok {
-				if r.SelectionStart == a.Pos() {
-					stmt = a
-					return false
-				} else if r.Program.Fset.Position(a.Pos()).Line == line && // if it's on same line
-					r.SelectionStart < a.End() && // and less than end
-					(r.SelectionStart > a.Pos() || // and we're either in the middle of a node
-						stmt == nil || // or we haven't found anything
-						a.Pos()-r.SelectionStart < stmt.Pos()-r.SelectionStart) { // or closer than what we have found
-					// NOTE: [I] do not trust this approximation very much. it attempts to fudge the beginning of the
-					// selection to the right, b/c in the case that they selected the beginning of a line, we want to find
-					// the first statement, and skews left in the case that they made a selection in the middle of the node.
-					// the only case of invalid input I can think of is selecting _only_ whitespace, which should be
-					// guarded against by checking the end boundary coupled with there not being an ast.Stmt there. bueller?
-					stmt = a
-				}
-			}
-			return true
-		})
-	}
-	return stmt
-}
+	// returns = LIVE_OUT[exit(sel)] ⋂ DEF[sel]
+	// If someStruct is a pointer and someStruct.field is assigned, but
+	// someStruct itself is never reassigned, then it does not need to be
+	// returned.  Likewise, if individual elements of a slice are updated
+	// but the slice itself is not reassigned, then the slice variable
+	// does not need to be returned.
+	updatedOnlyThruPointers := difference(r.varsWithPointerOrSliceTypes(updated), assigned)
+	returns = difference(
+		intersection(aliveLast, defined),
+		updatedOnlyThruPointers)
 
-// If the users end selection is in the midway of a node, then the entire node is selected as the last node
-// TODO reduce the calls of this, store a more useful version of it inside of our *ExtractFunc
-func (r *ExtractFunc) findEndPosition(node *ast.BlockStmt) ast.Stmt {
-	var stmt ast.Stmt = nil
-	for _, s := range node.List {
-		ast.Inspect(s, func(n ast.Node) bool {
-			if s, ok := n.(ast.Stmt); ok {
-				if s.Pos() >= r.SelectionStart && s.Pos() <= r.SelectionEnd { // since there can be one to many statements
-					stmt = s
-					return false
-				}
-			}
-			return true
-		})
-	}
-	return stmt
-}
+	locals = difference(
+		union(difference(assigned, params),
+			difference(used, aliveFirst)),
+		declared)
 
-// to call the editset function to update the function call and the function definition
-// throws an error if the start node or the end node is nil
-func (r *ExtractFunc) callEditset(node *ast.BlockStmt, path []ast.Node) {
-	start := r.findStartPosition(node)
-	end := r.findEndPosition(node)
-	if start == nil || end == nil {
-		r.Log.Error(errInvalidSelection("could not find specified bounds"))
-		return
+	// If we are returning the value of a variable declared in the
+	// selected statements, then the result variable needs to be declared.
+	declareResult = len(intersection(returns, declared)) > 0
+
+	if recvNode := r.stmtRange.EnclosingFunc().Recv; recvNode != nil {
+		recv = r.SelectedNodePkg.ObjectOf(recvNode.List[0].Names[0]).(*types.Var)
+		params = difference(params, []*types.Var{recv})
+		returns = difference(returns, []*types.Var{recv})
+		locals = difference(returns, []*types.Var{recv})
 	}
 
-	replace, funcCall := r.createNewFunction(node, path)
-	length := r.Program.Fset.Position(end.End()).Offset - r.Program.Fset.Position(start.Pos()).Offset
-	r.Edits[r.Filename].Add(&text.Extent{r.Program.Fset.Position(start.Pos()).Offset, length}, funcCall)
-	r.Edits[r.Filename].Add(&text.Extent{r.Program.Fset.Position(r.File.End()).Offset, 0}, replace)
+	return recv, params, returns, locals, declareResult
 }
 
-// this function returns the func Call and func Definition strings
-func (r *ExtractFunc) createNewFunction(node *ast.BlockStmt, path []ast.Node) (string, string) {
-	receieverName, receiverType, rType := r.checkForReceiver(path)
-	paramVarList, returnVarList, varDecl, flagShortAssign := r.parseCode(node, path)
-	varName, varType := r.returnNameType(paramVarList, path, rType, true)
-	retVarName, retVarType := r.returnNameType(returnVarList, path, nil, false) // the final boolean is for pointers that must not be returned
-	varDeclName, varDeclType := r.returnNameType(varDecl, path, rType, true)
-	r.checkParameters(receieverName, varName, varDeclName)
-	if len(retVarType) == 1 { // if the variable returned is of the receiver type, the shortAssign flag is set to false
-		if returnVarList[0].Type() == rType {
-			flagShortAssign = false
-		}
-	}
-	return r.createEditString(r.createString(varDeclName, varDeclType, true), r.createString(varName, nil, false), r.createString(varName, varType, false),
-		r.createString(retVarName, nil, false), r.createString(nil, retVarType, false), len(retVarName), r.extractCode(node), receieverName,
-		receiverType, flagShortAssign)
-}
-
-// checks if code is extracted from a method or a normal function, if it is extracted from a method, it returns receiver's type/name.
-func (r *ExtractFunc) checkForReceiver(path []ast.Node) (string, string, types.Type) {
-	var receieverName string
-	var receiverType string
-	var rType types.Type
-	for i := 0; i < len(path); i++ {
-		switch s := path[i].(type) {
-		case *ast.FuncDecl:
-			if s.Recv != nil {
-				receieverName = s.Recv.List[0].Names[0].Name
-				switch a := s.Recv.List[0].Type.(type) {
-				case *ast.StarExpr:
-					receiverType = "*" + a.X.(*ast.Ident).Name
-					rType = r.SelectedNodePkg.TypeOf(a)
-				case ast.Expr:
-					receiverType = a.(*ast.Ident).Name
-					rType = r.SelectedNodePkg.TypeOf(a)
-				}
-			}
-		}
-	}
-	return receieverName, receiverType, rType
-}
-
-// for every variable that is passed/returned/declared the function returns the name and type
-func (r *ExtractFunc) returnNameType(varList []*types.Var, path1 []ast.Node, rType types.Type, boolVar bool) ([]string, []string) {
-	var varType []string
-	var varName []string
+// varsWithPointerOrSliceTypes receives a list of variables and returns those
+// whose type is either a pointer or slice type.
+func (r *ExtractFunc) varsWithPointerOrSliceTypes(varList []*types.Var) []*types.Var {
+	result := []*types.Var{}
 	for _, a := range varList {
-		if rType != nil && a.Type() == rType { // if the receiver type is same as the current package, do nothing
-			continue
-		} else {
-			switch b := (a.Type()).(type) {
-			case *types.Named:
-				if b.Obj().Type().String() != "error" {
-					if b.Obj().Pkg().Name() == path1[len(path1)-1].(*ast.File).Name.Name { // prefix is of the current package, remove prefix
-						if !a.IsField() && a.Name() != "_" {
-							varName = append(varName, a.Name())
-							varType = append(varType, strings.TrimPrefix(a.Type().String(), b.Obj().Pkg().Path()+"."))
-						}
-					} else {
-						if !a.IsField() && a.Name() != "_" {
-							varName = append(varName, a.Name())
-							varType = append(varType, b.Obj().Pkg().Name()+"."+b.Obj().Id())
-						}
-					}
-				} else {
-					if !a.IsField() && a.Name() != "_" {
-						varName = append(varName, a.Name())
-						varType = append(varType, b.Obj().Type().String())
-					}
-				}
-			case *types.Pointer:
-				switch temp := b.Elem().(type) {
-				case *types.Basic:
-					if temp.Name() == "float64" || temp.Name() == "float32" || temp.Name() == "int" || temp.Name() == "string" {
-						if !a.IsField() && a.Name() != "_" && boolVar == true {
-							varName = append(varName, a.Name())
-							varType = append(varType, "*"+b.Elem().(*types.Basic).Name())
-						}
-					}else{
-						if !a.IsField() && a.Name() != "_" {
-							varName = append(varName, a.Name())
-							varType = append(varType, a.Type().String())
-						}
-					}
-				case *types.Named:
-					if temp.Obj().Pkg().Name() == path1[len(path1)-1].(*ast.File).Name.Name { // prefix is of the current package, remove prefix
-						if !a.IsField() && a.Name() != "_" && boolVar == true {
-							varName = append(varName, a.Name())
-							varType = append(varType, "*"+strings.TrimPrefix(a.Type().String(), "*"+b.Elem().(*types.Named).Obj().Pkg().Path()+"."))
-						}
-					} else if temp.Obj().Pkg().Name() != path1[len(path1)-1].(*ast.File).Name.Name {
-						if !a.IsField() && a.Name() != "_" && boolVar == true {
-							varName = append(varName, a.Name())
-							varType = append(varType, "*"+b.Elem().(*types.Named).Obj().Pkg().Name()+"."+b.Elem().(*types.Named).Obj().Name())
-						}
-					}
-				}
-			default:
-				if !a.IsField() && a.Name() != "_" {
-					varName = append(varName, a.Name())
-					varType = append(varType, r.TypeString(a.Pkg(), a.Type()))
-				}
-			}
-		}
-	}
-	return varName, varType
-}
-
-// if the name of the receiver and that of any of the arguments passed are the same then do not allow transformation
-// function of check if the receiver name and that of the parametr names are the same
-func (r *ExtractFunc) checkParameters(receieverName string, varName []string, varDeclName []string) {
-	for _, a := range varName {
-		if a == receieverName {
-			r.Log.Error("The method receiever name and the parameters passed cannot have the same name")
-		}
-	}
-	for _, a := range varDeclName {
-		if a == receieverName {
-			r.Log.Error("The method receiever name and the parameters declared cannot have the same name")
-		}
-	}
-}
-
-// returns the string representation of the code
-func (r *ExtractFunc) extractCode(node *ast.BlockStmt) []byte {
-	start := r.findStartPosition(node)
-	end := r.findEndPosition(node)
-	// TODO(reed): these find[Start|End]Position functions seem used too frequently,
-	// and all calls appear to be on the same 'node' which we got from PathEnclosingInterval,
-	// which is supposed to already put us around the correct spot. we should, at least,
-	// call these early in Run and store as fields in our *ExtractFunc. In the best case,
-	// we should stop passing the opaque 'node' around and use a more useful section of the ast.
-	if start == nil || end == nil {
-		r.Log.Error("The start positon of the extracted code is not right")
-		return nil // TODO this should be verified before this func is ever run
-	}
-
-	// TODO(reed): can we just use a more meaningful subset of []ast.Stmt instead of the entire block?
-	for i := 0; i < len(node.List); i++ {
-		if node.List[i].Pos() >= start.Pos() {
-			a := r.Program.Fset.Position(start.Pos()).Offset
-			b := r.Program.Fset.Position(end.End()).Offset
-			return r.FileContents[a:b]
-		}
-	}
-	return nil // logged that we got issues
-}
-
-// This function schecks if the selection is valid by using the following technique:
-// 1. Find the path-enclosing intervals for the first and last statement of the selected node.
-// 2. Filter out only the statement node and check for LabelStatements,
-// 3. If there are label-statements in the path, delete the immediate child node of that labeled statement
-// 4. After this  compare the path enclosing interval of both the statements(First and Last Statements).
-// 5. If they match, then the code is extracted right, else throw an error.
-func (r *ExtractFunc) checkValidSelection(stmtArr []ast.Stmt) bool {
-
-	var path1Stmt []ast.Stmt
-	var path2Stmt []ast.Stmt
-	var path11 []ast.Stmt
-	var path22 []ast.Stmt
-	var index1 []int
-	var index2 []int
-	if len(stmtArr) != 0 {
-		sort.Sort(nodeStmt(stmtArr))
-		firstStmt := stmtArr[0]
-		sort.Sort(nodeEnd(stmtArr)) // sorted based on the ascending order of node.End() value
-		endStmt := stmtArr[len(stmtArr)-1]
-		path1, _ := astutil.PathEnclosingInterval(r.File, firstStmt.Pos(), firstStmt.End())
-		path2, _ := astutil.PathEnclosingInterval(r.File, endStmt.Pos(), endStmt.End())
-		for i, _ := range path1 {
-			if aa, ok := path1[i].(ast.Stmt); ok {
-				if _, ok := path1[i].(*ast.LabeledStmt); ok {
-					index1 = append(index1, i-1)
-				}
-				path1Stmt = append(path1Stmt, aa)
-			}
-		}
-		for i, _ := range path2 {
-			if aa, ok := path2[i].(ast.Stmt); ok {
-				if _, ok := aa.(*ast.LabeledStmt); ok {
-					index2 = append(index2, i-1)
-				}
-				path2Stmt = append(path2Stmt, aa)
-			}
-		}
-		if len(index1) != 0 {
-			for i, a := range path1Stmt {
-				for _, b := range index1 {
-					if i != b {
-						path11 = append(path11, a)
-					}
-				}
-			}
-		} else {
-			for _, a := range path1Stmt {
-				path11 = append(path11, a)
-			}
-		}
-		if len(index2) != 0 {
-			for i, a := range path2Stmt {
-				for _, b := range index2 {
-					if i != b {
-						path22 = append(path22, a)
-					}
-				}
-			}
-		} else {
-			for _, a := range path2Stmt {
-				path22 = append(path22, a)
-			}
-		}
-
-	}
-	return sliceCompare(path11, path22)
-}
-func sliceCompare(path1 []ast.Stmt, path2 []ast.Stmt) bool {
-	var result bool = false
-	if len(path1) == len(path2) {
-		for i := 1; i < len(path1); i++ {
-			if path2[i] == path1[i] {
-				result = true
-			} else {
-				result = false
-			}
+		switch a.Type().(type) {
+		case *types.Pointer, *types.Slice:
+			result = append(result, a)
 		}
 	}
 	return result
 }
 
-// this function parses through the extracted code,
-// - performs the 'Single Entry/Single Exit' condition
-// - performs Live Variable analysis on the extracted code to get the list of variables that are :
-// 				1. Passed as arguments
-// 				2. Returned as variables
-// 				3. Declared as variables in the new function
-
-func (r *ExtractFunc) parseCode(node *ast.BlockStmt, path []ast.Node) ([]*types.Var, []*types.Var, []*types.Var, bool) {
-	var paramVarList []*types.Var
-	var returnVarList []*types.Var
-	var varDecl []*types.Var
-	var assign []*types.Var
-	var defined []*types.Var
-	var initVars []*types.Var
-	var funcCFG *cfg.CFG
-	var defArr []*types.Var
-	for _, n := range path {
-		switch a := n.(type) {
-		case *ast.FuncDecl:
-			funcCFG = cfg.FromFunc(a) // builds a control flow graph from a function 
-		}
-	}
-	breakConditionCheck, stmtArr, InitStmts := r.checkEntryExitCondtion(funcCFG, node) // returns the initStmt slice as well
-	valid := r.checkValidSelection(stmtArr)
-	for _, stmt := range InitStmts { // initStatment conversion to variables
-		switch a := stmt.(type) {
-		case *ast.AssignStmt:
-			for _, v := range a.Lhs { // get the list of variables that are declared in the init of for loop
-				switch tempv := v.(type) {
-				case *ast.Ident:
-					if i, ok := r.SelectedNodePkg.ObjectOf(tempv).(*types.Var); ok {
-						initVars = append(initVars, i)
-					}
-				case *ast.IndexExpr:
-					if i, ok := r.SelectedNodePkg.ObjectOf(tempv.X.(*ast.Ident)).(*types.Var); ok { // name of the array
-						initVars = append(initVars, i)
-					}
-					if i, ok := r.SelectedNodePkg.ObjectOf(tempv.Index.(*ast.Ident)).(*types.Var); ok { // index variable
-						initVars = append(initVars, i)
-					}
-				case *ast.StarExpr:
-					if i, ok := r.SelectedNodePkg.ObjectOf(tempv.X.(*ast.Ident)).(*types.Var); ok {
-						initVars = append(initVars, i)
-					}
-				}
-			}
-		case *ast.RangeStmt: // HERE WHEN YOU COME ACROSS RANGE STATEMENTS, THOSE VARIABLES TO THE LEFT OF THE := ARE PART OF THE INIT STATATEMENTS
-			if i, ok := r.SelectedNodePkg.ObjectOf(a.Key.(*ast.Ident)).(*types.Var); ok {
-				if i.Name() != "_" {
-					initVars = append(initVars, i)
-				}
-			}
-			if i, ok := r.SelectedNodePkg.ObjectOf(a.Value.(*ast.Ident)).(*types.Var); ok {
-				if i.Name() != "_" {
-					initVars = append(initVars, i)
-				}
-			}
-		}
-	}
-	sort.Sort(typeVar(initVars))
-	if breakConditionCheck && valid == true {
-		aliveFirst := r.returnEntryLiveVar(funcCFG, node)
-		useArr := r.returnUse(stmtArr)
-		assign = r.returnAssigned(stmtArr, r.SelectedNodePkg)
-		defined = r.returnDefined(stmtArr, r.SelectedNodePkg)
-		defArr = r.removeDuplicates(unionOp(assign, defined))
-		aliveLast := r.returnExitLiveVar(stmtArr, funcCFG, node)
-		aliveFirst = differenceOp(aliveFirst, initVars) // incase of a for loop
-		aliveLast = differenceOp(aliveLast, initVars)
-		paramVarList, _ = isIntersection(aliveFirst, useArr) // Params = LIVE_IN[Entry(selection node)] INTERSECTION USE[selection] //--original
-		returnVarList, _ = isIntersection(aliveLast, defArr) // returns = LIVE_OUT[exit(sel)] INTERSECTION DEF[sel]
-		varDecl = unionOp(differenceOp(assign, paramVarList), differenceOp(useArr, aliveFirst))
-		varDecl = differenceOp(varDecl, initVars)
-
-	} else {
-		r.Log.Error("The code cannot be extracted since the 'Single Entry/Single Exit' conditon failed (OR) a Valid selection wasn't made")
-	}
-	return paramVarList, returnVarList, differenceOp(varDecl, defined), r.setShortAssignmentFlag(stmtArr, returnVarList)
-}
-
-// this function removes the duplicates from the variable list that is passed into it
-func (r *ExtractFunc) removeDuplicates(varList []*types.Var) []*types.Var {
-	found := make(map[*types.Var]bool)
-	var result []*types.Var
-	for _, x := range varList {
-		if !found[x] {
-			found[x] = true
-			result = append(result, x)
-		}
-	}
-	sort.Sort(typeVar(result))
-	return result
-}
-
-//this function parses through the funcCFG.Blocks() and returns the correct list of statements that are extracted
-//- if the stmtArr contains just one node that is an *ast.AssignStmt which is a part of the Init of the different arguments, then throw an error
-
-func (r *ExtractFunc) returnStmtArray(funcCFG *cfg.CFG, node *ast.BlockStmt) ([]ast.Stmt, []ast.Stmt) {
-	var stmtArr []ast.Stmt
-	var InitStmts []ast.Stmt
-	endStmt := r.findEndPosition(node)
-	startStmt := r.findStartPosition(node)
-	for _, s := range funcCFG.Blocks() {
-		if s.Pos() >= startStmt.Pos() && s.End() <= (endStmt.End()) {
-			switch x := s.(type) {
-			case *ast.IfStmt:
-				if x.Init != nil {
-					InitStmts = append(InitStmts, x.Init)
-				}
-				stmtArr = append(stmtArr, x)
-			case *ast.SwitchStmt:
-				if x.Init != nil {
-					InitStmts = append(InitStmts, x.Init)
-				}
-				stmtArr = append(stmtArr, x)
-			case *ast.TypeSwitchStmt:
-				if x.Assign != nil {
-					InitStmts = append(InitStmts, x.Assign)
-					if x.Init != nil {
-						InitStmts = append(InitStmts, x.Init)
-					}
-				}
-				stmtArr = append(stmtArr, x)
-			case *ast.ForStmt:
-				if x.Init != nil { // what about range statements
-					InitStmts = append(InitStmts, x.Init)
-				}
-				stmtArr = append(stmtArr, x)
-			case *ast.RangeStmt:
-				InitStmts = append(InitStmts, x) // the entire range statement becomes a part of initstatement list,
-				// the left side of the := becomes a part of the init statement
-				stmtArr = append(stmtArr, x)
-			case *ast.CommClause:
-				if x.Comm != nil {
-					InitStmts = append(InitStmts, x.Comm)
-				}
-				stmtArr = append(stmtArr, x)
-			case *ast.LabeledStmt:
-				stmtArr = append(stmtArr, x)
-				stmtArr = append(stmtArr, x.Stmt)
-			case *ast.ReturnStmt:
-				r.Log.Error("RETURN statement cannot be extracted.")
-			default:
-				stmtArr = append(stmtArr, x)
-			}
-		}
-	}
-	if len(stmtArr) == 1 {
-		if _, ok := stmtArr[0].(*ast.AssignStmt); ok {
-			path, _ := astutil.PathEnclosingInterval(r.File, stmtArr[0].Pos(), stmtArr[0].End())
-			switch path[1].(type) {
-			case *ast.IfStmt, *ast.SwitchStmt, *ast.TypeSwitchStmt, *ast.ForStmt, *ast.CommClause,*ast.RangeStmt:
-				r.Log.Error("The Assignment statement extracted is not a valid statement ")
-			}
-		}
-	}
-	return stmtArr, InitStmts
-}
-
-func (r *ExtractFunc) compareStmt(a *ast.AssignStmt, InitStmts []ast.Stmt) bool {
-	flag := true
-	for _, b := range InitStmts {
-		if a == b {
-			r.Log.Error("The Assignment statement extracted is not a valid statement ")
-			flag = false
-		}
-	}
-	return flag
-}
-
-// Check the extracted code for the Single Entry and Single Exit Criteria :
-// 1. len(entry[SEL]).Preds == 1 must be TRUE for the first statement of the extracted code
-// 2. len(exit[SEL]).Succs  == 1 must be TRUE for the last statement of the extracted code
-func (r *ExtractFunc) checkEntryExitCondtion(funcCFG *cfg.CFG, node *ast.BlockStmt) (bool, []ast.Stmt, []ast.Stmt) {
-	endStmt := r.findEndPosition(node)
-	startStmt := r.findStartPosition(node)
-	stmtArr, InitStmts := r.returnStmtArray(funcCFG, node)
-	if funcCFG.Defers != nil {
-		for _, d := range funcCFG.Defers {
-			if d.Pos() >= startStmt.Pos() && d.End() <= (endStmt.End()) {
-				r.Log.Errorf("A defer statement cannot be extracted")
-				r.Log.AssociateNode(d)
-			}
-		}
-	}
-	sort.Sort(nodeStmt(stmtArr))
-	breakConditionCheck := r.checkBranchCondition(stmtArr)
-	return breakConditionCheck, stmtArr, InitStmts
-}
-
-// when *ast.BranchStmt is encountered,check if it is 'goto','break','continue'and 'fallthrough' all may or maynot have LABEL,
-// 1. if they have LABEL, then the LABELED Stmt must be a part of the extracted code
-// 2. if BREAK STATEMENT is encountered then it should be inside a 'for','switch','select' statement block
-// 3. if CONTINUE stmt then it should be inside a 'for' statement block
-// 4. if GOTO stmt is encountered then it must have LABELED stmt along with it
-// 5. When *ast.ReturnStmt is encountered, throw error
-func (r *ExtractFunc) checkBranchCondition(stmtArr []ast.Stmt) bool {
-	var xLabelArr []string
-	var zLabelArr []string
-	var exitValid bool = false
-	for i, n := range stmtArr {
-		switch x := n.(type) {
-		case *ast.BranchStmt:
-			switch x.Tok {
-			case token.BREAK:
-				exitValid = r.handleBreakStmt(x, stmtArr, i)
-				break
-			case token.CONTINUE:
-				exitValid = r.handleContinueStmt(x, stmtArr, i)
-				break
-			case token.GOTO:
-				xLabelArr, zLabelArr = r.handleGotoStmt(x, stmtArr, i)
-				break
-			}
-		case *ast.ReturnStmt:
-			exitValid = false
-			r.Log.Error("The RETURN statement is not extracted right")
-			r.Log.AssociateNode(x)
-		default:
-			continue
-		}
-	}
-	if r.labelComparison(xLabelArr, zLabelArr) == false {
-		r.Log.Error("The Single Entry/Single Exit condition failed in goto statement")
-		exitValid = false
-	} else {
-		exitValid = true
-	}
-	return exitValid
-}
-
-// checks for 'for','switch','TypeSwitch' and 'select' statements before of the break statement
-// For break Label statements, checks if the Label statement is the part of the extracted code
-func (r *ExtractFunc) handleBreakStmt(x *ast.BranchStmt, stmtArr []ast.Stmt, i int) bool {
-	var exitValid bool = false
-	var errorFlag bool = false
-	if x.Label == nil { // break without label
-		for j := i; j >= 0; j-- {
-			switch stmtArr[j].(type) {
-			case *ast.ForStmt, *ast.SwitchStmt, *ast.SelectStmt, *ast.TypeSwitchStmt:
-				exitValid = true
-				errorFlag = false
-				break
-			default:
-				errorFlag = true
-				continue
-			}
-		}
-	} else {
-		for j := i + 1; j >= 0; j-- {
-			switch s := stmtArr[j].(type) {
-			case *ast.LabeledStmt:
-				if x.Label.Name == s.Label.Name {
-					exitValid = true
-					errorFlag = false
-					break
-				} else {
-					exitValid = false
-					r.Log.Error("The BREAK's label doesn't match the LabeledStmt")
-					r.Log.AssociateNode(x)
-					break
-				}
-			default:
-				errorFlag = true
-				continue
-			}
-		}
-	}
-	if errorFlag == true {
-		exitValid = false
-		r.Log.Error("The BREAK statement is not extracted right")
-		r.Log.AssociateNode(x)
-		exitValid = false
-	}
-	return exitValid
-}
-
-// checks for 'for' statements before of the continue statement
-// For continue Label statements, checks if the Label statement is the part of the extracted code
-func (r *ExtractFunc) handleContinueStmt(x *ast.BranchStmt, stmtArr []ast.Stmt, i int) bool {
-	var exitValid bool = false
-	var errorFlag bool = false
-	if x.Label == nil { // CONTINUE without label
-		for j := i + 1; j >= 0; j-- {
-			switch stmtArr[j].(type) {
-			case *ast.ForStmt:
-				exitValid = true
-				errorFlag = false
-				break
-			default:
-				errorFlag = true
-				continue
-			}
-		}
-	} else {
-		for j := i + 1; j >= 0; j-- {
-			switch s := stmtArr[j].(type) {
-			case *ast.LabeledStmt:
-				if x.Label.Name == s.Label.Name {
-					exitValid = true
-					errorFlag = false
-					break
-				} else {
-					exitValid = false
-					r.Log.Error("The Continue statement's label doesn't match the LabeledStmt")
-					r.Log.AssociateNode(x)
-					break
-				}
-			default:
-				errorFlag = true
-				continue
-			}
-		}
-	}
-	if errorFlag == true {
-		exitValid = false
-		r.Log.Error("The CONTINUE statement is not extracted right")
-		r.Log.AssociateNode(x)
-	}
-	return exitValid
-}
-
-// Handles GOTO statements in the extracted code and verifies if the associated Label statement is present
-func (r *ExtractFunc) handleGotoStmt(x *ast.BranchStmt, stmtArr []ast.Stmt, i int) ([]string, []string) {
-	var xLabelArr []string
-	var zLabelArr []string
-	xLabelArr = append(xLabelArr, x.Label.Name)
-	for j := 0; j < len(stmtArr); j++ {
-		switch z := stmtArr[j].(type) {
-		case *ast.LabeledStmt: // add these to a set of statement array and then do the comparison
-			if x.Label.Name == z.Label.Name {
-				zLabelArr = append(zLabelArr, z.Label.Name)
-			}
-		}
-	}
-	return xLabelArr, zLabelArr
-}
-
-//Compares Labels in the GOTO statement and the Label Statments
-func (r *ExtractFunc) labelComparison(xLabelArr, zLabelArr []string) bool {
-	if len(xLabelArr) != len(zLabelArr) {
-		return false
-	} else {
-		return true
-	}
-}
-
-// When returning arguments from the new function, based on the variables returned and those defined in the extracted code,
-// we check if the returned variables is defined in the new code, if so then ':=' must be used while returning variables
-func (r *ExtractFunc) setShortAssignmentFlag(stmtArr []ast.Stmt, returnVarList []*types.Var) bool {
-	var flagShortAssign bool = false
-	var define []*types.Var
-	define = r.returnDefined(stmtArr, r.SelectedNodePkg)
-	if _, ok := isIntersection(returnVarList, define); ok {
-		flagShortAssign = true
-	}
-	return flagShortAssign
-}
-
-// returns the defs and uses variables from the analysis code
-func (r *ExtractFunc) returnUse(stmtArr []ast.Stmt) []*types.Var {
-	_, use := dataflow.ReferencedVars(stmtArr, r.SelectedNodePkg) // passing only the extracted statements
-	var useArr []*types.Var
-	for key, _ := range use {
-		if !key.IsField() { // removes the field Vars
-			useArr = append(useArr, key)
-		}
-	}
-	sort.Sort(typeVar(useArr))
-
-	return useArr
-}
-
-// returns variables that are live at the first line of the extracted code
-func (r *ExtractFunc) returnEntryLiveVar(funcCFG *cfg.CFG, node *ast.BlockStmt) []*types.Var {
-	var aliveFirst []*types.Var
-	in, _ := dataflow.LiveVars(funcCFG, r.SelectedNodePkg)
-
-	startStmt := r.findStartPosition(node)
-	for key, value := range in {
-		if key.Pos() == startStmt.Pos() { // something is wrong figure it our
-			for valKey, _ := range value {
-				if !valKey.IsField() {
-					aliveFirst = append(aliveFirst, valKey)
-				}
-			}
-		}
-	}
-	sort.Sort(typeVar(aliveFirst))
-	return aliveFirst
-}
-
-// returns variables that rae live at the last line of the extracted code
-func (r *ExtractFunc) returnExitLiveVar(stmtArr []ast.Stmt, funcCFG *cfg.CFG, node *ast.BlockStmt) []*types.Var {
-	var aliveLast []*types.Var
-	var flagForExit bool = false
-	in, out := dataflow.LiveVars(funcCFG, r.SelectedNodePkg)
-	sort.Sort(nodeEnd(stmtArr))
-	for key, value := range out {
-		if key.End() == stmtArr[len(stmtArr)-1].End() {
-			switch key.(type) {
-			case *ast.ForStmt, *ast.LabeledStmt, *ast.RangeStmt, *ast.TypeSwitchStmt, *ast.SelectStmt:
-				flagForExit = true
-				break
-			default:
-				for valKey, _ := range value {
-					if !valKey.IsField() {
-						aliveLast = append(aliveLast, valKey)
-					}
-				}
-			}
-		}
-	}
-	_, afterLast := r.findBeforeAfterNodes(funcCFG, node)
-	if flagForExit == true { // when a forloop is encountered in the end of the extracted statement
-		for key, value := range in { // we focus on the LIVE_IN of the stmt after the last statement
-			if key == afterLast {
-				for valKey, _ := range value {
-					aliveLast = append(aliveLast, valKey)
-				}
-			}
-		}
-	}
-	sort.Sort(typeVar(aliveLast))
-	return aliveLast
-}
-
-//returns the nodes that are immedeatly
-// - before the first node of the extracted code
-// - after the last node of the extracted code
-func (r *ExtractFunc) findBeforeAfterNodes(funcCFG *cfg.CFG, node *ast.BlockStmt) (ast.Stmt, ast.Stmt) {
-	var beforeFirst ast.Stmt
-	var afterLast ast.Stmt
-	var Arr []ast.Stmt
-	endStmt := r.findEndPosition(node)
-	startStmt := r.findStartPosition(node)
-	for _, s := range funcCFG.Blocks() {
-		Arr = append(Arr, s)
-	}
-	sort.Sort(nodeStmt(Arr))
-	for i := 1; i < len(Arr); i++ {
-		if Arr[i].Pos() == startStmt.Pos() {
-			beforeFirst = Arr[i-1]
-			break
-		}
-	}
-	sort.Sort(nodeEnd(Arr))
-	for i := 0; i < len(Arr); i++ {
-		if Arr[i].Pos() > endStmt.End()+1 {
-			afterLast = Arr[i]
-			break
-		}
-	}
-	if afterLast == nil {
-		afterLast = funcCFG.Exit
-	} else if beforeFirst == nil {
-		beforeFirst = funcCFG.Entry
-	}
-	return beforeFirst, afterLast
-}
-
-//This creates the editstring for
-//	1. function call
-//	2. function definition
-func (r *ExtractFunc) createEditString(varDecString, passstr, funcdefparamstr, retstr string, retfuncdefparamstr string,
-	retVarLen int, readStr []byte, receieverName, receiverType string, flagShortAssign bool) (string, string) {
-	var replacementStr string
-	var funcCallStr string
-	var varStr string = ""
-	var retString string = ""
-	var assignSymbol string = " = "
-	var bracketStr string = fmt.Sprintf("%s()", r.funcName)
-	var funcDefStr string = fmt.Sprintf("%s()", r.funcName)
-	if flagShortAssign == true {
-		// if(receiver is the only variable being returned... change the assign symbol to '=')
-		assignSymbol = " := "
-	}
-	if varDecString != "" {
-		varStr = varDecString
-	}
-	if retstr != "" {
-		retString = "return "
-	}
-	if receieverName != "" && receiverType != "" {
-		bracketStr = fmt.Sprintf("%s.%s()", receieverName, r.funcName)
-		funcDefStr = fmt.Sprintf("(%s %s) %s()", receieverName, receiverType, r.funcName)
-		if passstr != "" {
-			bracketStr = fmt.Sprintf("%s.%s(%s)", receieverName, r.funcName, passstr)
-			funcDefStr = fmt.Sprintf("(%s %s) %s(%s)", receieverName, receiverType, r.funcName, funcdefparamstr)
-		}
-		if retstr == "" {
-			replacementStr = fmt.Sprintf("\nfunc %s {\n%s%s\n}\n", funcDefStr, varStr, readStr)
-			funcCallStr = fmt.Sprintf("%s", bracketStr)
-		} else {
-			if retVarLen > 1 {
-				replacementStr = fmt.Sprintf("\nfunc %s(%s) {\n%s%s\n%s%s\n}\n",
-					funcDefStr, retfuncdefparamstr, varStr, readStr, retString, retstr)
-				funcCallStr = fmt.Sprintf("%s%s%s", retstr, assignSymbol, bracketStr)
-			} else {
-				replacementStr = fmt.Sprintf("\nfunc %s %s {\n%s%s\n%s%s\n}\n",
-					funcDefStr, retfuncdefparamstr, varStr, readStr, retString, retstr)
-				funcCallStr = fmt.Sprintf("%s%s%s", retstr, assignSymbol, bracketStr)
-			}
-		}
-	} else {
-		if passstr != "" {
-			bracketStr = fmt.Sprintf("%s(%s)", r.funcName, passstr)
-			funcDefStr = fmt.Sprintf("%s(%s)", r.funcName, funcdefparamstr)
-		}
-		if retstr == "" {
-			replacementStr = fmt.Sprintf("\nfunc %s {\n%s%s\n}\n", funcDefStr, varStr, readStr)
-			funcCallStr = fmt.Sprintf("%s", bracketStr)
-		} else {
-			if retVarLen > 1 {
-				replacementStr = fmt.Sprintf("\nfunc %s(%s) {\n%s%s\n%s%s\n}\n",
-					funcDefStr, retfuncdefparamstr, varStr, readStr, retString, retstr)
-				funcCallStr = fmt.Sprintf("%s%s%s", retstr, assignSymbol, bracketStr)
-			} else {
-				replacementStr = fmt.Sprintf("\nfunc %s %s {\n%s%s\n%s%s\n}\n",
-					funcDefStr, retfuncdefparamstr, varStr, readStr, retString, retstr)
-				funcCallStr = fmt.Sprintf("%s%s%s", retstr, assignSymbol, bracketStr)
-			}
-		}
-	}
-	return replacementStr, funcCallStr
-}
-
-func (r *ExtractFunc) createString(strarr []string, typearr []string, flagVar bool) string {
-	var buf bytes.Buffer
-	if flagVar == true {
-		for k := 0; k < len(strarr); k++ {
-			buf.WriteString("var " + strarr[k] + " " + typearr[k])
-			if k > 1 || k <= len(strarr)-1 {
-				buf.WriteString("\n")
-			}
-		}
-	} else {
-		if typearr == nil {
-			for k := 0; k < len(strarr); k++ {
-				buf.WriteString(strarr[k])
-				if k == len(strarr)-1 {
-					break
-				}
-				if k > 1 || k < len(strarr)-1 {
-					buf.WriteString(", ")
-				}
-			}
-		} else if strarr == nil {
-			for k := 0; k < len(typearr); k++ {
-				buf.WriteString(typearr[k])
-				if k == len(typearr)-1 {
-					break
-				}
-				if k > 1 || k < len(typearr)-1 {
-					buf.WriteString(", ")
-				}
-			}
-		} else {
-			for k := 0; k < len(strarr); k++ {
-				buf.WriteString(strarr[k] + " " + typearr[k])
-				if k > 1 || k < len(strarr)-1 {
-					buf.WriteString(", ")
-				}
-			}
-
-		}
-	}
-	return buf.String()
-}
-
-func isIntersection(s1 []*types.Var, s2 []*types.Var) ([]*types.Var, bool) {
-	var result []*types.Var
-	var flag bool = false
+func intersection(s1, s2 []*types.Var) []*types.Var {
+	result := []*types.Var{}
 	for i := 0; i < len(s2); i++ {
 		for j := 0; j < len(s1); j++ {
-			if s2[i].Name() == s1[j].Name() { //&& s2[i].Type() == s1[i].Type() { // when trying to make sure they have the same variables types, throws error ????
-				flag = true
+			if s2[i] == s1[j] {
 				result = append(result, s2[i])
-				break
-			} else {
-				flag = false
 			}
 		}
 	}
-	return result, flag
+	return result
 }
 
-func unionOp(v1, v2 []*types.Var) []*types.Var {
-	insec, _ := isIntersection(v1, v2) // check for duplicates and removes them
+func union(v1, v2 []*types.Var) []*types.Var {
+	insec := intersection(v1, v2) // check for duplicates and removes them
 	for _, a := range v2 {
 		v1 = append(v1, a)
 	}
-	v1 = differenceOp(v1, insec)
+	v1 = difference(v1, insec)
 	for _, b := range insec {
 		v1 = append(v1, b) // adding back the variables to the array only once
 	}
+	sort.Sort(typeVar(v1))
 	return v1
 }
 
-func differenceOp(use, in []*types.Var) []*types.Var {
+func difference(use, in []*types.Var) []*types.Var {
 	var flag bool
 	var result []*types.Var
 	for i := 0; i < len(use); i++ {
@@ -1025,440 +789,4 @@ func differenceOp(use, in []*types.Var) []*types.Var {
 		}
 	}
 	return result
-}
-
-func (r *ExtractFunc) isIdentifierValid(newName string) bool {
-	matched, err := regexp.MatchString("^[A-Za-z_][0-9A-Za-z_]*$", newName)
-	if matched && err == nil {
-		return true
-	}
-	return false
-}
-
-// sorting []*types.Var variables based on the Names()
-type typeVar []*types.Var
-
-func (t typeVar) Len() int           { return len(t) }
-func (t typeVar) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
-func (t typeVar) Less(i, j int) bool { return t[i].Name() < t[j].Name() }
-
-// sorting nodes based on positions
-type nodeStmt []ast.Stmt
-
-func (n nodeStmt) Len() int           { return len(n) }
-func (n nodeStmt) Swap(i, j int)      { n[i], n[j] = n[j], n[i] }
-func (n nodeStmt) Less(i, j int) bool { return n[i].Pos() < n[j].Pos() }
-
-// sorting nodes based on End()
-type nodeEnd []ast.Stmt
-
-func (n nodeEnd) Len() int           { return len(n) }
-func (n nodeEnd) Swap(i, j int)      { n[i], n[j] = n[j], n[i] }
-func (n nodeEnd) Less(i, j int) bool { return n[i].End() < n[j].End() }
-
-// part of DataFlow analysis
-func union(one, two map[*ast.Ident]struct{}) map[*ast.Ident]struct{} {
-	for o, _ := range one {
-		two[o] = struct{}{}
-	}
-	return two
-}
-
-func idents(node ast.Node) map[*ast.Ident]struct{} {
-	idents := make(map[*ast.Ident]struct{})
-	if node == nil {
-		return idents
-	}
-	ast.Inspect(node, func(n ast.Node) bool {
-		switch n := n.(type) {
-		case *ast.Ident:
-			idents[n] = struct{}{}
-		}
-		return true
-	})
-	return idents
-}
-
-func (r *ExtractFunc) returnAssigned(stmtArr []ast.Stmt, info *loader.PackageInfo) []*types.Var {
-	// defAssign := make(map[*types.Var]struct{})
-	var assign []*types.Var
-	for _, stmt := range stmtArr {
-		for _, d := range r.Assigned(stmt, info) {
-			assign = append(assign, d)
-		}
-	}
-	return assign
-}
-
-// this returns the variables that are only ASSIGNED using 'i++/i--' or '='
-func (r *ExtractFunc) Assigned(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
-	idntsAssign := make(map[*ast.Ident]struct{})
-	switch stmt := stmt.(type) {
-	case *ast.AssignStmt: // for statements with '='
-		if stmt.Tok != token.DEFINE || stmt.Tok != token.AND_ASSIGN {
-			for _, x := range stmt.Lhs {
-				indExp := false
-				switch x.(type) {
-				case *ast.IndexExpr:
-					indExp = true
-				case *ast.SelectorExpr:
-					//indExp = true // changed
-					indExp = false
-				}
-				if !indExp {
-					idntsAssign = union(idntsAssign, idents(x))
-				}
-			}
-		}
-	case *ast.IncDecStmt: // i++, i--
-		if _, ok := stmt.X.(*ast.SelectorExpr); !ok {
-			idntsAssign = idents(stmt.X)
-		}
-	}
-	var varsAssign []*types.Var
-	for i, _ := range idntsAssign {
-		if v, ok := info.ObjectOf(i).(*types.Var); ok {
-			if !v.IsField() && v.Name() != "_" {
-				varsAssign = append(varsAssign, v)
-			}
-		}
-	}
-	return varsAssign
-}
-
-func (r *ExtractFunc) returnDefined(stmtArr []ast.Stmt, info *loader.PackageInfo) []*types.Var {
-
-	var define []*types.Var
-	for _, stmt := range stmtArr {
-		for _, d := range r.Defined(stmt, info) {
-			define = append(define, d)
-		}
-	}
-	return define
-}
-
-// this returns the variables that are only ASSIGNED using 'i++/i--' or '='
-func (r *ExtractFunc) Defined(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
-	idnts := make(map[*ast.Ident]struct{})
-
-	switch stmt := stmt.(type) {
-	case *ast.DeclStmt: // vars (1+) in decl; zero values
-		ast.Inspect(stmt, func(n ast.Node) bool {
-			if v, ok := n.(*ast.ValueSpec); ok {
-				idnts = union(idnts, idents(v))
-			}
-			return true
-		})
-	case *ast.AssignStmt: // :=, &= are the only operators that define
-		if stmt.Tok == token.DEFINE || stmt.Tok == token.AND_ASSIGN {
-			for _, x := range stmt.Lhs {
-				indExp := false
-				switch x.(type) {
-				case *ast.IndexExpr:
-					indExp = true
-				case *ast.SelectorExpr:
-					indExp = false
-				}
-				if !indExp {
-					idnts = union(idnts, idents(x))
-				}
-			}
-		}
-	case *ast.RangeStmt: // only [ x, y ] on Lhs
-		idnts = union(idents(stmt.Key), idents(stmt.Value))
-	case *ast.TypeSwitchStmt:
-		// The assigned variable does not have a types.Var
-		// associated in this stmt; rather, the uses of that
-		// variable in the case clauses have several different
-		// types.Vars associated with them, according to type
-		var vars []*types.Var
-		ast.Inspect(stmt.Body, func(n ast.Node) bool {
-			switch cc := n.(type) {
-			case *ast.CaseClause:
-				v := typeCaseVar(info, cc)
-				if v != nil {
-					vars = append(vars, v)
-				}
-				return false
-			default:
-				return true
-			}
-		})
-		return vars
-	}
-
-	var vars []*types.Var
-	// should all map to types.Var's, if not we don't want anyway
-	for i, _ := range idnts {
-		if v, ok := info.ObjectOf(i).(*types.Var); ok {
-			if !v.IsField() && v.Name() != "_" {
-				vars = append(vars, v)
-			}
-		}
-	}
-	return vars
-}
-
-// typeCaseVar returns the implicit variable associated with a case clause in a
-// type switch statement.
-func typeCaseVar(info *loader.PackageInfo, cc *ast.CaseClause) *types.Var {
-	// Removed from go/loader
-	if v := info.Implicits[cc]; v != nil {
-		return v.(*types.Var)
-	}
-	return nil
-}
-
-// This file implements printing of types.
-
-var GcCompatibilityMode bool
-
-// TypeString returns the string representation of typ.
-// Named types are printed package-qualified if they
-// do not belong to this package.
-func (r *ExtractFunc) TypeString(this *types.Package, typ types.Type) string {
-	var buf bytes.Buffer
-	r.WriteType(&buf, this, typ)
-	return buf.String()
-}
-
-// WriteType writes the string representation of typ to buf.
-// Named types are printed package-qualified if they
-// do not belong to this package.
-func (r *ExtractFunc) WriteType(buf *bytes.Buffer, this *types.Package, typ types.Type) {
-	r.writeType(buf, this, typ, make([]types.Type, 8))
-}
-
-func (r *ExtractFunc) writeType(buf *bytes.Buffer, this *types.Package, typ types.Type, visited []types.Type) {
-	// Theoretically, this is a quadratic lookup algorithm, but in
-	// practice deeply nested composite types with unnamed component
-	// types are uncommon. This code is likely more efficient than
-	// using a map.
-	var structFields []*types.Var
-	var allMethods []*types.Func
-	var expMethods []*types.Func
-	var embeds []*types.Named
-	for _, t := range visited {
-		if t == typ {
-			fmt.Fprintf(buf, "○%T", typ) // cycle to typ
-			return
-		}
-	}
-	visited = append(visited, typ)
-	switch t := typ.(type) {
-	case nil:
-		buf.WriteString("<nil>")
-
-	case *types.Basic:
-		if t.Kind() == types.UnsafePointer {
-			buf.WriteString("unsafe.")
-		}
-		if GcCompatibilityMode {
-			// forget the alias names
-			switch t.Kind() { // -- > changes
-			case types.Byte:
-				t = types.Typ[types.Uint8]
-			case types.Rune:
-				t = types.Typ[types.Int32]
-			}
-		}
-		buf.WriteString(t.Name())
-
-	case *types.Array:
-		fmt.Fprintf(buf, "[%d]", t.Len())
-		r.writeType(buf, this, t.Elem(), visited)
-
-	case *types.Slice:
-		buf.WriteString("[]")
-		r.writeType(buf, this, t.Elem(), visited)
-
-	case *types.Struct:
-		buf.WriteString("struct{")
-		for i := 0; i < t.NumFields(); i++ {
-			structFields = append(structFields, t.Field(i))
-		}
-		// for i, f := range t.fields {
-		for i, f := range structFields {
-			if i > 0 {
-				buf.WriteString("; ")
-			}
-			if !f.Anonymous() {
-				buf.WriteString(f.Name())
-				buf.WriteByte(' ')
-			}
-			// writeType(buf, this, f.typ, visited)
-			r.writeType(buf, this, f.Type(), visited)
-			if tag := t.Tag(i); tag != "" {
-				fmt.Fprintf(buf, " %q", tag)
-			}
-		}
-
-		buf.WriteByte('}')
-
-	case *types.Pointer:
-		buf.WriteByte('*')
-		r.writeType(buf, this, t.Elem(), visited)
-
-	case *types.Tuple:
-		r.writeTuple(buf, this, t, false, visited)
-
-	case *types.Signature:
-		buf.WriteString("func")
-		r.writeSignature(buf, this, t, visited)
-
-	case *types.Interface:
-		// We write the source-level methods and embedded types rather
-		// than the actual method set since resolved method signatures
-		// may have non-printable cycles if parameters have anonymous
-		// interface types that (directly or indirectly) embed the
-		// current interface. For instance, consider the result type
-		// of m:
-		//
-		//     type T interface{
-		//         m() interface{ T }
-		//     }
-		//
-
-		buf.WriteString("interface{")
-		if GcCompatibilityMode {
-			// print flattened interface
-			// (useful to compare against gc-generated interfaces)
-			for i := 0; i < t.NumMethods(); i++ {
-				allMethods = append(allMethods, t.Method(i))
-			}
-			for i, m := range allMethods {
-				if i > 0 {
-					buf.WriteString("; ")
-				}
-				buf.WriteString(m.Name())
-				r.writeSignature(buf, this, m.Type().(*types.Signature), visited)
-			}
-		} else {
-			// print explicit interface methods and embedded types
-			for i := 0; i < t.NumExplicitMethods(); i++ {
-				expMethods = append(expMethods, t.ExplicitMethod(i))
-			}
-			for i := 0; i < t.NumEmbeddeds(); i++ {
-				embeds = append(embeds, t.Embedded(i))
-			}
-			for i, m := range expMethods {
-				if i > 0 {
-					buf.WriteString("; ")
-				}
-				buf.WriteString(m.Name())
-				r.writeSignature(buf, this, m.Type().(*types.Signature), visited)
-			}
-			for i, typ := range embeds {
-				if i > 0 || t.NumMethods() > 0 {
-					buf.WriteString("; ")
-				}
-				r.writeType(buf, this, typ, visited)
-			}
-		}
-		buf.WriteByte('}')
-
-	case *types.Map:
-		buf.WriteString("map[")
-		r.writeType(buf, this, t.Key(), visited)
-		buf.WriteByte(']')
-		r.writeType(buf, this, t.Elem(), visited)
-
-	case *types.Chan:
-		var s string
-		var parens bool
-		switch t.Dir() {
-		case types.SendRecv:
-			s = "chan "
-			if c, _ := t.Elem().(*types.Chan); c != nil && c.Dir() == types.RecvOnly {
-				parens = true
-			}
-		case types.SendOnly:
-			s = "chan<- "
-		case types.RecvOnly:
-			s = "<-chan "
-		default:
-			panic("unreachable")
-		}
-		buf.WriteString(s)
-		if parens {
-			buf.WriteByte('(')
-		}
-		r.writeType(buf, this, t.Elem(), visited)
-		if parens {
-			buf.WriteByte(')')
-		}
-
-	case *types.Named:
-		s := "<Named w/o object>"
-		if obj := t.Obj(); obj != nil {
-			if pkg := obj.Pkg(); pkg != nil && pkg != this {
-				buf.WriteString(path.Base(pkg.Path()))
-				buf.WriteByte('.')
-			}
-			s = obj.Name()
-		}
-		buf.WriteString(s)
-
-	default:
-		// For externally defined implementations of Type.
-		buf.WriteString(t.String())
-	}
-}
-
-func (r *ExtractFunc) writeTuple(buf *bytes.Buffer, this *types.Package, tup *types.Tuple, variadic bool, visited []types.Type) {
-	var tuplesVar []*types.Var
-
-	buf.WriteByte('(')
-	if tup != nil {
-		for i := 0; i < tup.Len(); i++ {
-			tuplesVar = append(tuplesVar, tup.At(i))
-		}
-		for i, v := range tuplesVar {
-			if i > 0 {
-				buf.WriteString(", ")
-			}
-			if v.Name() != "" {
-				buf.WriteString(v.Name())
-				buf.WriteByte(' ')
-			}
-			typ := v.Type()
-			if variadic && i == tup.Len()-1 {
-				if s, ok := typ.(*types.Slice); ok {
-					buf.WriteString("...")
-					typ = s.Elem()
-				} else {
-					r.writeType(buf, this, typ, visited)
-					buf.WriteString("...")
-					continue
-				}
-			}
-			r.writeType(buf, this, typ, visited)
-		}
-	}
-	buf.WriteByte(')')
-}
-
-// WriteSignature writes the representation of the signature sig to buf,
-// without a leading "func" keyword.
-// Named types are printed package-qualified if they
-// do not belong to this package.
-func (r *ExtractFunc) WriteSignature(buf *bytes.Buffer, this *types.Package, sig *types.Signature) {
-	r.writeSignature(buf, this, sig, make([]types.Type, 8))
-}
-
-func (r *ExtractFunc) writeSignature(buf *bytes.Buffer, this *types.Package, sig *types.Signature, visited []types.Type) {
-	r.writeTuple(buf, this, sig.Params(), sig.Variadic(), visited)
-	n := sig.Results().Len()
-	if n == 0 {
-		// no result
-		return
-	}
-	buf.WriteByte(' ')
-	if n == 1 && sig.Results().At(0).Name() == "" {
-		// single unnamed result
-		r.writeType(buf, this, sig.Results().At(0).Type(), visited)
-		return
-	}
-	// multiple or named result(s)
-	r.writeTuple(buf, this, sig.Results(), false, visited)
 }

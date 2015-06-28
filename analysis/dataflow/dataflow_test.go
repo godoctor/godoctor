@@ -183,7 +183,7 @@ loop:           //2
 
 //TEST1 for testcode test 99
 func TestVarsRangeStmt(t *testing.T) {
-	c := getWrapper(t,`
+	c := getWrapper(t, `
 		package main
 
 		import "fmt"
@@ -209,19 +209,19 @@ func TestVarsRangeStmt(t *testing.T) {
 			return temp
 		}`)
 	// c.printStmts()
-	c.expectLive(t,START)
-	c.expectLive(t,1,"xs")
-	c.expectLive(t,2,"xs","total")
-	c.expectLive(t,3,"xs","total","i","v")
-	c.expectLive(t,4,"total","xs","v")
-	c.expectLive(t,5,"total","xs")
-	c.expectLive(t,6)
-	c.expectLive(t,END)
+	c.expectLive(t, START)
+	c.expectLive(t, 1, "xs")
+	c.expectLive(t, 2, "xs", "total")
+	c.expectLive(t, 3, "xs", "total", "i", "v")
+	c.expectLive(t, 4, "total", "xs", "v")
+	c.expectLive(t, 5, "total", "xs")
+	c.expectLive(t, 6)
+	c.expectLive(t, END)
 }
 
 //TEST2 for testcode test 99
-func TestVarsRangeAndIf(t *testing.T){
-	c := getWrapper(t,`
+func TestVarsRangeAndIf(t *testing.T) {
+	c := getWrapper(t, `
 		package main
 
 		import "fmt"
@@ -253,24 +253,24 @@ func TestVarsRangeAndIf(t *testing.T){
 			return num*3
 		}`)
 	// c.printStmts()
-	c.expectLive(t,START)
-	c.expectLive(t,1,"xs")
-	c.expectLive(t,2,"total","xs")
-	c.expectLive(t,3,"total","xs","v","i")
-	c.expectLive(t,4,"total","xs","v","i") // not sure if this is right ! but based on the test 99
-	c.expectLive(t,5,"total","xs","v","i")
-	c.expectLive(t,6,"total","xs","v","i")
-	c.expectLive(t,7,"total","xs","v")
-	c.expectLive(t,8,"total","xs")
-	c.expectLive(t,9)
+	c.expectLive(t, START)
+	c.expectLive(t, 1, "xs")
+	c.expectLive(t, 2, "total", "xs")
+	c.expectLive(t, 3, "total", "xs", "v", "i")
+	c.expectLive(t, 4, "total", "xs", "v", "i") // not sure if this is right ! but based on the test 99
+	c.expectLive(t, 5, "total", "xs", "v", "i")
+	c.expectLive(t, 6, "total", "xs", "v", "i")
+	c.expectLive(t, 7, "total", "xs", "v")
+	c.expectLive(t, 8, "total", "xs")
+	c.expectLive(t, 9)
 	// c.expectLive(t,10)
-	c.expectLive(t,END)
+	c.expectLive(t, END)
 
 }
 
 //TEST2 for testcode test 99
-func TestVarsRangeAndIf2(t *testing.T){
-	c := getWrapper(t,`
+func TestVarsRangeAndIf2(t *testing.T) {
+	c := getWrapper(t, `
 		package main
 
 		import "fmt"
@@ -300,16 +300,16 @@ func TestVarsRangeAndIf2(t *testing.T){
 			return num*3
 		}`)
 	// c.printStmts()
-	c.expectLive(t,START)
-	c.expectLive(t,1,"xs")
-	c.expectLive(t,2,"xs","total")
-	c.expectLive(t,3,"total","xs","v")
-	c.expectLive(t,4,"total","xs","v") // not sure if this is right ! but based on the test 99
-	c.expectLive(t,5,"total","xs")
-	c.expectLive(t,6,"total","xs")
-	c.expectLive(t,7)
+	c.expectLive(t, START)
+	c.expectLive(t, 1, "xs")
+	c.expectLive(t, 2, "xs", "total")
+	c.expectLive(t, 3, "total", "xs", "v")
+	c.expectLive(t, 4, "total", "xs", "v") // not sure if this is right ! but based on the test 99
+	c.expectLive(t, 5, "total", "xs")
+	c.expectLive(t, 6, "total", "xs")
+	c.expectLive(t, 7)
 	// c.expectLive(t,10)
-	c.expectLive(t,END)
+	c.expectLive(t, END)
 
 }
 
@@ -747,7 +747,7 @@ func (c *CFGWrapper) expectUses(t *testing.T, start int, end int, exp ...string)
 		stmts = append(stmts, c.exp[i])
 	}
 
-	_, uses := ReferencedVars(stmts, c.prog.Created[0])
+	_, _, _, uses := ReferencedVars(stmts, c.prog.Created[0])
 
 	actualUse := make(map[*types.Var]struct{})
 	for u, _ := range uses {
@@ -789,10 +789,16 @@ func (c *CFGWrapper) expectDefs(t *testing.T, start int, end int, exp ...string)
 		stmts = append(stmts, c.exp[i])
 	}
 
-	defs, _ := ReferencedVars(stmts, c.prog.Created[0])
+	asgt, updt, decl, _ := ReferencedVars(stmts, c.prog.Created[0])
 
 	actualDef := make(map[*types.Var]struct{})
-	for d, _ := range defs {
+	for d, _ := range asgt {
+		actualDef[d] = struct{}{}
+	}
+	for d, _ := range updt {
+		actualDef[d] = struct{}{}
+	}
+	for d, _ := range decl {
 		actualDef[d] = struct{}{}
 	}
 
@@ -809,10 +815,10 @@ func (c *CFGWrapper) expectDefs(t *testing.T, start int, end int, exp ...string)
 	}
 
 	for d, _ := range expDef {
-		t.Error("Did not find", d.Name(), "in uses")
+		t.Error("Did not find", d.Name(), "in definitions")
 	}
 	for f, _ := range actualDef {
-		t.Error("Found", f.Name(), "in uses")
+		t.Error("Found", f.Name(), "in definitions")
 	}
 
 }
