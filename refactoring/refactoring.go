@@ -319,7 +319,6 @@ func createLoader(config *Config, errorHandler func(error)) (*loader.Program, er
 	}
 	buildContext.ReadDir = config.FileSystem.ReadDir
 	buildContext.OpenFile = config.FileSystem.OpenFile
-	buildContext.CgoEnabled = false
 
 	var lconfig loader.Config
 	lconfig.Build = &buildContext

@@ -254,11 +254,16 @@ func (e *EditSet) applyTo(in *bufio.Reader, out *bufio.Writer) error {
 		// Copy bytes preceding this edit
 		bytesToWrite := int64(edit.Offset - offset)
 		bytesWritten, err := io.CopyN(out, in, bytesToWrite)
+		if err != nil {
+			return err
+		}
 		offset += int(bytesWritten)
 		if bytesWritten < bytesToWrite {
 			return fmt.Errorf("edit offset %d is beyond "+
-				"the end of the file (%d bytes)",
-				edit.Offset, offset)
+				"the end of the file (%d bytes) - "+
+				"%d bytes written, %d expected",
+				edit.Offset, offset,
+				bytesWritten, bytesToWrite)
 		} else if err != nil {
 			return err
 		}
@@ -269,9 +274,12 @@ func (e *EditSet) applyTo(in *bufio.Reader, out *bufio.Writer) error {
 		bytesWritten, err = io.CopyN(ioutil.Discard, in, bytesToWrite)
 		offset += int(bytesWritten)
 		if bytesWritten < bytesToWrite {
-			return fmt.Errorf("edit offset %d is beyond "+
-				"the end of the file (%d bytes)",
-				edit.Offset, offset)
+			return fmt.Errorf("edit length %d starting "+
+				"from offset %d extends beyond "+
+				"the end of the file (%d bytes) - "+
+				"%d bytes skipped, %d expected",
+				edit.Length, edit.Offset, offset,
+				bytesWritten, bytesToWrite)
 		} else if err != nil {
 			return err
 		}

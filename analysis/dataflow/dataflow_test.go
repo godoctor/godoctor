@@ -7,8 +7,10 @@ package dataflow
 //something something
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
+	"reflect"
 	"testing"
 
 	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/loader"
@@ -177,6 +179,138 @@ loop:           //2
 	c.expectLive(t, 6)
 	c.expectLive(t, 7, "a")
 	c.expectLive(t, END)
+}
+
+//TEST1 for testcode test 99
+func TestVarsRangeStmt(t *testing.T) {
+	c := getWrapper(t, `
+		package main
+
+		import "fmt"
+
+		func main() {
+			xs := []float64{1, 2, 3, 4, 5} 		//1
+			total := 0.0 						//2
+			// BEGIN EXTRACT
+			for i, v := range doubleXS(xs) {	//3
+				fmt.Println(v, i)				//4
+				total += v 						//5
+			}
+			// END EXTRACT
+			fmt.Println(total)					//6
+			//END
+		}
+
+		func doubleXS(xs []float64) []float64 {
+			var temp []float64
+			for i, _ := range xs {
+				temp = append(temp, xs[i] * 2)
+			}
+			return temp
+		}`)
+	// c.printStmts()
+	c.expectLive(t, START)
+	c.expectLive(t, 1, "xs")
+	c.expectLive(t, 2, "xs", "total")
+	c.expectLive(t, 3, "xs", "total", "i", "v")
+	c.expectLive(t, 4, "total", "xs", "v")
+	c.expectLive(t, 5, "total", "xs")
+	c.expectLive(t, 6)
+	c.expectLive(t, END)
+}
+
+//TEST2 for testcode test 99
+func TestVarsRangeAndIf(t *testing.T) {
+	c := getWrapper(t, `
+		package main
+
+		import "fmt"
+
+		func main() {
+			xs := []float64{1, 2, 3, 4, 5} 		//1
+			total := 0.0						//2
+			for i, v := range doubleXS(xs) { 	//3
+				fmt.Println(total)				//4
+				if 6 == tripleNum(v){		//5
+					fmt.Println("#####")		//6
+				}
+				fmt.Println(v, i)				//7
+				total += v 						//8
+			}
+			fmt.Println("Final",total)			//9
+			//END
+		}
+
+		func doubleXS(xs []float64) []float64 {
+			var temp []float64
+			for i, _ := range xs {
+				temp = append(temp, xs[i] * 2)
+			}
+			return temp
+		}
+
+		func tripleNum(num float64) float64{
+			return num*3
+		}`)
+	// c.printStmts()
+	c.expectLive(t, START)
+	c.expectLive(t, 1, "xs")
+	c.expectLive(t, 2, "total", "xs")
+	c.expectLive(t, 3, "total", "xs", "v", "i")
+	c.expectLive(t, 4, "total", "xs", "v", "i") // not sure if this is right ! but based on the test 99
+	c.expectLive(t, 5, "total", "xs", "v", "i")
+	c.expectLive(t, 6, "total", "xs", "v", "i")
+	c.expectLive(t, 7, "total", "xs", "v")
+	c.expectLive(t, 8, "total", "xs")
+	c.expectLive(t, 9)
+	// c.expectLive(t,10)
+	c.expectLive(t, END)
+
+}
+
+//TEST2 for testcode test 99
+func TestVarsRangeAndIf2(t *testing.T) {
+	c := getWrapper(t, `
+		package main
+
+		import "fmt"
+
+		func main() {
+			xs := []float64{1, 2, 3, 4, 5} 		//1
+			total := 0.0						//2
+			for _, v := range doubleXS(xs) { 	//3
+				fmt.Println(total)				//4
+				if 6 == tripleNum(v){			//5
+					fmt.Println("#####")		//6
+				}
+			}
+			fmt.Println("Final",total)			//7
+			//END
+		}
+
+		func doubleXS(xs []float64) []float64 {
+			var temp []float64
+			for i, _ := range xs {
+				temp = append(temp, xs[i] * 2)
+			}
+			return temp
+		}
+
+		func tripleNum(num float64) float64{
+			return num*3
+		}`)
+	// c.printStmts()
+	c.expectLive(t, START)
+	c.expectLive(t, 1, "xs")
+	c.expectLive(t, 2, "xs", "total")
+	c.expectLive(t, 3, "total", "xs", "v")
+	c.expectLive(t, 4, "total", "xs", "v") // not sure if this is right ! but based on the test 99
+	c.expectLive(t, 5, "total", "xs")
+	c.expectLive(t, 6, "total", "xs")
+	c.expectLive(t, 7)
+	// c.expectLive(t,10)
+	c.expectLive(t, END)
+
 }
 
 func TestExprStuff(t *testing.T) {
@@ -613,7 +747,7 @@ func (c *CFGWrapper) expectUses(t *testing.T, start int, end int, exp ...string)
 		stmts = append(stmts, c.exp[i])
 	}
 
-	_, uses := ReferencedVars(stmts, c.prog.Created[0])
+	_, _, _, uses := ReferencedVars(stmts, c.prog.Created[0])
 
 	actualUse := make(map[*types.Var]struct{})
 	for u, _ := range uses {
@@ -655,10 +789,16 @@ func (c *CFGWrapper) expectDefs(t *testing.T, start int, end int, exp ...string)
 		stmts = append(stmts, c.exp[i])
 	}
 
-	defs, _ := ReferencedVars(stmts, c.prog.Created[0])
+	asgt, updt, decl, _ := ReferencedVars(stmts, c.prog.Created[0])
 
 	actualDef := make(map[*types.Var]struct{})
-	for d, _ := range defs {
+	for d, _ := range asgt {
+		actualDef[d] = struct{}{}
+	}
+	for d, _ := range updt {
+		actualDef[d] = struct{}{}
+	}
+	for d, _ := range decl {
 		actualDef[d] = struct{}{}
 	}
 
@@ -675,10 +815,10 @@ func (c *CFGWrapper) expectDefs(t *testing.T, start int, end int, exp ...string)
 	}
 
 	for d, _ := range expDef {
-		t.Error("Did not find", d.Name(), "in uses")
+		t.Error("Did not find", d.Name(), "in definitions")
 	}
 	for f, _ := range actualDef {
-		t.Error("Found", f.Name(), "in uses")
+		t.Error("Found", f.Name(), "in definitions")
 	}
 
 }
@@ -686,4 +826,10 @@ func (c *CFGWrapper) expectDefs(t *testing.T, start int, end int, exp ...string)
 //prints given AST
 func (c *CFGWrapper) printAST() {
 	ast.Print(c.fset, c.f)
+}
+
+func (c *CFGWrapper) printStmts() {
+	for k, v := range c.stmts {
+		fmt.Println(reflect.TypeOf(k), " -> ", v)
+	}
 }
