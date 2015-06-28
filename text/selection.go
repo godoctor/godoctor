@@ -184,6 +184,12 @@ func sameFile(target, check string) bool { // from go.tools/oracle/pos.go
 // lineColToPos converts a line/column position to a token.Pos.  The first
 // character in a file is considered to be at line 1, column 1.
 func lineColToPos(file *token.File, line int, column int) (token.Pos, error) {
+	if line < 1 || column < 1 || line > file.LineCount() {
+		return token.NoPos, fmt.Errorf("Invalid position: line %d, column %d (line and column must be ≥ 1)", line, column)
+	} else if line > file.LineCount() {
+		return token.NoPos, fmt.Errorf("Invalid position: line %d, column %d (file contains %d lines)", line, column, file.LineCount())
+	}
+
 	// Binary search to find a position on the given line
 	lastOffset := file.Size() - 1
 	start := 0
@@ -208,17 +214,20 @@ func lineColToPos(file *token.File, line int, column int) (token.Pos, error) {
 
 	// The difference may have been underestimated if the line contains
 	// non-ASCII characters
-	for file.Position(pos-1).Column >= column {
+	for file.Position(pos).Column > column && pos > file.Pos(0) &&
+		file.Position(pos-1).Column >= column {
 		pos--
 	}
-	for file.Position(pos).Column < column {
+	lastPos := file.Pos(file.Size() - 1)
+	for file.Position(pos).Column < column && pos < lastPos &&
+		file.Position(pos).Column < column {
 		pos++
 	}
 
 	p := file.Position(pos)
 	if p.Line != line || p.Column != column {
-		return pos, fmt.Errorf("Invalid position: line %d, column %d",
-			line, column)
+		return pos, fmt.Errorf("Invalid position: line %d, column %d (could only find line %d, column %d)",
+			line, column, p.Line, p.Column)
 	}
 	return pos, nil
 }
