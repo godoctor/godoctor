@@ -572,9 +572,14 @@ func (r *ExtractFunc) Description() *Description {
 		Name:      "Extract Function",
 		Synopsis:  "Extracts statements to a new function/method",
 		Usage:     "<new_name>",
+		HTMLDoc:   extractFuncDoc,
 		Multifile: false,
-		Params:    nil,
-		Hidden:    false,
+		Params: []Parameter{Parameter{
+			Label:        "Name:",
+			Prompt:       "Enter a name for the new function.",
+			DefaultValue: "",
+		}},
+		Hidden: false,
 	}
 }
 
@@ -790,3 +795,32 @@ func difference(use, in []*types.Var) []*types.Var {
 	}
 	return result
 }
+
+const extractFuncDoc = `
+  <h4>Purpose</h4>
+  <p>The Extract Function refactoring creates a new function (or method) from a
+  sequence of statements, then replaces the original statements with a call to
+  that function.</p>
+
+  <h4>Usage</h4>
+  <ol>
+    <li>Select a sequence of one or more statements inside an existing function
+        or method.</li>
+    <li>Activate the Extract Function refactoring.</li>
+    <li>Enter a name for the new function that will be created.</li>
+  </ol>
+
+  <p>The refactoring will automatically determine what local variables need to
+  be passed to the extracted function and returned as results.</p>
+
+  <p>An error or warning will be reported if the selected statements cannot be
+  extracted into a new function.  Usually, this occurs because they contain a
+  statement like <tt>return</tt> which will have a different meaning in the
+  extracted function.</p>
+
+  <h4>Limitations</h4>
+  <ul>
+    <li>Code containing <tt>return</tt> statements, <tt>defer</tt> statements,
+    or anonymous functions cannot be extracted.</li>
+  </ul>
+`
