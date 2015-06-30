@@ -29,7 +29,7 @@ type ToggleVar struct {
 
 func (r *ToggleVar) Description() *Description {
 	return &Description{
-		Name:      "Toggle var <-> :=",
+		Name:      "Toggle var ⇔ :=",
 		Synopsis:  "Toggles between a var declaration and := statement",
 		Usage:     "",
 		HTMLDoc:   toggleVarDoc,
@@ -65,13 +65,14 @@ func (r *ToggleVar) Run(config *Config) *Result {
 		case *ast.GenDecl:
 			if selectedNode.Tok == token.VAR {
 				if _, ok := nodes[i+1].(*ast.File); ok {
-					r.Log.Errorf("A Global variable cannot be defined using short assign operator")
+					r.Log.Errorf("A global variable cannot be defined using short assign operator.")
+					r.Log.AssociateNode(selectedNode)
 				} else {
 					r.var2short(selectedNode)
 					r.UpdateLog(config, true)
 				}
+				return &r.Result
 			}
-			return &r.Result
 		}
 	}
 
