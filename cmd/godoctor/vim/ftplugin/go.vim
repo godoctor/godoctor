@@ -80,7 +80,7 @@ function! s:is_multifile(refac)
         let name = substitute(fields[0], "^\\s\\+\\|\\s\\+$", "", "g") 
         let multi = substitute(fields[2], "^\\s\\+\\|\\s\\+$", "", "g") 
         if name ==? a:refac
-  	return multi == "true"
+          return multi ==? "true"
         endif
       endif
     endfor
