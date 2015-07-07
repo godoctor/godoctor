@@ -252,7 +252,7 @@ const renameDoc = `
   supported.</p>
 
   <h4>Usage</h4>
-  <ol>
+  <ol class="enum">
     <li>Select an identifier to be renamed.</li>
     <li>Activate the Rename refactoring.</li>
     <li>Enter a new name for the identifier.</li>
@@ -291,7 +291,7 @@ func main() {
     fmt.Println(hello)
 }</pre>
       </td>
-      <td>&nbsp;&nbsp;&rArr;&nbsp&nbsp;</td>
+      <td>&nbsp;&nbsp;&nbsp;&nbsp;&rArr;&nbsp&nbsp;&nbsp;&nbsp;</td>
       <td class="dotted">
         <pre>package main
 import "fmt"

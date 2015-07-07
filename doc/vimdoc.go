@@ -62,18 +62,35 @@ found at the Go Doctor Web site:
 This documentation provides a reference for the commands and options unique to
 the Go Doctor Vim plugin.
 
+This documentation was generated for {{.AboutText}}.
+
 ==============================================================================
 2. Commands                                                *godoctor-commands*
 
 :Refactor                                                          *:Refactor*
 :GoRefactor                                                      *:GoRefactor*
 
-A list of files modified and errors that occurred (if any) are displayed in the
-|location-list|.
+The Refactor and GoRefactor commands are synonymous; either can be used to
+initiate a Go refactoring.  These commands are available only when a Go source
+file is being edited.
+
+The command name is followed by the refactoring name and arguments (if any).
+For example, to rename an identifier in a Go program to "foo", move the cursor
+over the identifier (or select it), and issue the command:
 
 Example: >
     :Refactor rename foo
 <
+
+Vim will autocomplete the refactoring name ("rename" in the example above).
+
+A list of files modified and errors that occurred (if any) are displayed in the
+|location-list|.
+
+:Rename                                                              *:Rename*
+
+The Rename command is a shortcut for ":Refactor rename" and is otherwise used
+similarly.
 
 ==============================================================================
 3. Global Options                                    *godoctor-global-options*
@@ -81,16 +98,15 @@ Example: >
                                                               *'doctor_scope'*
 Default: ""
 If this is set, its value is passed to the godoctor via the "-scope" flag.
+
 For example: >
     let g:doctor_scope='/path/to/main.go'
 <
 
-                                                                     *'FIXME'*
-The path to the godoctor executable is usually detected automatically.  You
-can override this path by setting the variable
-'g:godoctor_FIXME': >
-    let g:godoctor_FIXME = '~/bin/godoctor'
-<
+Usually, the scope will point to the program entrypoint (main package) for the
+program you want to refactor.  If an explicit scope is not set, the Go Doctor
+assumes that the current directory contains a Go package, and it uses that
+package as the scope.
 
 ==============================================================================
 4. License                                                  *godoctor-license*

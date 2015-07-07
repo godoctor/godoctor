@@ -91,7 +91,7 @@ func Flags() *CLIFlags {
 	flags.jsonFlag = flags.Bool("json", false,
 		"Accept commands in OpenRefactory JSON protocol format")
 	flags.docFlag = flags.String("doc", "",
-		"Output the user's guide (HTML) or man page and exit")
+		"Output documentation (install, user, man, or vim) and exit")
 	return &flags
 }
 
@@ -126,13 +126,15 @@ func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, 
 		switch *flags.docFlag {
 		case "man":
 			doc.PrintManPage(aboutText, flags.FlagSet, stdout)
+		case "install":
+			doc.PrintInstallGuide(aboutText, flags.FlagSet, stdout)
 		case "user":
 			doc.PrintUserGuide(aboutText, flags.FlagSet, stdout)
 		case "vim":
 			doc.PrintVimdoc(aboutText, flags.FlagSet, stdout)
 		default:
 			fmt.Fprintln(stderr, "Error: The -doc flag must be "+
-				"\"man\", \"user\", or \"vim\"")
+				"\"man\", \"install\", \"user\", or \"vim\"")
 			return 1
 		}
 		return 0

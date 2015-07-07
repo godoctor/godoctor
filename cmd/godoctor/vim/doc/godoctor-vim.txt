@@ -11,29 +11,22 @@
                                    - = = = -                                 ~
 
 
-			     http://gorefactor.org/
+                            http://gorefactor.org/
 
-
-
-			  Vim Plugin Reference Manual                        ~
 
 
 ==============================================================================
-CONTENTS                                                   *godoctor-contents*
 
-    1.Overview......................................|godoctor-overview|
-    2.License.......................................|godoctor-license|
+The Go Doctor provides source code refactoring for programs written in the Go
+programming language (golang).
 
-
-==============================================================================
-1. Overview                                                *godoctor-overview*
-
-The Go Doctor provides source code refactoring for golang programs.
-
-Complete documentation for the Go Doctor, including a complete reference for
-the Vim plugin, is available at the Go Doctor Web site:
+This Vim documentation file is a stub.  Complete documentation for the Go
+Doctor, is available at the Go Doctor Web site
 
     https://gorefactor.org/
+
+which also includes instructions for installing the full documentation for
+the Go Doctor Vim plug-in.
 
 ==============================================================================
 2. License                                                  *godoctor-license*

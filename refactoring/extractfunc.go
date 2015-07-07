@@ -803,7 +803,7 @@ const extractFuncDoc = `
   that function.</p>
 
   <h4>Usage</h4>
-  <ol>
+  <ol class="enum">
     <li>Select a sequence of one or more statements inside an existing function
         or method.</li>
     <li>Activate the Extract Function refactoring.</li>
