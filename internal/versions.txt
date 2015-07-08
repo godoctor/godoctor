@@ -1,13 +1,13 @@
-Thu May 21 21:33:21 CDT 2015
+Tue Jul  7 23:34:17 PDT 2015
 
-golang.org/x/tools
-origin	https://go.googlesource.com/tools (fetch)
-abf43428cc239218424c7a44dc9b5987cd351c3e  (HEAD, origin/release-branch.go1.4, release-branch.go1.4) x/tools/dashboard/app: ignore freebsd-arm failures
+./golang.org/x/tools
+origin	git@github.com:godoctor/godoctor (fetch)
+9b960bd22f7b9475100a6bdc5b022f45539caffd  (HEAD, origin/master, origin/HEAD, update-tools, master) Fixd Renaming of embedded types
 
-github.com/cheggaaa/pb
-origin	https://github.com/cheggaaa/pb (fetch)
-d7729fd7ec1372c15b83db39834bf842bf2d69fb  (HEAD, origin/master, origin/HEAD, master) return object for a chain calling
+./github.com/cheggaaa/pb
+origin	git@github.com:godoctor/godoctor (fetch)
+9b960bd22f7b9475100a6bdc5b022f45539caffd  (HEAD, origin/master, origin/HEAD, update-tools, master) Fixd Renaming of embedded types
 
-github.com/willf/bitset
-origin	https://github.com/mattn/go-sqlite3 (fetch)
-4b220417a489359f934045d0509d941a7a2a1038  (HEAD, origin/master, origin/develop, origin/HEAD, master) create documentation according to Go standards
+./github.com/willf/bitset
+origin	git@github.com:godoctor/godoctor (fetch)
+9b960bd22f7b9475100a6bdc5b022f45539caffd  (HEAD, origin/master, origin/HEAD, update-tools, master) Fixd Renaming of embedded types

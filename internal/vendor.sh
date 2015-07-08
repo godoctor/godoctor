@@ -2,19 +2,23 @@
 
 # Vendoring of third-party packages for the Go Doctor
 
+set -e
+
 if [ `dirname $0` != '.' ]; then
 	echo "vendor.sh must be run from the internal directory"
 	exit 1
 fi
 
 # Change to the root of the godoctor repository
-cd ..
+#cd ..
 
 FILE=`pwd`/versions.txt
 
+echo $PWD
+
 echo "Logging versions to $FILE..."
 date >$FILE
-for pkg in golang.org/x/tools github.com/cheggaaa/pb github.com/willf/bitset; do
+for pkg in ./golang.org/x/tools ./github.com/cheggaaa/pb ./github.com/willf/bitset; do
 	pushd . >/dev/null
 	cd $pkg
 	echo "" >>$FILE
@@ -35,10 +39,9 @@ find . -iname '*_test.go' -delete
 
 echo "Rewriting import paths in Go Doctor and third-party sources..."
 pushd . >/dev/null
-cd ..
-find . -iname '*.go' -exec sed -e 's/"golang.org\/x\//"github.com\/godoctor\/godoctor\/internal\/golang.org\/x\//g' -i '' '{}' ';'
-find . -iname '*.go' -exec sed -e 's/"github.com\/cheggaaa\//"github.com\/godoctor\/godoctor\/internal\/github.com\/cheggaaa\//g' -i '' '{}' ';'
-find . -iname '*.go' -exec sed -e 's/"github.com\/willf\//"github.com\/godoctor\/godoctor\/internal\/github.com\/willf\//g' -i '' '{}' ';'
+find . -type f -name '*.go' -print0 | xargs -0 sed -Ei 's/"golang.org\/x\//"github.com\/godoctor\/godoctor\/internal\/golang.org\/x\//g'
+find . -type f -name '*.go' -print0 | xargs -0 sed -Ei 's/"github.com\/cheggaaa\//"github.com\/godoctor\/godoctor\/internal\/github.com\/cheggaaa\//g'
+find . -type f -name '*.go' -print0 | xargs -0 sed -Ei 's/"github.com\/willf\//"github.com\/godoctor\/godoctor\/internal\/github.com\/willf\//g'
 popd >/dev/null
 
 echo "DONE"
