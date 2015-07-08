@@ -18,7 +18,7 @@ var name string = "Go Doctor"
 
 // Go Doctor version number.  This is overridden in official builds using:
 // go build -ldflags "-X main.version 0.1" github.com/godoctor/godoctor/cmd/godoctor
-var version string = "0.1 (unofficial)"
+var version string = "0.1 (Beta)"
 
 func main() {
 	aboutText := fmt.Sprintf("%s %s", name, version)
