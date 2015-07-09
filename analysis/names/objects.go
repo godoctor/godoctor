@@ -19,7 +19,9 @@ import (
 // different methods in this package.
 func FindOccurrences(obj types.Object, prog *loader.Program) map[*ast.Ident]bool {
 	decls := map[types.Object]bool{obj: true}
-	if isMethod(obj) {
+	if _, ok := obj.(*types.TypeName); ok {
+		decls = FindEmbeddedTypes(obj, prog)
+	} else if isMethod(obj) {
 		decls = FindDeclarationsAcrossInterfaces(obj, prog)
 	}
 
