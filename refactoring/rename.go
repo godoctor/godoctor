@@ -129,7 +129,9 @@ func (r *Rename) rename(ident *ast.Ident, pkgInfo *loader.PackageInfo) {
 	obj := pkgInfo.ObjectOf(ident)
 
 	if obj == nil && r.selectedTypeSwitchVar() == nil {
-		r.base.Log.Errorf("Package renaming is not supported")
+		r.base.Log.Errorf("The selected identifier cannot be " +
+			"renamed.  (Package and cgo renaming are not " +
+			"currently supported.)")
 		r.base.Log.AssociateNode(ident)
 		return
 	}

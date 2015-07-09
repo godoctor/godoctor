@@ -184,7 +184,7 @@ func sameFile(target, check string) bool { // from go.tools/oracle/pos.go
 // lineColToPos converts a line/column position to a token.Pos.  The first
 // character in a file is considered to be at line 1, column 1.
 func lineColToPos(file *token.File, line int, column int) (token.Pos, error) {
-	if line < 1 || column < 1 || line > file.LineCount() {
+	if line < 1 || column < 1 {
 		return token.NoPos, fmt.Errorf("Invalid position: line %d, column %d (line and column must be ≥ 1)", line, column)
 	} else if line > file.LineCount() {
 		return token.NoPos, fmt.Errorf("Invalid position: line %d, column %d (file contains %d lines)", line, column, file.LineCount())
