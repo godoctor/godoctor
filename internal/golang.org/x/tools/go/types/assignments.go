@@ -45,7 +45,7 @@ func (check *Checker) assignment(x *operand, T Type) bool {
 		// bool, rune, int, float64, complex128 or string respectively, depending
 		// on whether the value is a boolean, rune, integer, floating-point, complex,
 		// or string constant."
-		if T == nil || isInterface(T) {
+		if T == nil || IsInterface(T) {
 			if T == nil && x.typ == Typ[UntypedNil] {
 				check.errorf(x.pos(), "use of untyped nil")
 				x.mode = invalid
@@ -161,7 +161,7 @@ func (check *Checker) assignVar(lhs ast.Expr, x *operand) Type {
 	var v *Var
 	var v_used bool
 	if ident != nil {
-		if _, obj := check.scope.LookupParent(ident.Name); obj != nil {
+		if _, obj := check.scope.LookupParent(ident.Name, token.NoPos); obj != nil {
 			v, _ = obj.(*Var)
 			if v != nil {
 				v_used = v.used
@@ -314,8 +314,13 @@ func (check *Checker) shortVarDecl(pos token.Pos, lhs, rhs []ast.Expr) {
 
 	// declare new variables
 	if len(newVars) > 0 {
+		// spec: "The scope of a constant or variable identifier declared inside
+		// a function begins at the end of the ConstSpec or VarSpec (ShortVarDecl
+		// for short variable declarations) and ends at the end of the innermost
+		// containing block."
+		scopePos := rhs[len(rhs)-1].End()
 		for _, obj := range newVars {
-			check.declare(scope, nil, obj) // recordObject already called
+			check.declare(scope, nil, obj, scopePos) // recordObject already called
 		}
 	} else {
 		check.softErrorf(pos, "no new variables on left side of :=")

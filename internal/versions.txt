@@ -1,13 +1,13 @@
-Tue Jul  7 23:34:17 PDT 2015
+Thu Jul 16 22:31:18 PDT 2015
 
 ./golang.org/x/tools
 origin	git@github.com:godoctor/godoctor (fetch)
-9b960bd22f7b9475100a6bdc5b022f45539caffd  (HEAD, origin/master, origin/HEAD, update-tools, master) Fixd Renaming of embedded types
+f17c8320c23089ef97407fc72f2c9654099e47b4  (HEAD, fix-import-paths) changes vendored TypeString to use pkg names instead of paths
 
 ./github.com/cheggaaa/pb
 origin	git@github.com:godoctor/godoctor (fetch)
-9b960bd22f7b9475100a6bdc5b022f45539caffd  (HEAD, origin/master, origin/HEAD, update-tools, master) Fixd Renaming of embedded types
+f17c8320c23089ef97407fc72f2c9654099e47b4  (HEAD, fix-import-paths) changes vendored TypeString to use pkg names instead of paths
 
 ./github.com/willf/bitset
 origin	git@github.com:godoctor/godoctor (fetch)
-9b960bd22f7b9475100a6bdc5b022f45539caffd  (HEAD, origin/master, origin/HEAD, update-tools, master) Fixd Renaming of embedded types
+f17c8320c23089ef97407fc72f2c9654099e47b4  (HEAD, fix-import-paths) changes vendored TypeString to use pkg names instead of paths

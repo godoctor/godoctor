@@ -23,6 +23,10 @@ func (check *Checker) funcBody(decl *declInfo, name string, sig *Signature, body
 		defer fmt.Println("--- <end>")
 	}
 
+	// set function scope extent
+	sig.scope.pos = body.Pos()
+	sig.scope.end = body.End()
+
 	// save/restore current context and setup function context
 	// (and use 0 indentation at function start)
 	defer func(ctxt context, indent int) {
@@ -119,7 +123,7 @@ func (check *Checker) multipleDefaults(list []ast.Stmt) {
 }
 
 func (check *Checker) openScope(s ast.Stmt, comment string) {
-	scope := NewScope(check.scope, comment)
+	scope := NewScope(check.scope, s.Pos(), s.End(), comment)
 	check.recordScope(s, scope)
 	check.scope = scope
 }
@@ -274,7 +278,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 		}
 		var x operand
 		Y := &ast.BasicLit{ValuePos: s.X.Pos(), Kind: token.INT, Value: "1"} // use x's position
-		check.binary(&x, s.X, Y, op)
+		check.binary(&x, nil, s.X, Y, op)
 		if x.mode == invalid {
 			return
 		}
@@ -306,7 +310,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 				return
 			}
 			var x operand
-			check.binary(&x, s.Lhs[0], s.Rhs[0], op)
+			check.binary(&x, nil, s.Lhs[0], s.Rhs[0], op)
 			if x.mode == invalid {
 				return
 			}
@@ -329,7 +333,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 				// list in a "return" statement if a different entity (constant, type, or variable)
 				// with the same name as a result parameter is in scope at the place of the return."
 				for _, obj := range res.vars {
-					if _, alt := check.scope.LookupParent(obj.name); alt != nil && alt != obj {
+					if _, alt := check.scope.LookupParent(obj.name, check.pos); alt != nil && alt != obj {
 						check.errorf(s.Pos(), "result parameter %s not in scope at return", obj.name)
 						check.errorf(alt.Pos(), "\tinner declaration of %s", obj)
 						// ok to continue
@@ -456,7 +460,14 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 				check.invalidAST(s.Pos(), "incorrect form of type switch guard")
 				return
 			}
-			check.recordDef(lhs, nil) // lhs variable is implicitly declared in each cause clause
+
+			if lhs.Name == "_" {
+				// _ := x.(type) is an invalid short variable declaration
+				check.softErrorf(lhs.Pos(), "no new variable on left side of :=")
+				lhs = nil // avoid declared but not used error below
+			} else {
+				check.recordDef(lhs, nil) // lhs variable is implicitly declared in each cause clause
+			}
 
 			rhs = guard.Rhs[0]
 
@@ -506,7 +517,11 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 					T = x.typ
 				}
 				obj := NewVar(lhs.Pos(), check.pkg, lhs.Name, T)
-				check.declare(check.scope, nil, obj)
+				scopePos := clause.End()
+				if len(clause.Body) > 0 {
+					scopePos = clause.Body[0].Pos()
+				}
+				check.declare(check.scope, nil, obj, scopePos)
 				check.recordImplicit(clause, obj)
 				// For the "declared but not used" error, all lhs variables act as
 				// one; i.e., if any one of them is 'used', all of them are 'used'.
@@ -569,11 +584,11 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			}
 
 			check.openScope(s, "case")
-			defer check.closeScope()
 			if clause.Comm != nil {
 				check.stmt(inner, clause.Comm)
 			}
 			check.stmtList(inner, clause.Body)
+			check.closeScope()
 		}
 
 	case *ast.ForStmt:
@@ -604,60 +619,49 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 		defer check.closeScope()
 
 		// check expression to iterate over
-		decl := s.Tok == token.DEFINE
 		var x operand
 		check.expr(&x, s.X)
-		if x.mode == invalid {
-			// if we don't have a declaration, we can still check the loop's body
-			// (otherwise we can't because we are missing the declared variables)
-			if !decl {
-				check.stmt(inner, s.Body)
-			}
-			return
-		}
 
 		// determine key/value types
 		var key, val Type
-		switch typ := x.typ.Underlying().(type) {
-		case *Basic:
-			if isString(typ) {
-				key = Typ[Int]
-				val = UniverseRune // use 'rune' name
-			}
-		case *Array:
-			key = Typ[Int]
-			val = typ.elem
-		case *Slice:
-			key = Typ[Int]
-			val = typ.elem
-		case *Pointer:
-			if typ, _ := typ.base.Underlying().(*Array); typ != nil {
+		if x.mode != invalid {
+			switch typ := x.typ.Underlying().(type) {
+			case *Basic:
+				if isString(typ) {
+					key = Typ[Int]
+					val = UniverseRune // use 'rune' name
+				}
+			case *Array:
 				key = Typ[Int]
 				val = typ.elem
-			}
-		case *Map:
-			key = typ.key
-			val = typ.elem
-		case *Chan:
-			key = typ.elem
-			val = Typ[Invalid]
-			if typ.dir == SendOnly {
-				check.errorf(x.pos(), "cannot range over send-only channel %s", &x)
-				// ok to continue
-			}
-			if s.Value != nil {
-				check.errorf(s.Value.Pos(), "iteration over %s permits only one iteration variable", &x)
-				// ok to continue
+			case *Slice:
+				key = Typ[Int]
+				val = typ.elem
+			case *Pointer:
+				if typ, _ := typ.base.Underlying().(*Array); typ != nil {
+					key = Typ[Int]
+					val = typ.elem
+				}
+			case *Map:
+				key = typ.key
+				val = typ.elem
+			case *Chan:
+				key = typ.elem
+				val = Typ[Invalid]
+				if typ.dir == SendOnly {
+					check.errorf(x.pos(), "cannot range over send-only channel %s", &x)
+					// ok to continue
+				}
+				if s.Value != nil {
+					check.errorf(s.Value.Pos(), "iteration over %s permits only one iteration variable", &x)
+					// ok to continue
+				}
 			}
 		}
 
 		if key == nil {
 			check.errorf(x.pos(), "cannot range over %s", &x)
-			// if we don't have a declaration, we can still check the loop's body
-			if !decl {
-				check.stmt(inner, s.Body)
-			}
-			return
+			// ok to continue
 		}
 
 		// check assignment to/declaration of iteration variables
@@ -665,9 +669,9 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 
 		// lhs expressions and initialization value (rhs) types
 		lhs := [2]ast.Expr{s.Key, s.Value}
-		rhs := [2]Type{key, val}
+		rhs := [2]Type{key, val} // key, val may be nil
 
-		if decl {
+		if s.Tok == token.DEFINE {
 			// short variable declaration; variable scope starts after the range clause
 			// (the for loop opens a new scope, so variables on the lhs never redeclare
 			// previously declared variables)
@@ -694,16 +698,26 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 				}
 
 				// initialize lhs variable
-				x.mode = value
-				x.expr = lhs // we don't have a better rhs expression to use here
-				x.typ = rhs[i]
-				check.initVar(obj, &x, false)
+				if typ := rhs[i]; typ != nil {
+					x.mode = value
+					x.expr = lhs // we don't have a better rhs expression to use here
+					x.typ = typ
+					check.initVar(obj, &x, false)
+				} else {
+					obj.typ = Typ[Invalid]
+					obj.used = true // don't complain about unused variable
+				}
 			}
 
 			// declare variables
 			if len(vars) > 0 {
 				for _, obj := range vars {
-					check.declare(check.scope, nil /* recordDef already called */, obj)
+					// spec: "The scope of a constant or variable identifier declared inside
+					// a function begins at the end of the ConstSpec or VarSpec (ShortVarDecl
+					// for short variable declarations) and ends at the end of the innermost
+					// containing block."
+					scopePos := s.End()
+					check.declare(check.scope, nil /* recordDef already called */, obj, scopePos)
 				}
 			} else {
 				check.error(s.TokPos, "no new variables on left side of :=")
@@ -714,10 +728,12 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 				if lhs == nil {
 					continue
 				}
-				x.mode = value
-				x.expr = lhs // we don't have a better rhs expression to use here
-				x.typ = rhs[i]
-				check.assignVar(lhs, &x)
+				if typ := rhs[i]; typ != nil {
+					x.mode = value
+					x.expr = lhs // we don't have a better rhs expression to use here
+					x.typ = typ
+					check.assignVar(lhs, &x)
+				}
 			}
 		}
 

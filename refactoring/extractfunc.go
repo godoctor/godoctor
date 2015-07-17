@@ -442,24 +442,25 @@ func (r *stmtRange) String() string {
 // extractedFunc encapsulates information about the new function that will be
 // created from the extracted code, along with how it should be called.
 type extractedFunc struct {
-	name          string       // name of the new function
-	recv          *types.Var   // receiver variable, or nil
-	params        []*types.Var // parameters for the new function
-	returns       []*types.Var // variables whose values will be returned
-	locals        []*types.Var // local variables to declare
-	declareResult bool         // true for x := f(), false for x = f()
-	code          []byte       // code to copy into the function body
+	name          string                        // name of the new function
+	recv          *types.Var                    // receiver variable, or nil
+	params        []*types.Var                  // parameters for the new function
+	returns       []*types.Var                  // variables whose values will be returned
+	locals        []*types.Var                  // local variables to declare
+	declareResult bool                          // true for x := f(), false for x = f()
+	code          []byte                        // code to copy into the function body
+	pkgFmt        func(p *types.Package) string // rewrite import uses
 }
 
 // SourceCode returns source code for (1) the new function declaration that
 // should be inserted, and (2) the function call that should replace the
 // selected statements.
 func (f *extractedFunc) SourceCode() (funcDecl, funcCall string) {
-	paramNames, paramTypes := namesAndTypes(f.params)
+	paramNames, paramTypes := namesAndTypes(f.params, f.pkgFmt)
 	funcDeclParams := createParamDecls(paramNames, paramTypes)
 	funcCallArgs := commaSeparated(paramNames)
 	if f.recv != nil {
-		recvType := types.TypeString(f.recv.Pkg(), f.recv.Type())
+		recvType := types.TypeString(f.recv.Type(), f.pkgFmt)
 		funcDecl = fmt.Sprintf("(%s %s) %s(%s)",
 			f.recv.Name(), recvType, f.name, funcDeclParams)
 		funcCall = fmt.Sprintf("%s.%s(%s)",
@@ -469,13 +470,13 @@ func (f *extractedFunc) SourceCode() (funcDecl, funcCall string) {
 		funcCall = fmt.Sprintf("%s(%s)", f.name, funcCallArgs)
 	}
 
-	localVarDecls := createVarDecls(namesAndTypes(f.locals))
+	localVarDecls := createVarDecls(namesAndTypes(f.locals, f.pkgFmt))
 	if len(f.returns) == 0 {
 		funcDecl = fmt.Sprintf("\nfunc %s {\n%s%s\n}\n",
 			funcDecl, localVarDecls, f.code)
 		funcCall = fmt.Sprintf("%s", funcCall)
 	} else {
-		returnNames, returnTypes := namesAndTypes(f.returns)
+		returnNames, returnTypes := namesAndTypes(f.returns, f.pkgFmt)
 		returnExprs := commaSeparated(returnNames)
 		returnStmt := "return " + returnExprs
 
@@ -505,11 +506,11 @@ func (f *extractedFunc) SourceCode() (funcDecl, funcCall string) {
 
 // namesAndTypes receives a list of variables and returns strings describing
 // their names and types, suitable for use in variable declarations.
-func namesAndTypes(vars []*types.Var) (names []string, typez []string) {
+func namesAndTypes(vars []*types.Var, fmt types.Qualifier) (names []string, typez []string) {
 	for _, a := range vars {
 		if a.Name() != "_" {
 			names = append(names, a.Name())
-			typez = append(typez, types.TypeString(a.Pkg(), a.Type()))
+			typez = append(typez, types.TypeString(a.Type(), fmt))
 		}
 	}
 	return
@@ -689,6 +690,23 @@ func (r *ExtractFunc) createExtractedFunc() *extractedFunc {
 		locals:        locals,
 		declareResult: declareResult,
 		code:          code,
+		pkgFmt:        pkgUseFmt(r.SelectedNodePkg.Pkg),
+	}
+}
+
+// pkgUseFmt returns a types.Qualifier similar to types.RelativeTo,
+// but instead of returning full paths, it returns only the package's base
+// name, i.e. 'github.com/some/pkg' -> 'pkg'. The current package's name
+// is also omitted (since it would be a circular dependency on itself).
+func pkgUseFmt(pkg *types.Package) types.Qualifier {
+	if pkg == nil {
+		return nil // wat
+	}
+	return func(other *types.Package) string {
+		if pkg == other {
+			return "" // same package; unqualified
+		}
+		return other.Name()
 	}
 }
 

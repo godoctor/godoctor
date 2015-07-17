@@ -84,6 +84,7 @@ type Checker struct {
 	// context within which the current object is type-checked
 	// (valid only for the duration of type-checking a specific object)
 	context
+	pos token.Pos // if valid, identifiers are looked up as if at position pos (used by Eval)
 
 	// debugging
 	indent int // indentation for tracing
@@ -233,7 +234,9 @@ func (check *Checker) Files(files []*ast.File) (err error) {
 
 	check.initOrder()
 
-	check.unusedImports()
+	if !check.conf.DisableUnusedImportCheck {
+		check.unusedImports()
+	}
 
 	// perform delayed checks
 	for _, f := range check.delayed {
