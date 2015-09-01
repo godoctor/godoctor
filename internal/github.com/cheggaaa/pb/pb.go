@@ -8,6 +8,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -97,10 +98,9 @@ func (pb *ProgressBar) Start() *ProgressBar {
 	pb.startTime = time.Now()
 	pb.startValue = pb.current
 	if pb.Total == 0 {
-		pb.ShowBar = false
 		pb.ShowTimeLeft = false
 		pb.ShowPercent = false
-	}	
+	}
 	if !pb.ManualUpdate {
 		go pb.writer()
 	}
@@ -224,22 +224,22 @@ func (pb *ProgressBar) NewProxyReader(r io.Reader) *Reader {
 }
 
 func (pb *ProgressBar) write(current int64) {
-	width := pb.getWidth()
+	width := pb.GetWidth()
 
 	var percentBox, countersBox, timeLeftBox, speedBox, barBox, end, out string
 
 	// percents
 	if pb.ShowPercent {
 		percent := float64(current) / (float64(pb.Total) / float64(100))
-		percentBox = fmt.Sprintf(" %#.02f %% ", percent)
+		percentBox = fmt.Sprintf(" %.02f %% ", percent)
 	}
-	
+
 	// counters
 	if pb.ShowCounters {
 		if pb.Total > 0 {
 			countersBox = fmt.Sprintf("%s / %s ", Format(current, pb.Units), Format(pb.Total, pb.Units))
 		} else {
-			countersBox = Format(current, pb.Units) + " "
+			countersBox = Format(current, pb.Units) + " / ? "
 		}
 	}
 
@@ -268,33 +268,48 @@ func (pb *ProgressBar) write(current int64) {
 		speedBox = Format(int64(speed), pb.Units) + "/s "
 	}
 
+	barWidth := utf8.RuneCountInString(countersBox + pb.BarStart + pb.BarEnd + percentBox + timeLeftBox + speedBox + pb.prefix + pb.postfix)
 	// bar
 	if pb.ShowBar {
-		size := width - len(countersBox+pb.BarStart+pb.BarEnd+percentBox+timeLeftBox+speedBox+pb.prefix+pb.postfix)
+		size := width - barWidth
 		if size > 0 {
-			curCount := int(math.Ceil((float64(current) / float64(pb.Total)) * float64(size)))
-			emptCount := size - curCount
-			barBox = pb.BarStart
-			if emptCount < 0 {
-				emptCount = 0
-			}
-			if curCount > size {
-				curCount = size
-			}
-			if emptCount <= 0 {
-				barBox += strings.Repeat(pb.Current, curCount)
-			} else if curCount > 0 {
-				barBox += strings.Repeat(pb.Current, curCount-1) + pb.CurrentN
-			}
+			if pb.Total > 0 {
+				curCount := int(math.Ceil((float64(current) / float64(pb.Total)) * float64(size)))
+				emptCount := size - curCount
+				barBox = pb.BarStart
+				if emptCount < 0 {
+					emptCount = 0
+				}
+				if curCount > size {
+					curCount = size
+				}
+				if emptCount <= 0 {
+					barBox += strings.Repeat(pb.Current, curCount)
+				} else if curCount > 0 {
+					barBox += strings.Repeat(pb.Current, curCount-1) + pb.CurrentN
+				}
 
-			barBox += strings.Repeat(pb.Empty, emptCount) + pb.BarEnd
+				barBox += strings.Repeat(pb.Empty, emptCount) + pb.BarEnd
+			} else {
+
+				barBox = pb.BarStart
+				pos := size - int(current)%int(size)
+				if pos-1 > 0 {
+					barBox += strings.Repeat(pb.Empty, pos-1)
+				}
+				barBox += pb.Current
+				if size-pos-1 > 0 {
+					barBox += strings.Repeat(pb.Empty, size-pos-1)
+				}
+				barBox += pb.BarEnd
+			}
 		}
 	}
 
 	// check len
 	out = pb.prefix + countersBox + barBox + percentBox + speedBox + timeLeftBox + pb.postfix
-	if len(out) < width {
-		end = strings.Repeat(" ", width-len(out))
+	if utf8.RuneCountInString(out) < width {
+		end = strings.Repeat(" ", width-utf8.RuneCountInString(out))
 	}
 
 	// and print!
@@ -308,7 +323,7 @@ func (pb *ProgressBar) write(current int64) {
 	}
 }
 
-func (pb *ProgressBar) getWidth() int {
+func (pb *ProgressBar) GetWidth() int {
 	if pb.ForceWidth {
 		return pb.Width
 	}

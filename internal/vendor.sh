@@ -16,7 +16,16 @@ FILE=`pwd`/versions.txt
 
 echo $PWD
 
-echo "Logging versions to $FILE..."
+echo "Cloning repositories..."
+rm -rf golang.org/x/tools && \
+	git clone --branch release-branch.go1.5 \
+		https://github.com/golang/tools.git golang.org/x/tools
+rm -rf github.com/cheggaaa/pb && \
+	git clone https://github.com/cheggaaa/pb.git github.com/cheggaaa/pb
+rm -rf github.com/willf/bitset && \
+	git clone https://github.com/willf/bitset.git github.com/willf/bitset
+
+echo "Logging versions to $FILE and removing .git directories..."
 date >$FILE
 for pkg in ./golang.org/x/tools ./github.com/cheggaaa/pb ./github.com/willf/bitset; do
 	pushd . >/dev/null
@@ -26,12 +35,17 @@ for pkg in ./golang.org/x/tools ./github.com/cheggaaa/pb ./github.com/willf/bits
 	git remote -v | head -1 >>$FILE
 	git log --pretty=format:'%H %d %s' -1 >>$FILE
 	echo "" >>$FILE
+	rm -rf "$pkg/.git"
 	popd >/dev/null
 done
 
 echo "Removing unused portions of go.tools..."
 pushd . >/dev/null
-cd golang.org/x/tools && rm -rf blog cmd cover dashboard godoc imports oracle playground present refactor codereview.cfg go/callgraph go/gccgoimporter go/importer go/pointer go/vcs
+cd golang.org/x/tools && \
+	rm -rf blog cmd cover dashboard godoc imports oracle playground \
+		present refactor codereview.cfg go/callgraph \
+		go/gcimporter go/gccgoimporter \
+		go/importer go/pointer go/ssa go/vcs
 popd >/dev/null
 
 echo "Removing tests from third-party packages..."
@@ -39,9 +53,9 @@ find . -iname '*_test.go' -delete
 
 echo "Rewriting import paths in Go Doctor and third-party sources..."
 pushd . >/dev/null
-find . -type f -name '*.go' -print0 | xargs -0 sed -Ei 's/"golang.org\/x\//"github.com\/godoctor\/godoctor\/internal\/golang.org\/x\//g'
-find . -type f -name '*.go' -print0 | xargs -0 sed -Ei 's/"github.com\/cheggaaa\//"github.com\/godoctor\/godoctor\/internal\/github.com\/cheggaaa\//g'
-find . -type f -name '*.go' -print0 | xargs -0 sed -Ei 's/"github.com\/willf\//"github.com\/godoctor\/godoctor\/internal\/github.com\/willf\//g'
+find . -type f -name '*.go' -print0 | xargs -0 sed -Ei '' 's/"golang.org\/x\//"github.com\/godoctor\/godoctor\/internal\/golang.org\/x\//g'
+find . -type f -name '*.go' -print0 | xargs -0 sed -Ei '' 's/"github.com\/cheggaaa\//"github.com\/godoctor\/godoctor\/internal\/github.com\/cheggaaa\//g'
+find . -type f -name '*.go' -print0 | xargs -0 sed -Ei '' 's/"github.com\/willf\//"github.com\/godoctor\/godoctor\/internal\/github.com\/willf\//g'
 popd >/dev/null
 
 echo "DONE"

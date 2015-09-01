@@ -168,7 +168,7 @@ type Result struct {
 	Edits map[string]*text.EditSet
 }
 
-const cgoError1 = "could not import C (cannot"
+const cgoError1 = "could not import C ("
 const cgoError2 = "undeclared name: C"
 
 type RefactoringBase struct {
@@ -324,7 +324,7 @@ func createLoader(config *Config, errorHandler func(error)) (*loader.Program, er
 	lconfig.Build = &buildContext
 	lconfig.ParserMode = parser.ParseComments | parser.DeclarationErrors
 	lconfig.AllowErrors = true
-	lconfig.SourceImports = true
+	//lconfig.SourceImports = true
 	lconfig.TypeChecker.Error = errorHandler
 
 	rest, err := lconfig.FromArgs(config.Scope, true)

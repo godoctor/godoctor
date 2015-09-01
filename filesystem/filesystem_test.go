@@ -205,7 +205,7 @@ func TestLoader(t *testing.T) {
 	lconfig.Build = &build
 	lconfig.ParserMode = parser.ParseComments | parser.DeclarationErrors
 	lconfig.AllowErrors = false
-	lconfig.SourceImports = true
+	//lconfig.SourceImports = true
 	lconfig.TypeChecker.Error = func(err error) {
 		t.Fatal(err)
 	}

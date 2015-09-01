@@ -1,13 +1,13 @@
-Thu Jul 16 22:31:18 PDT 2015
+Tue Sep  1 09:26:24 CDT 2015
 
 ./golang.org/x/tools
-origin	git@github.com:godoctor/godoctor (fetch)
-f17c8320c23089ef97407fc72f2c9654099e47b4  (HEAD, fix-import-paths) changes vendored TypeString to use pkg names instead of paths
+origin	https://github.com/golang/tools.git (fetch)
+d02228d1857b9f49cd0252788516ff5584266eb6  (HEAD, origin/release-branch.go1.5, release-branch.go1.5) cmd/callgraph: exclude test for Android
 
 ./github.com/cheggaaa/pb
-origin	git@github.com:godoctor/godoctor (fetch)
-f17c8320c23089ef97407fc72f2c9654099e47b4  (HEAD, fix-import-paths) changes vendored TypeString to use pkg names instead of paths
+origin	https://github.com/cheggaaa/pb.git (fetch)
+da1f27ad1d9509b16f65f52fd9d8138b0f2dc7b2  (HEAD, origin/master, origin/HEAD, master) Merge pull request #49 from harshavardhana/master
 
 ./github.com/willf/bitset
-origin	git@github.com:godoctor/godoctor (fetch)
-f17c8320c23089ef97407fc72f2c9654099e47b4  (HEAD, fix-import-paths) changes vendored TypeString to use pkg names instead of paths
+origin	https://github.com/willf/bitset.git (fetch)
+28a4168144bb8ac95454e1f51c84da1933681ad4  (HEAD, origin/master, origin/HEAD, master) Merge pull request #33 from chrisprobst/master
