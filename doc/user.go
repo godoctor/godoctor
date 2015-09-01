@@ -324,12 +324,12 @@ const userGuide = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "htt
   <a href="#usage-cli" onClick="show('usage-cli');">Show&nbsp;&raquo;</a>
 </div>
 <div id="usage-cli" class="showable">
-  <p>(Coming soon)</p>
-  <p>For more information about the <tt>godoctor</tt> command, see the <a
-  onClick="show('godoctor-man');" href="#godoctor-man"><tt>godoctor</tt> man
-  page</a>.  If you have installed this man page locally, you can access it
-  from a shell prompt by running<br/><br/>
-  <tt>man godoctor</tt></p>
+  <p>Most users will want to run the Go Doctor from Vim, since it allows you
+  to rename variables, extract functions, and perform other refactorings with
+  just a few keystrokes.  If you are inclined to use the command-line
+  <tt>godoctor</tt> tool directly, the
+  <a onClick="show('godoctor-man');" href="#godoctor-man"><tt>godoctor</tt> man
+  page</a> contains several examples illustrating typical invocations.
 </div>
 <a name="help"></a>
 <h2>Getting Help</h2>
