@@ -261,13 +261,10 @@ const userGuide = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "htt
                   <div class="indent">
                     <!-- BEGIN TOC -->
                     <h2>Getting Started</h2>
-                    <ul class="toc1">
-                      <li><a onClick="show('help');" href="#help">Getting Help</a></li>
-                      <ul class="toc2">
-                        <li><a onClick="show('starting');" href="#starting">Getting Started</a></li>
-                        <li><a onClick="show('documentation');" href="#documentation">Online Documentation</a></li>
-                        <li><a onClick="show('mailing-list');" href="#mailing-list">Joining the Mailing List</a></li>
-                      </ul>
+                    <ul class="toc2">
+                      <li><a onClick="show('starting');" href="#starting">Getting Started</a></li>
+                      <li><a onClick="show('documentation');" href="#documentation">Online Documentation</a></li>
+                      <li><a onClick="show('mailing-list');" href="#mailing-list">Joining the Mailing List</a></li>
                     </ul>
                     <h2>Refactorings</h2>
                     <ul class="toc2">
@@ -297,9 +294,6 @@ const userGuide = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "htt
           <div class="indent">
             <!-- BEGIN CONTENT -->
 <h1>{{.AboutText}} User's Guide</h1>
-<h2>Getting Help</h2>
-<div id="help-click" class="clicktoshow"></div>
-<div id="help" class="showable"></div>
 <a name="documentation"></a>
 <a name="starting"></a>
 <h3>Getting Started</h3>
