@@ -1,15 +1,40 @@
 
 
-                       "HOWTO" FOR GO DOCTOR DEVELOPERS
+                      INFORMATION FOR GO DOCTOR DEVELOPERS
 
 
-INSTALL THE GO DOCTOR BINARY---------------------------------------------------
+OVERVIEW OF PACKAGES-----------------------------------------------------------
 
-Assuming that you have checked out the Go Doctor sources (as described below),
-all the tests pass (also described below), and your working directory is
-$GOPATH/src/github.com/godoctor/godoctor, run this command:
+    analysis/       Static analyses
+        cfg             Control flow graph (with AST nodes as blocks)
+        dataflow        Data flow analysis (live variables and reaching defs)
+        names           Find references/conflicts/etc. for a given name
+    cmd/
+        godoctor    Command-line tool (invokes cli package below)
+    doc             Documentation: user's guide, installation guide, Vimdoc
+    engine/
+        cli         Command-line driver
+        protocol    Implementation of the OpenRefactory JSON protocol
+    filesystem      File system abstraction (*)
+    internal        Vendored third-party dependencies
+    refactoring     Refactorings (and supporting infrastructure)
+    text            Text selection, text editing, and unified diff support
 
-    go install github.com/godoctor/godoctor/cmd/godoctor
+    (*) The filesystem package is used for two purposes: (1) the Web demo
+        (supported by the engine/protocol package) needs to refactor files that
+        do not exist on disk, and (2) some refactorings re-load and re-parse
+        the code after it has been refactored in order to detect errors
+        introduced by the refactoring.
+
+
+CREATING A NEW REFACTORING-----------------------------------------------------
+
+    The project at
+
+                        https://github.com/godoctor/demo
+
+    shows how to create a simple refactoring, including test cases.  Check out
+    that code before delving into the internals of the Go Doctor.
 
 
 RUN TESTS----------------------------------------------------------------------
@@ -27,17 +52,6 @@ To run tests for refactorings only:
     go test -filter=rename/023  # E.g., to run a particular test
 
 
-UPDATE GO.TOOLS----------------------------------------------------------------
-
-The easy way:
-    go get -u golang.org/x/tools
-
-The less easy way:
-    cd $GOPATH/src/golang.org/x/tools
-    hg pull
-    hg update
-
-
 CHECK CODE COVERAGE FOR A TEST-------------------------------------------------
 
 See http://blog.golang.org/cover
@@ -47,6 +61,15 @@ To display just the percentage of code covered:
 
 To open a Web browser showing individual lines covered/not covered:
     go test -coverprofile=coverage.out && go tool cover -html=coverage.out
+
+
+INSTALL THE GO DOCTOR BINARY---------------------------------------------------
+
+Assuming that you have checked out the Go Doctor sources (as described below),
+all the tests pass (also described below), and your working directory is
+$GOPATH/src/github.com/godoctor/godoctor, run this command:
+
+    go install github.com/godoctor/godoctor/cmd/godoctor
 
 
 VIEW GODOC IN YOUR BROWSER-----------------------------------------------------
@@ -61,31 +84,17 @@ Browse to http://localhost:8080/pkg/github.com/godoctor
 When you don't need it anymore, shut down the godoc server:
     killall godoc
 
-If you have Go 1.3, you can add type analysis:
+If you have Go 1.3 or later, you can add type analysis:
     godoc -analysis type -http :8080 &
 
 
+UPDATE THIRD-PARTY VENDORED DEPENDENCIES--------------------------------------- 
+
+    cd $GOPATH/src/github.com/godoctor/godoctor/internal
+    ./vendor.sh
+
+
 GIT STUFF----------------------------------------------------------------------
-
-This is not intended to teach you how to use Git.  It's only meant to give a
-sense of the workflows that we use and the exact syntax of the Git commands
-involved.
-
-The commands below assume that you are running Linux or Mac OS X.  Some of
-these commands will not work under Windows; others require modifications (e.g.,
-changing $GOPATH to %GOPATH%).
-
-The Git commands in most of these scenarios will require your working directory
-to be $GOPATH/src/github.com/godoctor/godoctor.
-
-
-SET NAME/E-MAIL USED BY GIT
-
-    After you install Git for the first time, you will need to configure your
-    name and e-mail address, which will be associated with your commits.
-
-        $ git config --global user.name "Your Name"
-        $ git config --global user.email "username@auburn.edu"
 
     A nice idea from http://fredkschott.com/post/2014/02/git-log-is-so-2005/
     is to configure a "git lg" command that displays the git log in a more
@@ -97,19 +106,14 @@ SET NAME/E-MAIL USED BY GIT
 CLONING THE GO DOCTOR GIT REPOSITORY
 
     The source code for the Go Doctor should be stored in
-    $GOPATH/src/github.com/godoctor.  You will need Mercurial to get go.tools
-    and Git to get everything else.  To set up a development workspace:
+    $GOPATH/src/github.com/godoctor.  To set up a development workspace:
 
-        $ go get golang.org/x/tools
-        $ go get github.com/willf/bitset
         $ git clone https://github.com/godoctor/godoctor.git $GOPATH/src/github.com/godoctor
+
+    The following lines will cause "git pull" to rebase rather than merge:
+
         $ git config branch.autosetuprebase always
         $ git config branch.master.rebase true
-
-    Instead of the last two lines, you can get all dependencies automatically:
-
-        $ cd $GOPATH/src/github.com/godoctor
-        $ go get -u -v ./...    # To get dependencies, including go.tools
 
     If you have your own fork of the GitHub repository, you will want to store
     it locally in $GOPATH/src/github.com/godoctor so that you do not have to
@@ -119,68 +123,11 @@ CLONING THE GO DOCTOR GIT REPOSITORY
         $ git clone git@github.com:your_github_username/godoctor.git $GOPATH/src/github.com/godoctor
 
 
-DEVELOPING A NEW FEATURE
+DEVELOPING A NEW FEATURE OR BUG FIX
 
-    New features and bug fixes should be developed in branches.  This allows
-    them to be reviewed, tested, and revised before they are moved into the
-    production Go Doctor branch (the "master" branch).
-
-    To create a new branch called "devel-something" for a new feature you intend
-    to work on,
-
-        $ git pull origin master
-        $ git checkout -b devel-something origin/master
-
-    Note that the "devel-something" branch exists only on your local machine.
-    It's not on the server.  If you want to share it on the server, you can
-    (we'll get to that later), but you don't have to.
-
-    To list the branches that are currently available on your machine:
-
-        $ git branch
-
-    In the output, the starred branch is the one you're currently working on.
-    If you just created the devel-something branch, it is probably that.  To
-    switch back to the master branch, use
-
-        $ git checkout master
-
-    and likewise, to switch back to your development branch,
-
-        $ git checkout devel-something
-
-    Commit frequently to your branch.  Every time you make a significant
-    change, commit.  Commit, commit, commit.  Git makes it easy to undo
-    everything since your last commit, and you can even revert specific
-    commits.  One of the main advantages of using a version control system is
-    that it makes it easy to "jump back" to any previous point in time (as long
-    as you have a commit that records what the project looked like at that
-    point in time).
-
-    Eventually, there will be changes in the master branch that you need to
-    integrate into your development work.  To do that,
-
-    1. Use "git branch" to make sure you're on the right (development) branch.
-    2. Commit any outstanding changes.  If you still have work to do, that's
-       fine.  You're on a branch, so you can continue fixing things later and
-       make more commits to your branch.  The commit just records what your
-       project looked like at this point in time.  So, if something goes
-       horribly wrong, you can always "go back in time" and make your project
-       look exactly the same way it does right now.
-    3. Use "git pull" to integrate the changes from the master branch:
-        $ git pull origin master
-
-    Then, continue making changes, making commits, and periodically
-    integrating the changes from the master branch until you're done.
-
-    When you're ready to share your development branch on the server (e.g., so
-    others can try out your code), make sure you've pulled in the latest
-    changes from the master branch (as above), then
-
-        $ git push origin devel-something:devel-something
-
-    After sharing your branch on the server, when you make new commits to your
-    branch, you can use "git push" to push those commits to the server.
+    If you are planning to develop a new feature or fix a bug, fork the
+    Go Doctor repository at GitHub, develop the feature or bug fix in your
+    fork, and submit a pull request.
 
 
 EDITOR INTEGRATION-------------------------------------------------------------
@@ -188,6 +135,9 @@ EDITOR INTEGRATION-------------------------------------------------------------
 There are two ways to integrate the Go Doctor into a text editor or IDE: using
 the OpenRefactory JSON protocol, or by invoking the godoctor directly and
 parsing standard output and error.
+
+Currently, the Vim plug-in uses the latter approach, and the online
+demonstration at gorefactor.org uses the OpenRefactory protocol.
 
 
                INTEGRATION USING THE OPENREFACTORY JSON PROTOCOL
@@ -256,11 +206,11 @@ godoctor binary and interprets its output.
 (1) List available refactorings
 
     $ godoctor --list
-Refactoring    	Description                                    	     Multifile?
+Refactoring    Description                                           Multifile?
 --------------------------------------------------------------------------------
-rename         	Changes the name of an identifier                 	true
-toggle         	Toggles between a var declaration and := statement	false
-godoc          	Adds stub GoDoc comments where they are missing   	false
+rename         Changes the name of an identifier                     true
+toggle         Toggles between a var declaration and := statement    false
+godoc          Adds stub GoDoc comments where they are missing       false
 
     The output of this command has two header lines.  Each subsequent line
     contains three tab-separated fields.  The first is a short name for a
@@ -297,16 +247,16 @@ Usage: rename <new_name>
 
         $ echo "package main" | godoctor -file - -pos 1,9:1,12 rename foo
 Defaulting to file scope for refactoring (provide an explicit scope to change this)
-<stdin>:1:9: Error: cannot rename main function inside main package ,it eliminates the program entry 							point
+<stdin>:1:9: Error: cannot rename main function inside main package: it will eliminate the program entrypoint
     
     (B) Output: Diff vs. Complete Files
 
         When a refactoring is run, the Go Doctor's output is as follows:
             1. An error log is written to standard error.  Errors, warnings,
-	       and informational messages are written in a GCC-like format.
+               and informational messages are written in a GCC-like format.
                Note that some messages may have an associated filename and line
                number, while others may not.
-	    2. The output of the refactoring (a diff, or a list of the affected
+            2. The output of the refactoring (a diff, or a list of the affected
                files' modified contents) is written to standard output.
 
         By default, the Go Doctor will output a patch file that can be applied
@@ -321,7 +271,7 @@ diff -u /dev/stdin /dev/stdout
 -package main; var n int = 3
 +package main; var nnn int = 3
 
-	Alternatively, if the -complete flag is given, the Go Doctor will
+        Alternatively, if the -complete flag is given, the Go Doctor will
         output the entire contents of all files affected by the refactoring.
 
         $ echo "package main; var n int = 3" | godoctor -complete -pos 18,1 rename nnn
@@ -343,7 +293,7 @@ package main; var nnn int = 3
         beginning of the modifications made by the refactoring.  No error
         messages should follow the first @@@@@ line.
 
-	Note that, when files are parsed from the -complete output, there is no
+        Note that, when files are parsed from the -complete output, there is no
         way to determine whether the file contained a newline at the end of the
         file.  The Vim plug-in assumes that all files should end with a
         trailing newline.
