@@ -192,4 +192,55 @@ func (r *ToggleVar) shortAssignString(decl *ast.GenDecl) string {
 	return (fmt.Sprintf("%s := ", r.varDeclLHS(decl)))
 }
 
-const toggleVarDoc = ``
+const toggleVarDoc = `
+  <h4>Purpose</h4>
+  <p>The Toggle var &hArr; := refactoring converts a <tt>var</tt> declaration to a
+  short assignment statement (using :=), or vice versa.</p>
+
+  <h4>Usage</h4>
+  <ol class="enum">
+    <li>Select a local variable declaration (either a <tt>var</tt> declaration
+    or a := statement).</li>
+    <li>Activate the Toggle var &hArr; := refactoring.</li>
+  </ol>
+
+  <p>If a <tt>var</tt> declaration is selected, it will be converted to a short
+  assignment statement (:=).  If a short assignment statement is selected, it
+  will be converted to a <tt>var</tt> declaration (with an explicit type
+  declaration).</p>
+
+  <p>An error or warning will be reported if the selected statements cannot be
+  converted.  For example, declarations at the file scope must be declared using
+  <tt>var</tt>; they cannot be converted to short assignment statements.</p>
+
+  <h4>Example</h4>
+  <p>The example below demonstrates the effect of toggling the highlighted
+  declaration of <tt>msg</tt> between a short assignment statement and a
+  <tt>var</tt> declaration.</p>
+  <table cellspacing="5" cellpadding="15" style="border: 0;">
+    <tr>
+      <th>Before</th><th>&nbsp;</th><th>After</th>
+    </tr>
+    <tr>
+      <td class="dotted">
+        <pre>package main
+import "fmt"
+
+func main() {
+    <span class="highlight">msg := hello</span>
+    fmt.Println(msg)
+}</pre>
+      </td>
+      <td>&nbsp;&nbsp;&nbsp;&nbsp;&hArr;&nbsp&nbsp;&nbsp;&nbsp;</td>
+      <td class="dotted">
+        <pre>package main
+import "fmt"
+
+func main() {
+    <span class="highlight">var msg string = hello</span>
+    fmt.Println(msg)
+}</pre>
+      </td>
+    </tr>
+  </table>
+`

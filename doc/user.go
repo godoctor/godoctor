@@ -262,13 +262,9 @@ const userGuide = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "htt
                     <!-- BEGIN TOC -->
                     <h2>Getting Started</h2>
                     <ul class="toc1">
-                      <li><a onClick="show('usage');" href="#usage">Basic Usage</a></li>
-                      <ul class="toc2">
-                        <li><a onClick="show('usage-vim');" href="#usage-vim">Vim Plug-in</a></li>
-                        <li><a onClick="show('usage-cli');" href="#usage-cli">Command Line Tool (godoctor)</a></li>
-                      </ul>
                       <li><a onClick="show('help');" href="#help">Getting Help</a></li>
                       <ul class="toc2">
+                        <li><a onClick="show('starting');" href="#starting">Getting Started</a></li>
                         <li><a onClick="show('documentation');" href="#documentation">Online Documentation</a></li>
                         <li><a onClick="show('mailing-list');" href="#mailing-list">Joining the Mailing List</a></li>
                       </ul>
@@ -301,50 +297,42 @@ const userGuide = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "htt
           <div class="indent">
             <!-- BEGIN CONTENT -->
 <h1>{{.AboutText}} User's Guide</h1>
-<a name="usage"></a>
-<h2>Basic Usage</h2>
-<div id="usage-click" class="clicktoshow"></div>
-<div id="usage" class="showable"></div>
-<a name="usage-vim"></a>
-<h3>Using the Go Doctor Vim Plugin</h3>
-<div id="usage-vim-click" class="clicktoshow">
-  <a href="#usage-vim" onClick="show('usage-vim');">Show&nbsp;&raquo;</a>
-</div>
-<div id="usage-vim" class="showable">
-  <p>(Coming soon)</p>
-  <p>For more information about the Vim plug-in, see the <a
-  onClick="show('godoctor-vim');" href="#godoctor-vim">Vim Plug-in
-  Reference</a>.  If you have installed the Vim plug-in documentation, you can
-  access this by starting Vim and executing the command:<br/><br/>
-  <tt>:help godoctor</tt></p>
-</div>
-<a name="usage-cli"></a>
-<h3>Using the Command Line Tool (<tt>godoctor</tt>)</h3>
-<div id="usage-cli-click" class="clicktoshow">
-  <a href="#usage-cli" onClick="show('usage-cli');">Show&nbsp;&raquo;</a>
-</div>
-<div id="usage-cli" class="showable">
-  <p>Most users will want to run the Go Doctor from Vim, since it allows you
-  to rename variables, extract functions, and perform other refactorings with
-  just a few keystrokes.  If you are inclined to use the command-line
-  <tt>godoctor</tt> tool directly, the
-  <a onClick="show('godoctor-man');" href="#godoctor-man"><tt>godoctor</tt> man
-  page</a> contains several examples illustrating typical invocations.
-</div>
-<a name="help"></a>
 <h2>Getting Help</h2>
 <div id="help-click" class="clicktoshow"></div>
 <div id="help" class="showable"></div>
 <a name="documentation"></a>
+<a name="starting"></a>
+<h3>Getting Started</h3>
+<div id="starting-click" class="clicktoshow">
+  <a href="#starting" onClick="show('starting');">Show&nbsp;&raquo;</a>
+</div>
+<div id="starting" class="showable">
+  <p>If this is your first time using the Go Doctor, see the
+  <a href="http://gorefactor.org/starting.html">Getting Started</a> page on the
+  Go Doctor Web site.  It contains videos (and basic instructions) showing some
+  typical uses of the Go Doctor using the Vim plug-in.</p>
+  <p>You will probably want to run the Go Doctor from Vim, since it allows you
+  to rename variables, extract functions, and perform other refactorings with
+  just a few keystrokes.  Detailed information about the Vim plug-in is
+  available in the <a onClick="show('godoctor-vim');" href="#godoctor-vim">Vim
+  Plug-in Reference</a>.  If you are inclined to use the command-line
+  <tt>godoctor</tt> tool directly, the <a onClick="show('godoctor-man');"
+  href="#godoctor-man"><tt>godoctor</tt> man page</a> contains several examples
+  illustrating typical invocations.</p>
+  <p>Later parts of this user manual contain detailed information on each of
+  the refactorings supported by the Go Doctor.</p>
+</div>
 <h3>Online Documentation</h3>
 <div id="documentation-click" class="clicktoshow">
   <a href="#documentation" onClick="show('documentation');">Show&nbsp;&raquo;</a>
 </div>
 <div id="documentation" class="showable">
-  <p>Up-to-date documentation for the Go Doctor is available online at
-  <a target="_blank" href="http://gorefactor.org">http://gorefactor.org</a>.
-  See the installation instructions at that link for how to install a local
-  copy of the documentation.</p>
+  <p>The latest documentation for the Go Doctor (including this user manual,
+  the <tt>godoctor</tt> man page, and the Vim Plug-in Reference) is available
+  online at <a target="_blank"
+  href="http://gorefactor.org">http://gorefactor.org</a>.  See the installation
+  instructions at that link for how to install a local copy of the
+  documentation.</p>
 </div>
 <a name="mailing-list"></a>
 <h3>Joining the Mailing List</h3>
@@ -354,8 +342,8 @@ const userGuide = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "htt
 <div id="mailing-list" class="showable">
   <p>If you get stuck, please join the <a target="_blank"
   href="http://mailman.eng.auburn.edu/cgi-bin/mailman/listinfo/go-refactoring">go-refactoring
-  mailing list</a>; that is a good place to ask for help.  Updates to the Go
-  Doctor will also be announced on the mailing list.</li>
+  mailing list</a>.  Other users on the list might be able to help you.
+  Updates to the Go Doctor will also be announced on the mailing list.</li>
 </div>
 <a name="refactorings"></a>
 <h2>Refactorings</h2>
