@@ -263,8 +263,9 @@ const userGuide = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "htt
                     <h2>Getting Started</h2>
                     <ul class="toc2">
                       <li><a onClick="show('starting');" href="#starting">Getting Started</a></li>
-                      <li><a onClick="show('documentation');" href="#documentation">Online Documentation</a></li>
                       <li><a onClick="show('mailing-list');" href="#mailing-list">Joining the Mailing List</a></li>
+                      <li><a onClick="show('documentation');" href="#documentation">Online Documentation</a></li>
+                      <li><a onClick="show('offline');" href="#offline">Installing Local Documentation</a></li>
                     </ul>
                     <h2>Refactorings</h2>
                     <ul class="toc2">
@@ -294,7 +295,6 @@ const userGuide = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "htt
           <div class="indent">
             <!-- BEGIN CONTENT -->
 <h1>{{.AboutText}} User's Guide</h1>
-<a name="documentation"></a>
 <a name="starting"></a>
 <h3>Getting Started</h3>
 <div id="starting-click" class="clicktoshow">
@@ -316,18 +316,6 @@ const userGuide = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "htt
   <p>Later parts of this user manual contain detailed information on each of
   the refactorings supported by the Go Doctor.</p>
 </div>
-<h3>Online Documentation</h3>
-<div id="documentation-click" class="clicktoshow">
-  <a href="#documentation" onClick="show('documentation');">Show&nbsp;&raquo;</a>
-</div>
-<div id="documentation" class="showable">
-  <p>The latest documentation for the Go Doctor (including this user manual,
-  the <tt>godoctor</tt> man page, and the Vim Plug-in Reference) is available
-  online at <a target="_blank"
-  href="http://gorefactor.org">http://gorefactor.org</a>.  See the installation
-  instructions at that link for how to install a local copy of the
-  documentation.</p>
-</div>
 <a name="mailing-list"></a>
 <h3>Joining the Mailing List</h3>
 <div id="mailing-list-click" class="clicktoshow">
@@ -338,6 +326,59 @@ const userGuide = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "htt
   href="http://mailman.eng.auburn.edu/cgi-bin/mailman/listinfo/go-refactoring">go-refactoring
   mailing list</a>.  Other users on the list might be able to help you.
   Updates to the Go Doctor will also be announced on the mailing list.</li>
+</div>
+<a name="documentation"></a>
+<h3>Online Documentation</h3>
+<div id="documentation-click" class="clicktoshow">
+  <a href="#documentation" onClick="show('documentation');">Show&nbsp;&raquo;</a>
+</div>
+<div id="documentation" class="showable">
+  <p>The latest documentation for the Go Doctor (including this user manual,
+  the <tt>godoctor</tt> man page, and the Vim Plug-in Reference) is always
+  available online at <a target="_blank"
+  href="http://gorefactor.org">http://gorefactor.org</a>.  If you want to
+  install a local copy of the documentation, see below.</p>
+</div>
+<a name="offline"></a>
+<h3>Installing Local Documentation</h3>
+<div id="offline-click" class="clicktoshow">
+  <a href="#offline" onClick="show('offline');">Show&nbsp;&raquo;</a>
+</div>
+<div id="offline" class="showable">
+  <p>If you do not want to use the online documentation, you can install the Go
+  Doctor documentation locally.  The <tt>godoctor</tt> tool generates its own
+  documentation.  It can generate a local copy of the Installation Guide and
+  User Guide on the Go Doctor Web site; it can generate a Unix man page for the
+  <tt>godoctor</tt> tool; it can also generate more complete documentation for
+  the Vim plug-in (by default, the Vim plug-in includes stub documentation
+  pointing to the Go Doctor Web site).</p>
+  <ul>
+    <li><b>To generate a local copy of the Installation Guide:</b><br/><br/>
+      &nbsp;&nbsp;&nbsp;&nbsp;
+      <tt>godoctor -doc install &gt;install.html</tt></li>
+    <li><b>To generate a local copy of the User's Guide:</b><br/><br/>
+      &nbsp;&nbsp;&nbsp;&nbsp;
+      <tt>godoctor -doc user &gt;user.html</tt></li>
+    <li><b>To generate a local copy of the godoctor man page,</b><br/><br/>
+      use the <tt>godoctor</tt> tool to generate the man page, then save it as
+      <i>godoctor.1</i> in a directory on your MANPATH.  For example, if you
+      installed <tt>godoctor</tt> into /usr/local/bin, you will probably want
+      to install the man page into /usr/local/share/man:<br/><br/>
+      <pre>sudo mkdir -p /usr/local/share/man/man1</pre><br/>
+      <pre>sudo sh -c 'godoctor -doc man &gt;/usr/local/share/man/man1/godoctor.1'</pre><br/></li>
+    <li><b>To install complete documentation for the Vim plug-in:</b>
+    <ol class="enum">
+      <li>Use the <tt>godoctor</tt> tool to generate the Vim documentation, and
+        overwrite the <b>godoctor-vim.txt</b> file in the Vim plug-in's
+        <i>doc</i> directory.  For example:<br/><br/>
+        <pre>godoctor -doc vim &gt;~/.vim/godoctor.vim/doc/godoctor-vim.txt</pre></li>
+      <li>In Vim, run<br/><br/>
+        <pre>:helptags ~/.vim/godoctor.vim/doc</pre><br/>
+        to generate help tags from the plug-in documentation.</li>
+      <li>To view the Vim plug-in documentation, execute<br/><br/>
+        <tt>:help godoctor</tt></li>
+    </ol>
+  </ul>
 </div>
 <a name="refactorings"></a>
 <h2>Refactorings</h2>

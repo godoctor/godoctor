@@ -181,11 +181,10 @@ const installGuide = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "
                     <!-- BEGIN TOC -->
                     <h2>Installation</h2>
                       <ul class="toc2">
-                      <li><a onClick="show('install-godoctor');" href="#install-godoctor">Installing the Go Doctor</a></li>
-                      <li><a onClick="show('install-vim');" href="#install-vim">Installing the Vim Plug-in</a></li>
-                      <li><a onClick="show('install-docs');" href="#install-docs">Installing Documentation</a></li>
+                      <li><a onClick="show('install-vim');" href="#install-vim">For vim users</a></li>
+                      <li><a onClick="show('install-godoctor');" href="#install-godoctor">For users of other editors</a></li>
                     </ul>
-		    <p style="text-align: center; font-size: 10px; color: #808080;">
+                    <p style="text-align: center; font-size: 10px; color: #808080;">
                       <a href="#" onClick="showAll();">Show All</a> |
                       <a href="#" onClick="hideAll();">Hide All</a>
                     </p>
@@ -202,150 +201,105 @@ const installGuide = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "
             <!-- BEGIN CONTENT -->
 <h1>{{.AboutText}} Installation Guide</h1>
 <a name="install"></a>
-<!--h2>Installation</h2-->
-<div id="install-click" class="clicktoshow">
-  <a href="#install" onClick="show('install');">Show&nbsp;&raquo;</a>
+<div id="install">
+  <style>
+  .question {
+    font-family: Arial, helvetica;
+    font-weight: bold;
+    font-size: 18px;
+    text-align: center;
+  }
+  .answers {
+    text-align: center;
+  }
+  .yes {
+    color: #008000;
+  }
+  .no {
+    color: #800000;
+  }
+  .showable {
+    display: none;
+  }
+  </style>
+  <p class="question">Do you use Vim?</p>
+  <p class="answers"><a href="#install-vim" onClick="show('install-vim');"><span class="yes">&#x2713;</span>&nbsp;Yes</a>
+                     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                     <a href="#install-godoctor" onClick="show('install-godoctor');"><span class="no">&#x2717;</span>&nbsp;No</a></p>
 </div>
-<div id="install" class="showable">
-  <p>The Go Doctor consists of:</p>
-  <ul>
-    <li>The <tt>godoctor</tt> command line tool</li>
-    <li>An optional plug-in for the Vim text editor</li>
-  </ul>
-</div>
-<a name="install-godoctor"></a>
-<h2>Installing the <tt>godoctor</tt> Command Line Tool</h2>
-<div id="install-godoctor-click" class="clicktoshow">
-  <a href="#install-godoctor" onClick="show('install-godoctor');">Show&nbsp;&raquo;</a>
-</div>
-<div id="install-godoctor" class="showable">
-  <ol class="enum">
-    <li><tt>go get github.com/godoctor/godoctor/cmd/godoctor</tt><br/>
-    <tt>go install github.com/godoctor/godoctor/cmd/godoctor</tt><br/>
-    <tt>$GOPATH/bin/godoctor</tt><br/><br/>
-    The final <tt>godoctor</tt> command should output a brief help message.</li>
-    <li>The Vim plug-in assumes that the <tt>godoctor</tt> command is on your
-    PATH.  Most Go programmers will want to put $GOPATH/bin on their PATH.
-    Alternatively, you may install the Go Doctor into a more permanent
-    location, e.g.,<br/><br/>
-    <tt>sudo install $GOPATH/bin/godoctor /usr/local/bin/</tt></li>
-    <li><i>(Optional)</i> The <tt>godoctor</tt> tool can generate a Unix man
-    page for itself.  The man page should be saved as <i>godoctor.1</i> in a
-    directory on your MANPATH.  For example, if you installed <tt>godoctor</tt>
-    into /usr/local/bin, you will probably want to install the man page into
-    /usr/local/share/man:<br/><br/>
-      <pre>sudo mkdir -p /usr/local/share/man/man1</pre><br/>
-      <pre>sudo sh -c 'godoctor -doc man &gt;/usr/local/share/man/man1/godoctor.1'</pre><br/></li>
-  </ol>
-</div>
+<!-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -->
 <a name="install-vim"></a>
-<h2>Installing the Go Doctor Vim Plug-in</h2>
-<div id="install-vim-click" class="clicktoshow">
-  <a href="#install-vim" onClick="show('install-vim');">Show&nbsp;&raquo;</a>
-</div>
 <div id="install-vim" class="showable">
-  <p><i>Note: In addition to the Go Doctor, you may want to install
-  <a target="_blank" href="https://github.com/fatih/vim-go">vim-go</a>,
-  which provides Vim integration for several other Go programming tools.</i></p>
-  <p>The Go Doctor Vim plug-in has been tested with Vim 7.3 and 7.4.</p>
-  <p>To install the plug-in, there are two options: one if you use Pathogen to
-  manage Vim plug-ins, and another if you prefer to install plug-ins
-  manually.</p>
-  <h3>Option 1: Using Pathogen</h3>
-  <p><i><a target="_blank"
-  href="https://github.com/tpope/vim-pathogen">Pathogen</a> makes it easy to
-  add new plug-ins to Vim by eliminating the need to manually edit Vim's
-  <tt>runtimepath</tt> when a new plug-in is installed.  If you have installed
-  Pathogen, follow these instructions; if you have not installed Pathogen (or
-  if you are not sure), follow the instructions for Option&nbsp;2 (Manual
-  Installation) instead.</i></p>
-  <ol class="enum">
-    <li>Link the <b>vim</b> directory from the Go Doctor source tree into your
-    ~/.vim/bundle directory.  For example:<br/><br/>
-    <tt>ln -s \<br/>
-    &nbsp;&nbsp;$GOPATH/src/github.com/godoctor/godoctor/cmd/godoctor/vim \<br/>
-    &nbsp;&nbsp;$HOME/.vim/bundle/godoctor-vim</tt><br/><br/>
-    The resulting file structure should look something like this:<br/>
-    <span style="margin-left: 2em;">$HOME/</span><br/>
-    <span style="margin-left: 3.5em;">.vim/</span><br/>
-    <span style="margin-left: 5em;">bundle/</span><br/>
-    <span style="margin-left: 6.5em;">godoctor-vim/</span><br/>
-    <span style="margin-left: 8em;">doc/</span><br/>
-    <span style="margin-left: 8em;">ftdetect/</span><br/>
-    <span style="margin-left: 8em;">ftplugin/</span><br/>
-    </li>
-    <li>Verify that the <tt>godoctor</tt> command is on your PATH.  If you type
-    <tt>godoctor</tt> at a shell prompt, you should get a brief help
-    message.</li>
-    <li>Open a <tt>.go</tt> source file in Vim, and make sure that the
-    <tt>:GoRefactor</tt> command is available.  (Note that it will <i>only</i>
-    be available when a file with a .go filename extension is being edited.)
-    Type <tt>:GoRefac</tt>, press the <b>Tab</b> key, and verify that the
-    command autocompletes to <tt>:GoRefactor</tt>.  Exit Vim.</li>
-    <li><i>(Optional)</i> The Vim plug-in includes stub documentation pointing
-    to the Web site.  You may want to overwrite this with more complete
-    documentation, which is generated by the <tt>godoctor</tt> command itself.
-    To do so, simply overwrite the <b>godoctor-vim.txt</b> file in the Vim
-    plug-in's <i>doc</i> directory.  For example:<br/><br/>
-    <pre>godoctor -doc vim &gt;.vim/bundle/godoctor-vim/doc/godoctor-vim.txt</pre></li>
-    <li>In Vim, run <tt>:Helptags</tt> to generate help tags from the
-    plug-in documentation.</li>
-    <li>To view the Vim plug-in documentation, execute <tt>:help godoctor</tt>
-    in Vim.</li>
-  </ol>
-  <h3>Option 2: Manual Installation (without Pathogen)</h3>
-  <ol class="enum">
-    <li>Add these lines to ~/.vimrc:
-    <pre>
-    if exists("g:did_load_filetypes")
-      filetype off
-      filetype plugin indent off
-    endif
-    set rtp+=$GOPATH/src/github.com/godoctor/godoctor/cmd/godoctor/vim
-    filetype plugin indent on
-    syntax on</pre></li>
-    <li>Verify that the <tt>godoctor</tt> command is on your PATH.  If you type
-    <tt>godoctor</tt> at a shell prompt, you should get a brief help
-    message.</li>
-    <li>Open a <tt>.go</tt> source file in Vim, and make sure that the
-    <tt>:GoRefactor</tt> command is available.  (Note that it will <i>only</i>
-    be available when a file with a .go filename extension is being edited.)
-    Type <tt>:GoRefac</tt>, press the <b>Tab</b> key, and verify that the
-    command autocompletes to <tt>:GoRefactor</tt>.  Exit Vim.</li>
-    <li><i>(Optional)</i> The Vim plug-in includes stub documentation pointing
-    to the Web site.  You may want to overwrite this with more complete
-    documentation, which is generated by the <tt>godoctor</tt> command itself.
-    To do so, simply overwrite the <b>godoctor-vim.txt</b> file in the Vim
-    plug-in's <i>doc</i> directory.  For example:<br/><br/>
-    <pre>godoctor -doc vim \<br/>
-&gt;$GOPATH/src/github.com/godoctor/godoctor/cmd/godoctor/vim/doc/godoctor-vim.txt</pre></li>
-    <li>In Vim, run
-    <pre>:helptags $GOPATH/src/github.com/godoctor/godoctor/cmd/godoctor/vim/doc</pre>
-    to generate help tags from the
-    plug-in documentation.</li>
-    <li>To view the Vim plug-in documentation, execute <tt>:help godoctor</tt>
-    in Vim.</li>
-  </ol>
-</div>
-<a name="install-docs"></a>
-<h2>Installing Documentation Locally</h2>
-<div id="install-docs-click" class="clicktoshow">
-  <a href="#install-docs" onClick="show('install-docs');">Show&nbsp;&raquo;</a>
-</div>
-<div id="install-docs" class="showable">
-  <p>Documentation for the Go Doctor is generated by the Go Doctor itself.  This
-  can be used to create a local copy of the documentation available on the Go
-  Doctor Web site.</p>
+  <h2>Installation for Vim Users</h2>
+  <p>The Go Doctor Vim plug-in (godoctor.vim) follows the standard runtime path
+  structure, so we recommend using a plug-in manager (like
+  <a target="_blank" href="https://github.com/tpope/vim-pathogen">Pathogen</a>)
+  to install it.  In addition, <code>filetype plugin indent on</code> must also
+  be set (add this to your <code>~/.vimrc</code>).</p>
   <ul>
-    <li>See above for instructions on how to generate the man page for the
-    <tt>godoctor</tt> command, as well as the documentation for the Vim
-    plug-in.</li>
-    <li>To generate a local copy of the HTML documentation:<br/><br/>
-      &nbsp;&nbsp;&nbsp;&nbsp;
-      <tt>godoctor -doc install &gt;install.html</tt><br/>
-      &nbsp;&nbsp;&nbsp;&nbsp;
-      <tt>godoctor -doc user &gt;user.html</tt></li>
+    <li><a target="_blank" href="https://github.com/tpope/vim-pathogen">Pathogen</a>
+      <ul>
+      <li><pre>git clone https://github.com/godoctor/godoctor.vim.git \
+~/.vim/bundle/godoctor.vim</pre></li>
+      </ul></li>
+    <li><a target="_blank" href="https://github.com/junegunn/vim-plug">vim-plug</a>
+      <ul>
+      <li><pre>Plug 'godoctor/godoctor.vim'</pre></li>
+      </ul></li>
+    <li><a target="_blank" href="https://github.com/Shougo/neobundle.vim">NeoBundle</a>
+      <ul>
+      <li><pre>NeoBundle 'godoctor/godoctor.vim'</pre></li>
+      </ul></li>
+    <li><a target="_blank" href="https://github.com/gmarik/vundle">Vundle</a>
+      <ul>
+      <li><pre>Plugin 'godoctor/godoctor.vim'</pre></li>
+      </ul></li>
+    <li>Manual
+      <ul>
+      <li><pre>git clone https://github.com/godoctor/godoctor.vim ~/.vim/godoctor.vim</pre></li>
+      <li>Add these lines to ~/.vimrc<br/>
+<pre>
+if exists("g:did_load_filetypes")
+  filetype off
+  filetype plugin indent off
+endif
+set rtp+=~/.vim/godoctor.vim
+filetype plugin indent on
+syntax on
+</pre>
+</li>
+      </ul></li>
   </ul>
+  <p>If the <tt>godoctor</tt> executable is not already installed and in your
+  <tt>$PATH</tt>, just type <tt>:GoDoctorInstall</tt>. This will install it to
+  <tt>$GOPATH/bin</tt>, which will also need to be in your <tt>$PATH</tt>,
+  which assumes you have <tt>$GOPATH</tt> set.  <tt>git</tt> must be installed
+  for <tt>:GoDoctorInstall</tt> to work.</p>
+  <p>We took express care not to conflict with anything in
+  <a href="https://github.com/fatih/vim-go">https://github.com/fatih/vim-go</a>.
+  This means (<tt>vim-go</tt> note aside) that it is safe to have
+  <tt>vim-go</tt> installed alongside <tt>godoctor.vim</tt>. Notably, vim-go
+  has <tt>:GoRename</tt> and <tt>:GoRefactor</tt> where we have
+  <tt>:Rename</tt> and <tt>:Refactor</tt> when editing a <tt>.go</tt> file.</p>
+</div>
+<!-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -->
+<a name="install-godoctor"></a>
+<div id="install-godoctor" class="showable">
+  <h2>Installation for Users of Other Editors</h2>
+  <p>At the moment, the Go Doctor only has a Vim plug-in.  Contributing a
+  plug-in for another editor (emacs, Sublime Text, etc.) would be a great way
+  to <a href="http://godoctor.com/contrib.html">contribute</a>.</p>
+  <p>However, you can still use the <b>Go Doctor command line tool</b>.  To
+  install:</p>
+  <ul>
+    <li><tt>go get github.com/godoctor/godoctor/cmd/godoctor</tt></li>
+    <li><tt>go install github.com/godoctor/godoctor/cmd/godoctor</tt></li>
+  </ul>
+  <p>For examples of how to use the command line tool, see the
+  <a href="http://gorefactor.org/doc.html#EXAMPLES"><tt>godoctor</tt> man
+  page</a>, or
+  <a href="http://gorefactor.org/doc.html#offline">install a local copy of the
+  man page</a>.</p>
 </div>
             <!-- END CONTENT -->
           </div>
