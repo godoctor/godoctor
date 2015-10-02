@@ -292,8 +292,8 @@ syntax on
   <p>However, you can still use the <b>Go Doctor command line tool</b>.  To
   install:</p>
   <ul>
-    <li><tt>go get github.com/godoctor/godoctor/cmd/godoctor</tt></li>
-    <li><tt>go install github.com/godoctor/godoctor/cmd/godoctor</tt></li>
+    <li><tt>go get github.com/godoctor/godoctor</tt></li>
+    <li><tt>go install github.com/godoctor/godoctor</tt></li>
   </ul>
   <p>For examples of how to use the command line tool, see the
   <a href="http://gorefactor.org/doc.html#EXAMPLES"><tt>godoctor</tt> man

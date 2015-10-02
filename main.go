@@ -13,11 +13,11 @@ import (
 )
 
 // Name of the refactoring tool (Go Doctor).  This can be overridden using:
-// go build -ldflags "-X main.name 'Go Doctor'" github.com/godoctor/godoctor/cmd/godoctor
+// go build -ldflags "-X main.name 'Go Doctor'" github.com/godoctor/godoctor
 var name string = "Go Doctor"
 
-// Go Doctor version number.  This is overridden in official builds using:
-// go build -ldflags "-X main.version 0.1" github.com/godoctor/godoctor/cmd/godoctor
+// Go Doctor version number.  This can be overriddenusing:
+// go build -ldflags "-X main.version 0.1" github.com/godoctor/godoctor
 var version string = "0.1 (Beta)"
 
 func main() {

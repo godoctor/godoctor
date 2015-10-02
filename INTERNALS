@@ -69,7 +69,7 @@ Assuming that you have checked out the Go Doctor sources (as described below),
 all the tests pass (also described below), and your working directory is
 $GOPATH/src/github.com/godoctor/godoctor, run this command:
 
-    go install github.com/godoctor/godoctor/cmd/godoctor
+    go install github.com/godoctor/godoctor
 
 
 VIEW GODOC IN YOUR BROWSER-----------------------------------------------------
