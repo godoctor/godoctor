@@ -7,8 +7,8 @@ package names
 import (
 	"go/ast"
 
-	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/loader"
-	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/types"
+	"golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/types"
 )
 
 // FindDeclarationsAcrossInterfaces finds all objects that might need to be

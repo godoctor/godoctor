@@ -17,7 +17,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/loader"
 
 	"github.com/godoctor/godoctor/analysis/names"
 	"github.com/godoctor/godoctor/text"

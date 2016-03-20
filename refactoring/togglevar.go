@@ -16,8 +16,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/ast/astutil"
-	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/types"
+	"golang.org/x/tools/go/ast/astutil"
+	"golang.org/x/tools/go/types"
 	"github.com/godoctor/godoctor/text"
 )
 

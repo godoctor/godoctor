@@ -7,7 +7,7 @@ package names
 import (
 	"go/token"
 
-	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/types"
+	"golang.org/x/tools/go/types"
 )
 
 // FindConflict determines if there already exists an identifier with the given

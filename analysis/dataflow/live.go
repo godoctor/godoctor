@@ -8,9 +8,9 @@ import (
 	"go/ast"
 
 	"github.com/godoctor/godoctor/analysis/cfg"
-	"github.com/godoctor/godoctor/internal/github.com/willf/bitset"
-	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/loader"
-	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/types"
+	"github.com/willf/bitset"
+	"golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/types"
 )
 
 // File defines live variables analysis for a statement
