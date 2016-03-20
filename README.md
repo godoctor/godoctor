@@ -1,17 +1,14 @@
-                                   - = = = -
+# The Go Doctor
 
+![build](https://api.travis-ci.org/godoctor/godoctor.svg?branch=master)
+[![GoDoc](https://godoc.org/github.com/godoctor/godoctor?status.png)](https://godoc.org/github.com/godoctor/godoctor)
+![Project Status](https://img.shields.io/badge/status-beta-yellow.svg)
 
-                           T H E   G O   D O C T O R
- 
-                           a golang refactoring tool
+## A golang refactoring tool
 
+http://gorefactor.org
 
-                                   - = = = -
-
-
-                             http://gorefactor.org/
-
-
+```
                                  .,;;::;;;;::;,.                    
                            .'.......         ......'.               
                   .'.'. .,,'......        .''...''. .,;:'.''.       
@@ -47,3 +44,4 @@
                     :;'  .:l,''''............''''''..,. .;:,        
                     'c;.''       ............         .'.,.         
                       ,:.                                           
+```
