@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"go/ast"
 
-	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/loader"
 
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"github.com/godoctor/godoctor/analysis/dataflow"

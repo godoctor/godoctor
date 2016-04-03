@@ -1,4 +1,4 @@
-// Copyright 2015 Auburn University. All rights reserved.
+// Copyright 2016 Auburn University. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -51,7 +51,7 @@ The <args> following the refactoring name vary depending on the refactoring.
 To display usage information for a particular refactoring, such as rename, use:
     %% godoctor rename
 
-For complete usage information, see the user manual:  FIXME: URL`)
+For complete usage information, see the user manual: http://gorefactor.org/doc.html`)
 }
 
 type CLIFlags struct {

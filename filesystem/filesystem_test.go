@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/loader"
 
 	"go/build"
 	"go/parser"
