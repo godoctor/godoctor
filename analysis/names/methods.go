@@ -8,7 +8,7 @@ import (
 	"go/ast"
 
 	"golang.org/x/tools/go/loader"
-	"golang.org/x/tools/go/types"
+	"go/types"
 )
 
 // FindDeclarationsAcrossInterfaces finds all objects that might need to be

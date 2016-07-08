@@ -17,7 +17,7 @@ import (
 	"github.com/godoctor/godoctor/analysis/dataflow"
 	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/go/loader"
-	"golang.org/x/tools/go/types"
+	"go/types"
 	"github.com/godoctor/godoctor/text"
 )
 

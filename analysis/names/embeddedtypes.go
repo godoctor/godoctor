@@ -8,7 +8,7 @@ import (
 	"go/ast"
 
 	"golang.org/x/tools/go/loader"
-	"golang.org/x/tools/go/types"
+	"go/types"
 )
 
 // FindEmbeddedTypes finds each use of the given Object's type as an embedded

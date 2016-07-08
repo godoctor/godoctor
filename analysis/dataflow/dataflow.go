@@ -15,7 +15,7 @@ import (
 	"go/token"
 
 	"golang.org/x/tools/go/loader"
-	"golang.org/x/tools/go/types"
+	"go/types"
 )
 
 // ReferencedVars returns the sets of local variables that are defined or used
