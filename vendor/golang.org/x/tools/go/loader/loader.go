@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"golang.org/x/tools/go/ast/astutil"
-	"golang.org/x/tools/go/types"
+	"go/types"
 )
 
 const trace = false // show timing info for type-checking

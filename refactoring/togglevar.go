@@ -17,7 +17,7 @@ import (
 	"strings"
 
 	"golang.org/x/tools/go/ast/astutil"
-	"golang.org/x/tools/go/types"
+	"go/types"
 	"github.com/godoctor/godoctor/text"
 )
 

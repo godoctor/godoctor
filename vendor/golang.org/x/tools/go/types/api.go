@@ -20,7 +20,7 @@
 // and checks for compliance with the language specification.
 // Use Info.Types[expr].Type for the results of type inference.
 //
-package types // import "golang.org/x/tools/go/types"
+package types // import "go/types"
 
 import (
 	"bytes"

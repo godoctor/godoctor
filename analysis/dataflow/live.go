@@ -10,7 +10,7 @@ import (
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"github.com/willf/bitset"
 	"golang.org/x/tools/go/loader"
-	"golang.org/x/tools/go/types"
+	"go/types"
 )
 
 // File defines live variables analysis for a statement

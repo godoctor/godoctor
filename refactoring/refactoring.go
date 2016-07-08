@@ -28,7 +28,7 @@ import (
 
 	"github.com/godoctor/godoctor/filesystem"
 	"golang.org/x/tools/go/loader"
-	"golang.org/x/tools/go/types"
+	"go/types"
 	"github.com/godoctor/godoctor/text"
 )
 
