@@ -9,7 +9,7 @@ package typeutil
 import (
 	"sync"
 
-	"go/types"
+	"golang.org/x/tools/go/types"
 )
 
 // A MethodSetCache records the method set of each type T for which
