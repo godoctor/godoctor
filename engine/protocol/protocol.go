@@ -29,6 +29,7 @@ func (r Reply) String() string {
 
 type State struct {
 	State      int
+	About      string
 	Mode       string
 	Dir        string
 	Filesystem filesystem.FileSystem
@@ -68,8 +69,8 @@ func Run(writer io.Writer, aboutText string, args []string) {
 }
 
 func runSingle(writer io.Writer, aboutText string) {
-	cmdList := setup(aboutText)
-	var state = State{0, "", "", nil}
+	cmdList := setup()
+	var state = State{State: 0, About: aboutText, Mode: "", Dir: "", Filesystem: nil}
 	var inputJson map[string]interface{}
 	ioreader := bufio.NewReader(os.Stdin)
 	for {
@@ -102,14 +103,14 @@ func runSingle(writer io.Writer, aboutText string) {
 			continue
 		}
 		// everything good to run command
-		result, _ := cmdList[cmd.(string)].Run(&state, inputJson) // run the command
+		result, _ := cmdList[cmd.(string)](&state, inputJson) // run the command
 		printReply(writer, result)
 	}
 }
 
 func runList(writer io.Writer, aboutText string, argJson []map[string]interface{}) {
-	cmdList := setup(aboutText)
-	var state = State{1, "", "", nil}
+	cmdList := setup()
+	var state = State{State: 1, About: aboutText, Mode: "", Dir: "", Filesystem: nil}
 	for i, cmdObj := range argJson {
 		// has command?
 		cmd, found := cmdObj["command"]
@@ -119,7 +120,7 @@ func runList(writer io.Writer, aboutText string, argJson []map[string]interface{
 		}
 		// valid command?
 		if _, found := cmdList[cmd.(string)]; found {
-			resultReply, err := cmdList[cmd.(string)].Run(&state, cmdObj)
+			resultReply, err := cmdList[cmd.(string)](&state, cmdObj)
 			if err != nil {
 				printReply(writer, resultReply)
 				return
@@ -136,15 +137,15 @@ func runList(writer io.Writer, aboutText string, argJson []map[string]interface{
 }
 
 // little helpers
-func setup(aboutText string) map[string]Command {
+func setup() map[string]Command {
 	cmds := make(map[string]Command)
-	cmds["about"] = &About{aboutText: aboutText}
-	cmds["open"] = &Open{}
-	cmds["list"] = &List{}
-	cmds["setdir"] = &Setdir{}
-	cmds["params"] = &Params{}
-	cmds["put"] = &Put{}
-	cmds["xrun"] = &XRun{}
+	cmds["about"] = about
+	cmds["open"] = open
+	cmds["list"] = list
+	cmds["setdir"] = setdir
+	cmds["params"] = params
+	cmds["put"] = put
+	cmds["xrun"] = xRun
 	return cmds
 }
 
