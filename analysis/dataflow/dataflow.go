@@ -13,9 +13,9 @@ package dataflow
 import (
 	"go/ast"
 	"go/token"
+	"go/types"
 
 	"golang.org/x/tools/go/loader"
-	"golang.org/x/tools/go/types"
 )
 
 // ReferencedVars returns the sets of local variables that are defined or used

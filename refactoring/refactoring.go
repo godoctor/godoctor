@@ -19,6 +19,7 @@ import (
 	"go/parser"
 	"go/printer"
 	"go/token"
+	"go/types"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -27,9 +28,8 @@ import (
 	"sync"
 
 	"github.com/godoctor/godoctor/filesystem"
-	"golang.org/x/tools/go/loader"
-	"golang.org/x/tools/go/types"
 	"github.com/godoctor/godoctor/text"
+	"golang.org/x/tools/go/loader"
 )
 
 // The maximum number of errors from the go/loader that will be reported

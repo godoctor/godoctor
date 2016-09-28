@@ -10,11 +10,11 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"go/types"
 	"reflect"
 	"testing"
 
 	"golang.org/x/tools/go/loader"
-	"golang.org/x/tools/go/types"
 
 	"github.com/godoctor/godoctor/analysis/cfg"
 )

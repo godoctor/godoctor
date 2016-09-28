@@ -6,9 +6,9 @@ package names
 
 import (
 	"go/ast"
+	"go/types"
 
 	"golang.org/x/tools/go/loader"
-	"golang.org/x/tools/go/types"
 )
 
 // FindEmbeddedTypes finds each use of the given Object's type as an embedded

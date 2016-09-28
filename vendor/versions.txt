@@ -1,13 +1,13 @@
-Tue Sep  1 09:26:24 CDT 2015
+Tue Sep 27 20:42:22 EDT 2016
 
 ./golang.org/x/tools
 origin	https://github.com/golang/tools.git (fetch)
-d02228d1857b9f49cd0252788516ff5584266eb6  (HEAD, origin/release-branch.go1.5, release-branch.go1.5) cmd/callgraph: exclude test for Android
+fc2b74b64ef08c618146ebc92062f6499db5314c  (HEAD, origin/master, origin/HEAD, master) refactor/rename: don't stop because of "soft" errors
 
 ./github.com/cheggaaa/pb
 origin	https://github.com/cheggaaa/pb.git (fetch)
-da1f27ad1d9509b16f65f52fd9d8138b0f2dc7b2  (HEAD, origin/master, origin/HEAD, master) Merge pull request #49 from harshavardhana/master
+ad4efe000aa550bb54918c06ebbadc0ff17687b9  (HEAD, origin/master, origin/HEAD, master) Merge pull request #84 from jun06t/time
 
 ./github.com/willf/bitset
 origin	https://github.com/willf/bitset.git (fetch)
-28a4168144bb8ac95454e1f51c84da1933681ad4  (HEAD, origin/master, origin/HEAD, master) Merge pull request #33 from chrisprobst/master
+24b253213c7bdcdd6cde7d6c73760eb16d98551c  (HEAD, origin/master, origin/HEAD, master) Merge pull request #45 from lemire/master
