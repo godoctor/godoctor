@@ -16,13 +16,13 @@ import (
 	"fmt"
 	"go/ast"
 	"go/printer"
+	"go/types"
 	"io"
 	"os"
 	"sort"
 	"strings"
 
 	"golang.org/x/tools/go/loader"
-	"golang.org/x/tools/go/types"
 
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"github.com/godoctor/godoctor/analysis/dataflow"

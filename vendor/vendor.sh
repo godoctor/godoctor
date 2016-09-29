@@ -18,8 +18,7 @@ echo $PWD
 
 echo "Cloning repositories..."
 rm -rf golang.org/x/tools && \
-	git clone --branch release-branch.go1.5 \
-		https://github.com/golang/tools.git golang.org/x/tools
+	git clone https://github.com/golang/tools.git golang.org/x/tools
 rm -rf github.com/cheggaaa/pb && \
 	git clone https://github.com/cheggaaa/pb.git github.com/cheggaaa/pb
 rm -rf github.com/willf/bitset && \

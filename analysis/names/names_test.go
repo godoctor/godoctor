@@ -9,6 +9,7 @@ import (
 	"go/ast"
 	"go/build"
 	"go/parser"
+	"go/types"
 	"sort"
 	"testing"
 
@@ -16,7 +17,6 @@ import (
 	"github.com/godoctor/godoctor/text"
 
 	"golang.org/x/tools/go/loader"
-	"golang.org/x/tools/go/types"
 )
 
 // -=- Utility Functions -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=

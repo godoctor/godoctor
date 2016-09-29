@@ -12,13 +12,13 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"go/types"
 	"io"
 	"reflect"
 	"strings"
 
-	"golang.org/x/tools/go/ast/astutil"
-	"golang.org/x/tools/go/types"
 	"github.com/godoctor/godoctor/text"
+	"golang.org/x/tools/go/ast/astutil"
 )
 
 // A ToggleVar refactoring converts between explicitly-typed variable

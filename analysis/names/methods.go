@@ -6,9 +6,9 @@ package names
 
 import (
 	"go/ast"
+	"go/types"
 
 	"golang.org/x/tools/go/loader"
-	"golang.org/x/tools/go/types"
 )
 
 // FindDeclarationsAcrossInterfaces finds all objects that might need to be

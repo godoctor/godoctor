@@ -6,9 +6,9 @@ package names
 
 import (
 	"go/ast"
+	"go/types"
 
 	"golang.org/x/tools/go/loader"
-	"golang.org/x/tools/go/types"
 )
 
 // FindOccurrences receives an Object and returns the set of all identifiers
