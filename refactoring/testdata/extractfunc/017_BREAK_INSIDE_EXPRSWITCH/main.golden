@@ -7,6 +7,7 @@ func main() {
 	j := 4
 	Foo(j)
 }
+
 func Foo(j int) {
 	switch j {
 	case 1, 3, 5, 7, 9:

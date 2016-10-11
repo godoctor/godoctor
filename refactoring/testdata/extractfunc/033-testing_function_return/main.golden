@@ -10,6 +10,7 @@ func main() {
 	fmt.Println("the new value of b", b)
 	fmt.Println("The variable a is:", a)
 }
+
 func Foo() int {
 	var b int
 	b = 5

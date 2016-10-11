@@ -9,6 +9,7 @@ func main() {
 	b = printB(a)
 	fmt.Println("The new value of b is:", b)
 }
+
 func printB(a int) int {
 	var b int
 	b = 5

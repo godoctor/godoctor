@@ -8,6 +8,7 @@ func main() {
 	FOO(i)
 	fmt.Println("after loop")
 }
+
 func FOO(i int) {
 	for i <= 5 {
 		if i == 3 {

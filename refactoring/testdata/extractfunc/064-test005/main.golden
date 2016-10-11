@@ -12,6 +12,7 @@ func main() {
 	res := foo()
 	fmt.Println("1+2 =", res)
 }
+
 func foo() int {
 	res := plus(1, 2)
 	return res

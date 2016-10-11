@@ -31,6 +31,7 @@ func main() {
 		fmt.Println("no activity")
 	}
 }
+
 func newFunc(msg string) {
 	fmt.Println("sent message", msg)
 }

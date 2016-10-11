@@ -8,6 +8,7 @@ func main() {
 	x = 77.0
 	newFunc(x)
 }
+
 func newFunc(x interface{}) {
 	switch x.(type) {
 	case int:

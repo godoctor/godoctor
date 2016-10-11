@@ -8,6 +8,7 @@ func main() {
 	fmt.Println(y)
 	Foo()
 }
+
 func Foo() {
 ABC:
 	for {

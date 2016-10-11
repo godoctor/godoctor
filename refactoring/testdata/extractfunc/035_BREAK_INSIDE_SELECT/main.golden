@@ -21,6 +21,7 @@ func main() {
 		Foo(c1, c2)
 	}
 }
+
 func Foo(c1 chan string, c2 chan string) {
 	select {
 	case msg1 := <-c1:

@@ -8,6 +8,7 @@ func main() {
 	i++
 	Foo(i)
 }
+
 func Foo(i int) {
 	if i == 6 {
 		goto ABC

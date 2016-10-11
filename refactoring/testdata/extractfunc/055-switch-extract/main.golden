@@ -7,6 +7,7 @@ func main() {
 	x := 1
 	newFunc(x)
 }
+
 func newFunc(x int) {
 d:
 	for {

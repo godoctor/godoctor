@@ -18,6 +18,7 @@ func main() {
 		fmt.Println("Unknown type. Sorry!")
 	}
 }
+
 func Foo(i float64) {
 	if i == 77.0 {
 		a := i + 3

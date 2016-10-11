@@ -18,6 +18,7 @@ func main() {
 	fmt.Println("Value of n is ", n)
 	fmt.Println("Printing Modified point after returning", p)
 }
+
 func foo(a int, b int, p *Pt) (int, int) {
 	p.y = 6
 	fmt.Println("New Pt", p)

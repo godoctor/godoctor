@@ -33,6 +33,7 @@ func main() {
 	var input string
 	fmt.Scanln(&input)
 }
+
 func Foo(c chan string) {
 	go pinger(c)
 	go ponger(c)

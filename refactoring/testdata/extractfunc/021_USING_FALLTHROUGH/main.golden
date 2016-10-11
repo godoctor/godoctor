@@ -7,6 +7,7 @@ func main() {
 	k := 6
 	Foo(k)
 }
+
 func Foo(k int) {
 	switch k {
 	case 4:

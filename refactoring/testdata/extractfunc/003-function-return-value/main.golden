@@ -8,6 +8,7 @@ func main() {
 	b := 4
 	changeB(a, b)
 }
+
 func changeB(a int, b int) {
 	fmt.Println("Value of a and b", a, b)
 	b = 77

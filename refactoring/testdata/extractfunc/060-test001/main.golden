@@ -14,6 +14,7 @@ func main() {
 	}
 	fmt.Println("the new value of b is ", b)
 }
+
 func foo(b int) int {
 	fmt.Println("a and b are equal")
 	b = b + 1

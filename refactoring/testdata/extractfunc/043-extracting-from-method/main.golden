@@ -21,6 +21,17 @@ func (people AgesByNames) older() string {
 	return n
 }
 
+func (people AgesByNames) foo(a int) string {
+	var n string
+	for key, value := range people {
+		if value > a {
+			a = value
+			n = key
+		}
+	}
+	return n
+}
+
 func main() {
 	s := SliceOfints{1, 2, 3, 4, 5}
 	folks := AgesByNames{
@@ -32,14 +43,4 @@ func main() {
 
 	fmt.Println("The sum of ints in the slice s is: ", s.sum())
 	fmt.Println("The older in the map folks is:", folks.older())
-}
-func (people AgesByNames) foo(a int) string {
-	var n string
-	for key, value := range people {
-		if value > a {
-			a = value
-			n = key
-		}
-	}
-	return n
 }

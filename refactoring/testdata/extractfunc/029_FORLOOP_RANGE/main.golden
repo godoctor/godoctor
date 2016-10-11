@@ -9,6 +9,7 @@ func main() {
 	total = Foo(total, xs)
 	fmt.Println(total / float64(len(xs)))
 }
+
 func Foo(total float64, xs []float64) float64 {
 	for _, v := range xs {
 		total += v

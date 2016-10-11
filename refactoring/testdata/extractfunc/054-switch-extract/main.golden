@@ -8,6 +8,7 @@ func main() {
 	s2 := "efgh"
 	newFunc(s1, s2)
 }
+
 func newFunc(s1 string, s2 string) {
 	switch s1 {
 	case s2:

@@ -9,6 +9,7 @@ func main() {
 	foo(i)
 	fmt.Println("end of main function")
 }
+
 func foo(i int) {
 	if i%2 == 0 {
 		fmt.Println("i is even")

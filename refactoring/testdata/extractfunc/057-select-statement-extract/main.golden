@@ -26,6 +26,7 @@ func main() {
 		fmt.Println("no activity")
 	}
 }
+
 func newFunc(messages chan string) {
 	select {
 	case msg := <-messages:
