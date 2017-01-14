@@ -94,6 +94,29 @@ UPDATE THIRD-PARTY VENDORED DEPENDENCIES---------------------------------------
     ./vendor.sh
 
 
+RELEASE PROCEDURE-------------------------------------------------------------- 
+
+    1. godoctor/gopatient - Should not require any changes
+
+    2. godoctor/demo - Make sure it still works
+
+    3. godoctor/godoctor.vim - Make sure it still works
+
+    4. godoctor/godoctor:
+       a. Merge relevant commits into master
+       b. Update version number (e.g., 0.5) in main.go
+       b. git tag -a v0.5    # Annotated tag
+          - Run "git show v0.2" to see an example of a commit message
+       c. git push origin v0.5
+
+    5. godoctor/www:
+       a. Make sure the home page has all refactorings listed
+       b. Follow instructions in README to update version number and docs
+       c. git tag v0.5    # Lightweight tag
+       d. git push origin v0.5
+       e. Publish web site (goapp deploy)
+
+
 GIT STUFF----------------------------------------------------------------------
 
     A nice idea from http://fredkschott.com/post/2014/02/git-log-is-so-2005/

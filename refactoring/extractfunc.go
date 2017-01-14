@@ -1,5 +1,5 @@
-// Copyright 2015 Auburn University. All rights reserved.
-// Use of this source code is governed by recvTypeExpr BSD-style
+// Copyright 2015-2017 Auburn University and others. All rights reserved.
+// Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
 package refactoring
