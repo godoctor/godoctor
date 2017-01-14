@@ -8,6 +8,7 @@ func main() {
 	b := printB()
 	fmt.Println("The variable a is:", a, b)
 }
+
 func printB() int {
 	b := 4
 	fmt.Println("The variable b is:", b)

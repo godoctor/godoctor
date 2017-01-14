@@ -9,6 +9,7 @@ func main() {
 	i = i + 2
 	fmt.Println("the value 'i' is:", i)
 }
+
 func Foo(i int) int {
 	for {
 		if i == 3 {

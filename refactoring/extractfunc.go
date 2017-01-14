@@ -60,6 +60,8 @@ type stmtRange struct {
 	liveIn map[ast.Stmt]map[*types.Var]struct{}
 	// PackageInfo used to bind variable names to *types.Var objects
 	pkgInfo *loader.PackageInfo
+	// The package rooted func / method enclosing the selection
+	enclosingFunc *ast.FuncDecl
 }
 
 // newStmtRange creates a stmtRange corresponding to a selected region of a
@@ -170,7 +172,9 @@ loop:
 		cfg:           cfg,
 		blocksInRange: nil,
 		liveIn:        liveIn,
-		pkgInfo:       pkgInfo}
+		pkgInfo:       pkgInfo,
+		enclosingFunc: enclosingFunc,
+	}
 
 	// Determine the subset of blocks in the CFG that correspond to
 	// statements within the selected region.
@@ -209,17 +213,6 @@ func maxPos(m, n token.Pos) token.Pos {
 		return m
 	}
 	return n
-}
-
-// EnclosingFunc returns the (named) function containing the selected
-// statements.
-func (r *stmtRange) EnclosingFunc() *ast.FuncDecl {
-	for _, node := range r.pathToRoot {
-		if funcDecl, ok := node.(*ast.FuncDecl); ok {
-			return funcDecl
-		}
-	}
-	panic("no FuncDecl in path to root")
 }
 
 // selectedStmts returns the children of the enclosing
@@ -472,7 +465,7 @@ func (f *extractedFunc) SourceCode() (funcDecl, funcCall string) {
 
 	localVarDecls := createVarDecls(namesAndTypes(f.locals, f.pkgFmt))
 	if len(f.returns) == 0 {
-		funcDecl = fmt.Sprintf("\nfunc %s {\n%s%s\n}\n",
+		funcDecl = fmt.Sprintf("\n\nfunc %s {\n%s%s\n}\n",
 			funcDecl, localVarDecls, f.code)
 		funcCall = fmt.Sprintf("%s", funcCall)
 	} else {
@@ -487,13 +480,13 @@ func (f *extractedFunc) SourceCode() (funcDecl, funcCall string) {
 
 		funcDefReturnTypes := commaSeparated(returnTypes)
 		if len(returnNames) > 1 {
-			funcDecl = fmt.Sprintf("\nfunc %s(%s) {\n%s%s\n%s\n}\n",
+			funcDecl = fmt.Sprintf("\n\nfunc %s(%s) {\n%s%s\n%s\n}\n",
 				funcDecl, funcDefReturnTypes, localVarDecls,
 				f.code, returnStmt)
 			funcCall = fmt.Sprintf("%s%s%s",
 				returnExprs, assignSymbol, funcCall)
 		} else {
-			funcDecl = fmt.Sprintf("\nfunc %s %s {\n%s%s\n%s\n}\n",
+			funcDecl = fmt.Sprintf("\n\nfunc %s %s {\n%s%s\n%s\n}\n",
 				funcDecl, funcDefReturnTypes, localVarDecls,
 				f.code, returnStmt)
 			funcCall = fmt.Sprintf("%s%s%s",
@@ -668,8 +661,10 @@ func (r *ExtractFunc) addEdits() {
 	length := r.Program.Fset.Position(r.stmtRange.End()).Offset - offset
 	r.Edits[r.Filename].Add(&text.Extent{offset, length}, funcCall)
 
+	next := r.Program.Fset.Position(r.stmtRange.enclosingFunc.End()).Offset
+
 	// Insert the new function declaration
-	r.Edits[r.Filename].Add(&text.Extent{r.Program.Fset.Position(r.File.End()).Offset, 0}, funcDecl)
+	r.Edits[r.Filename].Add(&text.Extent{next, 0}, funcDecl)
 }
 
 // createExtractedFunc returns an extractedFunc, which contains information
@@ -748,7 +743,7 @@ func (r *ExtractFunc) analyzeVars() (recv *types.Var, params, returns, locals []
 	// selected statements, then the result variable needs to be declared.
 	declareResult = len(intersection(returns, declared)) > 0
 
-	if recvNode := r.stmtRange.EnclosingFunc().Recv; recvNode != nil {
+	if recvNode := r.stmtRange.enclosingFunc.Recv; recvNode != nil {
 		recv = r.SelectedNodePkg.ObjectOf(recvNode.List[0].Names[0]).(*types.Var)
 		params = difference(params, []*types.Var{recv})
 		returns = difference(returns, []*types.Var{recv})

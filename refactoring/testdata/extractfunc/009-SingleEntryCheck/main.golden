@@ -8,6 +8,7 @@ func main() {
 	Foo(i)
 	fmt.Println("A statement just after for loop.")
 }
+
 func Foo(i int) {
 	for {
 		if i == 3 {

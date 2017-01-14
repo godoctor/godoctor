@@ -10,6 +10,7 @@ func main() {
 	Square(y)
 	fmt.Println("square(x)", *y)
 }
+
 func Square(y *float64) {
 	*y = *y * *y
 }

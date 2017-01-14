@@ -17,6 +17,7 @@ func main() {
 	}
 	fmt.Println("2d: ", twoD)
 }
+
 func innerLoop(i int, innerLen int, twoD [][]int) {
 	twoD[i] = make([]int, innerLen)
 	for j := 0; j < innerLen; j++ {

@@ -8,6 +8,7 @@ func main() {
 	x = 77.0
 	Foo(x)
 }
+
 func Foo(x interface{}) {
 	switch i := x.(type) {
 	case int:

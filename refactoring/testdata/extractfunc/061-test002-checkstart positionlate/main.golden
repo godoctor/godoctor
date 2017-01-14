@@ -9,6 +9,7 @@ func main() {
 	b, c = foo()
 	fmt.Println("IN MAIN", b, c)
 }
+
 func foo() (int, int) {
 	var b int
 	var c int

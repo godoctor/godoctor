@@ -12,6 +12,7 @@ func main() {
 	}
 	fmt.Println("out of k loop")
 }
+
 func Foo(i int, k int) int {
 	for j := k; j < 5; j++ {
 		fmt.Println("j =", j)

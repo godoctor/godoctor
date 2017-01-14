@@ -13,6 +13,7 @@ func main() {
 	p.x = 5
 	foo(p)
 }
+
 func foo(p *Pt) {
 	p.y = 6
 	fmt.Print("New Pt", p)

@@ -15,6 +15,12 @@ func main() {
 
 }
 
+func FOO(v float64) {
+	if temp, ok := tripleNum(v); ok {
+		fmt.Println("##temp", temp)
+	}
+}
+
 func doubleXS(xs []float64) []float64 {
 	var temp []float64
 	for i, _ := range xs {
@@ -25,9 +31,4 @@ func doubleXS(xs []float64) []float64 {
 
 func tripleNum(num float64) (float64, bool) {
 	return num * 3, true
-}
-func FOO(v float64) {
-	if temp, ok := tripleNum(v); ok {
-		fmt.Println("##temp", temp)
-	}
 }

@@ -19,6 +19,7 @@ func main() {
 	}()
 	Foo(c1, c2)
 }
+
 func Foo(c1 chan string, c2 chan string) {
 H:
 	for i := 0; i < 2; i++ {

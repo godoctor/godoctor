@@ -8,6 +8,7 @@ func main() {
 		newFunction(i)
 	}
 }
+
 func newFunction(i int) {
 	if num := 9; num < 10 {
 		A := num

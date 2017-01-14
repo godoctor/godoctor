@@ -7,6 +7,7 @@ func main() {
 	fmt.Println("statement inside the main function")
 	Foo()
 }
+
 func Foo() {
 	for i := 0; i <= 8; i++ {
 		fmt.Println("i is ", i)

@@ -7,6 +7,7 @@ func main() {
 	i := 5
 	Foo(i)
 }
+
 func Foo(i int) {
 	for i < 10 {
 		i++

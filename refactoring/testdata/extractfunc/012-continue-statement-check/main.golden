@@ -11,6 +11,7 @@ func main() {
 	}
 	fmt.Println("A statement just after for loop.")
 }
+
 func Foo(i int) {
 	if i == 3 {
 		continue

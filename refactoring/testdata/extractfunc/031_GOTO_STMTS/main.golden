@@ -8,6 +8,7 @@ func main() {
 	Foo(i)
 	fmt.Println("after for loop")
 }
+
 func Foo(i int) {
 ABC:
 	fmt.Println("ABC")

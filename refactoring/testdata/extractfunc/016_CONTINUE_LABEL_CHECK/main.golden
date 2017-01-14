@@ -28,6 +28,7 @@ func main() {
 	}
 	printMap(elements)
 }
+
 func printMap(elements map[string]map[string]string) {
 R:
 	for _, row := range elements {

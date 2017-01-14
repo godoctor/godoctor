@@ -9,6 +9,7 @@ func main() {
 	b = foo(a, b)
 	fmt.Println("the new value of b is ", b)
 }
+
 func foo(a int, b int) int {
 	b = b + 2
 	if a == b {
