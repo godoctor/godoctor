@@ -68,8 +68,9 @@ func (r *ExtractLocal) Run(config *Config) *Result {
 		r.checkExprIsNotInTypeAssertionType() &&
 		r.checkExprHasEnclosingStmt() &&
 		r.checkEnclosingStmtIsAllowed() &&
-		r.checkExprIsNotInAssignStmtLhs() &&
+		r.checkExprIsNotAssignStmtLhs() &&
 		r.checkExprIsNotInIfStmtWithInit() &&
+		r.checkExprIsNotRangeStmtLhs() &&
 		r.checkExprIsNotInCaseClauseOfTypeSwitchStmt() {
 		// Now, check preconditions that are only for semantic
 		// preservation (i.e., they should not block the refactoring,
@@ -109,6 +110,8 @@ func (r *ExtractLocal) checkSelectedNodeIsExpr() bool {
 // returning false if it cannot.
 func (r *ExtractLocal) checkExprHasValidType() bool {
 	exprType := r.SelectedNodePkg.TypeOf(r.SelectedNode.(ast.Expr))
+	// fmt.Printf("Node is %s\n", reflect.TypeOf(r.SelectedNode))
+	// fmt.Printf("Type is %s\n", exprType)
 
 	if _, isFunctionType := exprType.(*types.Tuple); isFunctionType {
 		r.Log.Errorf("The selected expression cannot be assigned to a variable since it has a tuple type %s", exprType)
@@ -254,6 +257,7 @@ func (r *ExtractLocal) checkExprHasEnclosingStmt() bool {
 //
 // Precondition: r.enclosingStmtIndex() >= 0
 func (r *ExtractLocal) checkEnclosingStmtIsAllowed() bool {
+	// fmt.Printf("Enclosing stmt is %s\n", reflect.TypeOf(r.enclosingStmt()))
 	switch r.enclosingStmt().(type) {
 	case *ast.AssignStmt:
 		return true
@@ -287,18 +291,20 @@ func (r *ExtractLocal) checkEnclosingStmtIsAllowed() bool {
 	}
 }
 
-// checkExprIsNotInAssignStmtLhs determines if the selected node is one of
-// the LHS expressions for the given assignment statement, logging an error and
+// checkExprIsNotAssignStmtLhs determines if the selected node is one of the
+// LHS expressions for the given assignment statement, logging an error and
 // returning false if it is.
+//
+// Note, in particular, that this prevents extracting _.
 //
 // Note that it is acceptable to extract a subexpression of an LHS expression
 // (e.g., the subscript expression in a[i+2]=...), but not the entire expression.
-func (r *ExtractLocal) checkExprIsNotInAssignStmtLhs() bool {
+func (r *ExtractLocal) checkExprIsNotAssignStmtLhs() bool {
 	for _, node := range r.PathEnclosingSelection {
 		if asgt, ok := node.(*ast.AssignStmt); ok {
 			for _, lhsExpr := range asgt.Lhs {
 				if r.SelectedNode == lhsExpr {
-					r.Log.Error("The selected expression cannot be extracted since it is in the left-hand side of an assignment.")
+					r.Log.Error("The selected expression cannot be extracted since it is assigned to.")
 					r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
 					return false
 				}
@@ -337,6 +343,25 @@ func (r *ExtractLocal) checkExprIsNotInIfStmtWithInit() bool {
 				"if statement with an initialization.")
 			r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
 			return false
+		}
+	}
+	return true
+}
+
+// checkExprIsNotRangeStmtLhs determines if the selected node is either the key
+// or value expression for a range statement, logging an error and returning
+// false if it is.
+//
+// Note that it is acceptable to extract a subexpression of an LHS expression
+// (e.g., the subscript expression in a[i+2]=...), but not the entire expression.
+func (r *ExtractLocal) checkExprIsNotRangeStmtLhs() bool {
+	for _, node := range r.PathEnclosingSelection {
+		if asgt, ok := node.(*ast.RangeStmt); ok {
+			if asgt.Key == r.SelectedNode || asgt.Value == r.SelectedNode {
+				r.Log.Error("The selected expression cannot be extracted since it is the key or value expression for a range statement.")
+				r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+				return false
+			}
 		}
 	}
 	return true
