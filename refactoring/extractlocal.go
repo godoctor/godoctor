@@ -68,6 +68,7 @@ func (r *ExtractLocal) Run(config *Config) *Result {
 
 	var insertBefore ast.Stmt
 	if r.checkSelectedNodeIsExpr() &&
+		r.checkForNameConflict() &&
 		r.checkExpressionType() &&
 		r.checkExpressionContext() &&
 		r.checkStatementContext(&insertBefore) {
@@ -93,6 +94,48 @@ func (r *ExtractLocal) checkSelectedNodeIsExpr() bool {
 		r.Log.Error("Please select an expression to extract.")
 		r.Log.Errorf("(Selected node: %s)", reflect.TypeOf(r.SelectedNode))
 		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+		return false
+	}
+
+	return true
+}
+
+// scopeEnclosingSelection returns the smallest scope in which the selected node exists.
+func (r *ExtractLocal) scopeEnclosingSelection() *types.Scope {
+	for _, node := range r.PathEnclosingSelection {
+		if scope, found := r.SelectedNodePkg.Info.Scopes[node]; found {
+			return scope.Innermost(r.SelectedNode.Pos())
+		}
+	}
+	return nil
+}
+
+// checkForNameConflict determines if the new variable name will conflict with
+// or shadow an existing name, logging an error and returning false if it will.
+func (r *ExtractLocal) checkForNameConflict() bool {
+	scope := r.scopeEnclosingSelection()
+	if scope == nil {
+		r.Log.Error("A scope could not be found for the selected expression.")
+		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+		return false
+	}
+
+	// TO DISPLAY THE SCOPE:
+	// var buf bytes.Buffer
+	// scope.WriteTo(&buf, 0, true)
+	// fmt.Println(buf.String())
+
+	existingObj := scope.Lookup(r.varName)
+	if existingObj != nil {
+		r.Log.Errorf("If a variable named %s is introduced, it will conflict with an existing declaration.", r.varName)
+		r.Log.AssociatePos(existingObj.Pos(), existingObj.Pos())
+		return false
+	}
+
+	_, existingObj = scope.LookupParent(r.varName, r.SelectedNode.Pos())
+	if existingObj != nil {
+		r.Log.Errorf("If a variable named %s is introduced, it will shadow an existing declaration.", r.varName)
+		r.Log.AssociatePos(existingObj.Pos(), existingObj.Pos())
 		return false
 	}
 
