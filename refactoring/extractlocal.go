@@ -218,7 +218,8 @@ func (r *ExtractLocal) checkStatementContext(insertBefore *ast.Stmt) bool {
 
 	switch stmt := r.enclosingNodes[enclosingStmt].(type) {
 	case *ast.AssignStmt:
-		return r.checkIfSelectedNodeIsAssignStmtLhs(stmt)
+		return r.checkIfSelectedNodeIsAssignStmtLhs(stmt) &&
+			r.checkIfSelectedNodeIsInIfStmtInit()
 
 	case *ast.CaseClause:
 		// grandparent will be switch or type switch statement
@@ -274,6 +275,21 @@ func (r *ExtractLocal) checkIfSelectedNodeIsAssignStmtLhs(asgt *ast.AssignStmt) 
 		if r.SelectedNode == lhsExpr {
 			r.Log.Error("The selected expression cannot be extracted " +
 				"since it is in the left-hand side of an assignment.")
+			r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+			return false
+		}
+	}
+	return true
+}
+
+// checkIfSelectedNodeIsInIfStmtInit determines if the selected node appears in
+// the initialization statement of an if statement, logging an error and
+// returning false if it is.
+func (r *ExtractLocal) checkIfSelectedNodeIsInIfStmtInit() bool {
+	for i, node := range r.enclosingNodes {
+		if ifStmt, ok := node.(*ast.IfStmt); ok && i > 0 && r.enclosingNodes[i-1] == ifStmt.Init {
+			r.Log.Error("The selected expression cannot be extracted " +
+				"since it is in an if statement initialization.")
 			r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
 			return false
 		}
