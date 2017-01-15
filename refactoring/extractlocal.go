@@ -238,7 +238,7 @@ func (r *ExtractLocal) checkStatementContext(insertBefore *ast.Stmt) bool {
 
 	case *ast.IfStmt:
 		*insertBefore = r.findOutermostIfStmt(enclosingStmt)
-		return r.checkForReachingDefinition(stmt.Init, stmt)
+		return r.checkIfIfStmtHasInit(stmt)
 
 	//case *ast.IncDecStmt:
 	//case *ast.LabeledStmt not allowed - label cannot be extracted
@@ -311,6 +311,29 @@ func (r *ExtractLocal) findOutermostIfStmt(start int) *ast.IfStmt {
 		}
 	}
 	return result
+}
+
+// checkIfIfStmtHasInit determines if the given if statement has an
+// initialization, logging an error and returning false if it does.
+//
+// There are several problems with such if statements:
+// (1) if x := 3; x < 5
+//     Here, the definition (and declaration) of x in the init statement
+//     reaches the condition, so an expression involving x cannot be
+//     extracted from the condition.
+// (2) if thing, ok := x.(*Thing); ok
+//     The type assertion cannot be extracted, since it assigns both thing and
+//     ok in this context.
+// (3) if value, found := myMap[entry]
+//     Similar.
+func (r *ExtractLocal) checkIfIfStmtHasInit(ifStmt *ast.IfStmt) bool {
+	if ifStmt.Init != nil {
+		r.Log.Error("Expressions cannot be extracted from an " +
+			"if statement with an initialization.")
+		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+		return false
+	}
+	return true
 }
 
 // checkForReachingDefinition determines if a local variable is possibly
