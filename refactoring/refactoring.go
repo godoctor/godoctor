@@ -19,6 +19,7 @@ import (
 	"go/parser"
 	"go/printer"
 	"go/token"
+	"go/types"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -28,8 +29,7 @@ import (
 
 	"github.com/godoctor/godoctor/filesystem"
 	"github.com/godoctor/godoctor/text"
-	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/loader"
-	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/types"
+	"golang.org/x/tools/go/loader"
 )
 
 // The maximum number of errors from the go/loader that will be reported
@@ -134,6 +134,9 @@ type Config struct {
 	// The GOPATH.  If this is set to the empty string, the GOPATH is
 	// determined from the environment.
 	GoPath string
+	// The GOROOT.  If this is set to the empty string, the GOROOT is
+	// determined from the environment.
+	GoRoot string
 }
 
 // The Refactoring interface identifies methods common to all refactorings.
@@ -165,7 +168,7 @@ type Result struct {
 	Edits map[string]*text.EditSet
 }
 
-const cgoError1 = "could not import C (cannot"
+const cgoError1 = "could not import C ("
 const cgoError2 = "undeclared name: C"
 
 type RefactoringBase struct {
@@ -279,6 +282,13 @@ func (r *RefactoringBase) Run(config *Config) *Result {
 		return &r.Result
 	}
 
+	/*
+		r.Log.Infof("Selection is \"%s\" (offsets %d–%d)",
+			r.TextFromPosRange(r.SelectionStart, r.SelectionEnd),
+			r.OffsetOfPos(r.SelectionStart),
+			r.OffsetOfPos(r.SelectionEnd))
+	*/
+
 	r.Edits = map[string]*text.EditSet{
 		r.Filename: text.NewEditSet(),
 	}
@@ -298,15 +308,23 @@ func createLoader(config *Config, errorHandler func(error)) (*loader.Program, er
 	if config.GoPath != "" {
 		buildContext.GOPATH = config.GoPath
 	}
+	if os.Getenv("GOROOT") != "" {
+		// When the Go Doctor Web demo is running on App Engine, the
+		// GOROOT environment variable will be set since the default
+		// GOROOT is not readable.
+		buildContext.GOROOT = os.Getenv("GOROOT")
+	}
+	if config.GoRoot != "" {
+		buildContext.GOROOT = config.GoRoot
+	}
 	buildContext.ReadDir = config.FileSystem.ReadDir
 	buildContext.OpenFile = config.FileSystem.OpenFile
-	buildContext.CgoEnabled = false
 
 	var lconfig loader.Config
 	lconfig.Build = &buildContext
 	lconfig.ParserMode = parser.ParseComments | parser.DeclarationErrors
 	lconfig.AllowErrors = true
-	lconfig.SourceImports = true
+	//lconfig.SourceImports = true
 	lconfig.TypeChecker.Error = errorHandler
 
 	rest, err := lconfig.FromArgs(config.Scope, true)

@@ -42,7 +42,8 @@ func PrintUserGuideAsGiven(aboutText string, flags *flag.FlagSet, ctnt *UserGuid
 			"<body>", "</body>")
 	}
 	if ctnt.VimdocHTML == "" {
-		ctnt.VimdocHTML = fmt.Sprintf("<pre>\n%s\n</pre>",
+		ctnt.VimdocHTML = fmt.Sprintf(
+			"<pre>\n%s\n</pre>",
 			printVimdoc(aboutText, flags))
 	}
 
@@ -260,22 +261,11 @@ const userGuide = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "htt
                   <div class="indent">
                     <!-- BEGIN TOC -->
                     <h2>Getting Started</h2>
-                    <ul class="toc1">
-                      <li><a onClick="show('install');" href="#install">Installation</a></li>
-                      <ul class="toc2">
-                        <li><a onClick="show('install-godoctor');" href="#install-godoctor">Installing the Go Doctor</a></li>
-                        <li><a onClick="show('install-vim');" href="#install-vim">Installing the Vim Plug-in</a></li>
-                      </ul>
-                      <li><a onClick="show('usage');" href="#usage">Basic Usage</a></li>
-                      <ul class="toc2">
-                        <li><a onClick="show('usage-vim');" href="#usage-vim">Vim Plug-in</a></li>
-                        <li><a onClick="show('usage-cli');" href="#usage-cli">Command Line Tool (godoctor)</a></li>
-                      </ul>
-                      <li><a onClick="show('help');" href="#help">Getting Help</a></li>
-                      <ul class="toc2">
-                        <li><a onClick="show('documentation');" href="#documentation">Documentation</a></li>
-                        <li><a onClick="show('mailing-list');" href="#mailing-list">Joining the Mailing List</a></li>
-                      </ul>
+                    <ul class="toc2">
+                      <li><a onClick="show('starting');" href="#starting">Getting Started</a></li>
+                      <li><a onClick="show('mailing-list');" href="#mailing-list">Joining the Mailing List</a></li>
+                      <li><a onClick="show('documentation');" href="#documentation">Online Documentation</a></li>
+                      <li><a onClick="show('offline');" href="#offline">Installing Local Documentation</a></li>
                     </ul>
                     <h2>Refactorings</h2>
                     <ul class="toc2">
@@ -305,136 +295,26 @@ const userGuide = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "htt
           <div class="indent">
             <!-- BEGIN CONTENT -->
 <h1>{{.AboutText}} User's Guide</h1>
-<a name="install"></a>
-<h2>Installation</h2>
-<div id="install-click" class="clicktoshow">
-  <a href="#install" onClick="show('install');">Show&nbsp;&raquo;</a>
+<a name="starting"></a>
+<h3>Getting Started</h3>
+<div id="starting-click" class="clicktoshow">
+  <a href="#starting" onClick="show('starting');">Show&nbsp;&raquo;</a>
 </div>
-<div id="install" class="showable">
-  <p>The Go Doctor binary distribution includes these files:</p>
-  <ul>
-    <li><b>godoctor</b> &ndash; The <tt>godoctor</tt> command line tool
-    (godoctor.exe on Windows)</li>
-    <li><b>godoctor.1</b> &ndash; The <tt>godoctor</tt> man page
-    (not included on Windows)</li>
-    <li><b>godoctor.html</b> &ndash; This user's guide</li>
-    <li><b>godoctor-vim/...</b> &ndash; The Go Doctor Vim plug-in</li>
-  </ul>
-</div>
-<a name="install-godoctor"></a>
-<h3>Installing the <tt>godoctor</tt> Command Line Tool</h3>
-<div id="install-godoctor-click" class="clicktoshow">
-  <a href="#install-godoctor" onClick="show('install-godoctor');">Show&nbsp;&raquo;</a>
-</div>
-<div id="install-godoctor" class="showable">
-  <p>To install the <tt>godoctor</tt> command line tool:</p>
-  <ol class="enum">
-    <li>Extract the files from the downloaded .zip file to a temporary
-    location.</li>
-    <li>Copy the <b>godoctor</b> binary to a directory on your $PATH.</li>
-    <li>Copy <b>godoctor.1</b> binary to a directory on your $MANPATH.</li>
-  </ol>
-  <p>For example, to install the Go Doctor in /usr/local:</p>
-  <pre>
-  sudo install godoctor /usr/local/bin/
-  sudo cp godoctor.1 /usr/local/share/man/man1/</pre>
-  <p>After you have installed the <tt>godoctor</tt> binary, you may want to
-  <a href="#install-vim">install the Go Doctor Vim plug-in</a>.</p>
-</div>
-<a name="install-vim"></a>
-<h3>Installing the Go Doctor Vim Plug-in</h3>
-<div id="install-vim-click" class="clicktoshow">
-  <a href="#install-vim" onClick="show('install-vim');">Show&nbsp;&raquo;</a>
-</div>
-<div id="install-vim" class="showable">
-  <p>The Go Doctor Vim plug-in supports Vim TODO VERSION</p>
-  <p><b>If you have <a target="_blank" href="https://github.com/tpope/vim-pathogen">Pathogen</a> installed:</b></p>
-  <ol class="enum">
-    <li>Copy the <b>godoctor-vim</b> directory from the Go Doctor
-    distribution into your ~/.vim/bundle directory.  The resulting file
-    structure should look something like this:<br/>
-    <span style="margin-left: 2em;">$HOME/</span><br/>
-    <span style="margin-left: 3.5em;">.vim/</span><br/>
-    <span style="margin-left: 5em;">bundle/</span><br/>
-    <span style="margin-left: 6.5em;">godoctor-vim/</span><br/>
-    <span style="margin-left: 8em;">doc/</span><br/>
-    <span style="margin-left: 8em;">ftdetect/</span><br/>
-    <span style="margin-left: 8em;">ftplugin/</span><br/>
-    </li>
-    <li>Start Vim.  TODO <tt>:GoRefactor about</tt></li>
-    <li>In Vim, run <tt>:Helptags</tt> to generate help tags for the plug-in.</li>
-  </ol>
-  <p><b>If you do not have Pathogen installed:</b></p>
-  <ol class="enum">
-    <li>Copy the <b>godoctor-vim</b> directory from the Go Doctor
-    distribution to a more permanent location on your file system.</li>
-    <li>Add these lines to ~/.vimrc, replacing the highlighted path with the
-    actual path to the <b>godoctor-vim</b> directory:
-    <pre>
-    if exists("g:did_load_filetypes")
-      filetype off
-      filetype plugin indent off
-    endif
-    set rtp+=<span class="highlight">/path/to/godoctor-vim</span>
-    filetype plugin indent on
-    syntax on</pre></li>
-    <li>Start Vim.  TODO <tt>:GoRefactor about</tt></li>
-    <li>TODO In Vim, generate help tags for the plug-in by running <tt>:helptags <span class="highlight">/path/to/godoctor-vim</span>/doc</tt></li>
-  </ol>
-  <p><i>Note: In addition to the Go Doctor, you may want to install
-  <a target="_blank" href="https://github.com/fatih/vim-go">vim-go</a>,
-  which provides Vim integration for several other Go programming tools.</i></p>
-</div>
-<a name="usage"></a>
-<h2>Basic Usage</h2>
-<div id="usage-click" class="clicktoshow"></div>
-<div id="usage" class="showable"></div>
-<a name="usage-vim"></a>
-<h3>Using the Go Doctor Vim Plugin</h3>
-<div id="usage-vim-click" class="clicktoshow">
-  <a href="#usage-vim" onClick="show('usage-vim');">Show&nbsp;&raquo;</a>
-</div>
-<div id="usage-vim" class="showable">
-  <p>Documentation for the Go Doctor Vim plugin is provided through Vim's
-  online help system.  After installing the plugin as above, start Vim and
-  run:
-  <pre>
-  :help godoctor</pre></p>
-  <p>The online help for the Vim plugin is also available at
-  <a target="_blank">TODO</a>.</p>
-</div>
-<a name="usage-cli"></a>
-<h3>Using the Command Line Tool (<tt>godoctor</tt>)</h3>
-<div id="usage-cli-click" class="clicktoshow">
-  <a href="#usage-cli" onClick="show('usage-cli');">Show&nbsp;&raquo;</a>
-</div>
-<div id="usage-cli" class="showable">
-  <p>Documentation for the <tt>godoctor</tt> command line tool is available
-  as a Unix man page.  After installing the man page as above, from a shell
-  prompt, run
-  <pre>
-  man godoctor</pre></p>
-  <p>The man page for the <tt>godoctor</tt> command is also available at
-  <a target="_blank">TODO</a>.</p>
-</div>
-<a name="help"></a>
-<h2>Getting Help</h2>
-<div id="help-click" class="clicktoshow"></div>
-<div id="help" class="showable"></div>
-<a name="documentation"></a>
-<h3>Documentation</h3>
-<div id="documentation-click" class="clicktoshow">
-  <a href="#documentation" onClick="show('documentation');">Show&nbsp;&raquo;</a>
-</div>
-<div id="documentation" class="showable">
-  <p>If you are reading this, you have already found the documentation for the
-  Go Doctor.  This User's Guide contains all of the available documentation.
-  The <a onClick="show('godoctor-man');" href="#godoctor-man">man page</a> for
-  the <tt>godoctor</tt> command line tool and the <a
-  onClick="show('godoctor-vim');" href="#godoctor-vim">Vim plugin
-  reference</a> are both included here, but they are also available separately.
-  For details, see <a onClick="show('usage');" href="#usage">Basic Usage</a>
-  above.
+<div id="starting" class="showable">
+  <p>If this is your first time using the Go Doctor, see the
+  <a href="http://gorefactor.org/starting.html">Getting Started</a> page on the
+  Go Doctor Web site.  It contains videos (and basic instructions) showing some
+  typical uses of the Go Doctor using the Vim plug-in.</p>
+  <p>You will probably want to run the Go Doctor from Vim, since it allows you
+  to rename variables, extract functions, and perform other refactorings with
+  just a few keystrokes.  Detailed information about the Vim plug-in is
+  available in the <a onClick="show('godoctor-vim');" href="#godoctor-vim">Vim
+  Plug-in Reference</a>.  If you are inclined to use the command-line
+  <tt>godoctor</tt> tool directly, the <a onClick="show('godoctor-man');"
+  href="#godoctor-man"><tt>godoctor</tt> man page</a> contains several examples
+  illustrating typical invocations.</p>
+  <p>Later parts of this user manual contain detailed information on each of
+  the refactorings supported by the Go Doctor.</p>
 </div>
 <a name="mailing-list"></a>
 <h3>Joining the Mailing List</h3>
@@ -444,8 +324,61 @@ const userGuide = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "htt
 <div id="mailing-list" class="showable">
   <p>If you get stuck, please join the <a target="_blank"
   href="http://mailman.eng.auburn.edu/cgi-bin/mailman/listinfo/go-refactoring">go-refactoring
-  mailing list</a>, and ask there for help.  Updates to the Go Doctor will also
-  be announced on the list.</li>
+  mailing list</a>.  Other users on the list might be able to help you.
+  Updates to the Go Doctor will also be announced on the mailing list.</li>
+</div>
+<a name="documentation"></a>
+<h3>Online Documentation</h3>
+<div id="documentation-click" class="clicktoshow">
+  <a href="#documentation" onClick="show('documentation');">Show&nbsp;&raquo;</a>
+</div>
+<div id="documentation" class="showable">
+  <p>The latest documentation for the Go Doctor (including this user manual,
+  the <tt>godoctor</tt> man page, and the Vim Plug-in Reference) is always
+  available online at <a target="_blank"
+  href="http://gorefactor.org">http://gorefactor.org</a>.  If you want to
+  install a local copy of the documentation, see below.</p>
+</div>
+<a name="offline"></a>
+<h3>Installing Local Documentation</h3>
+<div id="offline-click" class="clicktoshow">
+  <a href="#offline" onClick="show('offline');">Show&nbsp;&raquo;</a>
+</div>
+<div id="offline" class="showable">
+  <p>If you do not want to use the online documentation, you can install the Go
+  Doctor documentation locally.  The <tt>godoctor</tt> tool generates its own
+  documentation.  It can generate a local copy of the Installation Guide and
+  User Guide on the Go Doctor Web site; it can generate a Unix man page for the
+  <tt>godoctor</tt> tool; it can also generate more complete documentation for
+  the Vim plug-in (by default, the Vim plug-in includes stub documentation
+  pointing to the Go Doctor Web site).</p>
+  <ul>
+    <li><b>To generate a local copy of the Installation Guide:</b><br/><br/>
+      &nbsp;&nbsp;&nbsp;&nbsp;
+      <tt>godoctor -doc install &gt;install.html</tt></li>
+    <li><b>To generate a local copy of the User's Guide:</b><br/><br/>
+      &nbsp;&nbsp;&nbsp;&nbsp;
+      <tt>godoctor -doc user &gt;user.html</tt></li>
+    <li><b>To generate a local copy of the godoctor man page,</b><br/><br/>
+      use the <tt>godoctor</tt> tool to generate the man page, then save it as
+      <i>godoctor.1</i> in a directory on your MANPATH.  For example, if you
+      installed <tt>godoctor</tt> into /usr/local/bin, you will probably want
+      to install the man page into /usr/local/share/man:<br/><br/>
+      <pre>sudo mkdir -p /usr/local/share/man/man1</pre><br/>
+      <pre>sudo sh -c 'godoctor -doc man &gt;/usr/local/share/man/man1/godoctor.1'</pre><br/></li>
+    <li><b>To install complete documentation for the Vim plug-in:</b>
+    <ol class="enum">
+      <li>Use the <tt>godoctor</tt> tool to generate the Vim documentation, and
+        overwrite the <b>godoctor-vim.txt</b> file in the Vim plug-in's
+        <i>doc</i> directory.  For example:<br/><br/>
+        <pre>godoctor -doc vim &gt;~/.vim/godoctor.vim/doc/godoctor-vim.txt</pre></li>
+      <li>In Vim, run<br/><br/>
+        <pre>:helptags ~/.vim/godoctor.vim/doc</pre><br/>
+        to generate help tags from the plug-in documentation.</li>
+      <li>To view the Vim plug-in documentation, execute<br/><br/>
+        <tt>:help godoctor</tt></li>
+    </ol>
+  </ul>
 </div>
 <a name="refactorings"></a>
 <h2>Refactorings</h2>
@@ -480,7 +413,9 @@ const userGuide = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "htt
   <a href="#godoctor-vim" onClick="show('godoctor-vim');">Show&nbsp;&raquo;</a>
 </div>
 <div id="godoctor-vim" class="showable">
+  <div class="vimdoc">
   {{.VimdocHTML}}
+  </div>
 </div>
 <a name="license"></a>
 <h3>License</h3>

@@ -6,11 +6,11 @@ package dataflow
 
 import (
 	"go/ast"
+	"go/types"
 
 	"github.com/godoctor/godoctor/analysis/cfg"
-	"github.com/godoctor/godoctor/internal/github.com/willf/bitset"
-	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/loader"
-	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/types"
+	"github.com/willf/bitset"
+	"golang.org/x/tools/go/loader"
 )
 
 // File defines reaching definitions for a statement level

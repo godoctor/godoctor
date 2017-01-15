@@ -9,8 +9,7 @@ import "testing"
 func TestAboutValidatePass(t *testing.T) {
 	// about requires state > 0 to pass validation
 	state := State{State: 1}
-	about := About{}
-	if pass, err := about.Validate(&state, nil); !pass {
+	if err := aboutValidate(&state, nil); err != nil {
 		t.Fatal("About.Validate: ", err)
 	}
 }
@@ -18,8 +17,7 @@ func TestAboutValidatePass(t *testing.T) {
 func TestAboutValidateFail(t *testing.T) {
 	// about requires state > 0 to pass validation
 	state := State{State: 0}
-	about := About{}
-	if pass, err := about.Validate(&state, nil); pass {
+	if err := aboutValidate(&state, nil); err == nil {
 		t.Fatal("About.Validate: should fail with stat < 1")
 	} else {
 		if err.Error() != "The about command requires a state of non-zero" {
@@ -30,9 +28,8 @@ func TestAboutValidateFail(t *testing.T) {
 
 func TestAboutRunFail(t *testing.T) {
 	state := State{State: 0}
-	about := About{}
 
-	if reply, err := about.Run(&state, nil); err == nil {
+	if reply, err := about(&state, nil); err == nil {
 		t.Fatal("About.Run: should fail with state < 1")
 	} else {
 		if reply.Params["message"] != err.Error() {
@@ -42,10 +39,9 @@ func TestAboutRunFail(t *testing.T) {
 }
 
 func TestAboutRunPass(t *testing.T) {
-	state := State{State: 1}
-	about := About{aboutText: "Test About Text"}
+	state := State{State: 1, About: "Test About Text"}
 
-	if reply, err := about.Run(&state, nil); err != nil {
+	if reply, err := about(&state, nil); err != nil {
 		t.Fatal("About.Run: should pass validate with state of 1")
 	} else {
 		if reply.Params["reply"] != "OK" {

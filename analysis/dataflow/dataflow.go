@@ -13,30 +13,107 @@ package dataflow
 import (
 	"go/ast"
 	"go/token"
+	"go/types"
 
-	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/loader"
-	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/types"
+	"golang.org/x/tools/go/loader"
 )
 
 // ReferencedVars returns the sets of local variables that are defined or used
 // within the given list of statements (based on syntax).
-func ReferencedVars(stmts []ast.Stmt, info *loader.PackageInfo) (def, use map[*types.Var]struct{}) {
-	def = make(map[*types.Var]struct{})
+func ReferencedVars(stmts []ast.Stmt, info *loader.PackageInfo) (asgt, updt, decl, use map[*types.Var]struct{}) {
+	asgt = make(map[*types.Var]struct{})
+	updt = make(map[*types.Var]struct{})
+	decl = make(map[*types.Var]struct{})
 	use = make(map[*types.Var]struct{})
-
 	for _, stmt := range stmts {
-		for _, d := range defs(stmt, info) {
-			def[d] = struct{}{}
+		for _, d := range assignments(stmt, info, false) {
+			asgt[d] = struct{}{}
+		}
+		for _, d := range assignments(stmt, info, true) {
+			updt[d] = struct{}{}
+		}
+		for _, d := range decls(stmt, info) {
+			decl[d] = struct{}{}
 		}
 		for _, u := range uses(stmt, info) {
 			use[u] = struct{}{}
+
 		}
 	}
-	return def, use
+	return asgt, updt, decl, use
 }
 
-// defs extracts any local variables whose values are assigned in the given statement.
+// defs returns the set of variables that are assigned a value in the given
+// statement, either by being assigned or declared
 func defs(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
+	union := make(map[*types.Var]struct{})
+	for _, v := range assignments(stmt, info, true) {
+		union[v] = struct{}{}
+	}
+	for _, v := range assignments(stmt, info, false) {
+		union[v] = struct{}{}
+	}
+	for _, v := range decls(stmt, info) {
+		union[v] = struct{}{}
+	}
+
+	result := []*types.Var{}
+	for v, _ := range union {
+		result = append(result, v)
+	}
+	return result
+}
+
+// assignments extracts any local variables whose values are assigned in the given statement.
+func assignments(stmt ast.Stmt, info *loader.PackageInfo, wantMembers bool) []*types.Var {
+	idnts := make(map[*ast.Ident]struct{})
+
+	switch stmt := stmt.(type) {
+	case *ast.AssignStmt: // =, &=, etc. except x[i] (IndexExpr)
+		if stmt.Tok != token.DEFINE {
+			for _, x := range stmt.Lhs {
+				switch x.(type) {
+				case *ast.IndexExpr, *ast.SelectorExpr, *ast.StarExpr:
+					if wantMembers {
+						idnts = union(idnts, assigned(x))
+					}
+				default:
+					idnts = union(idnts, idents(x))
+				}
+			}
+		}
+	case *ast.IncDecStmt: // i++, i--
+		switch x := stmt.X.(type) {
+		case *ast.IndexExpr, *ast.SelectorExpr, *ast.StarExpr:
+			if wantMembers {
+				idnts = union(idnts, assigned(x))
+			}
+		default:
+			idnts = union(idnts, idents(x))
+		}
+	}
+
+	return collectVars(idnts, info)
+}
+
+// idents returns the set of identifiers assigned in a given node.
+func assigned(node ast.Expr) map[*ast.Ident]struct{} {
+	switch expr := node.(type) {
+	case *ast.IndexExpr:
+		return assigned(expr.X)
+	case *ast.SelectorExpr:
+		field := map[*ast.Ident]struct{}{expr.Sel: struct{}{}}
+		return union(assigned(expr.X), field)
+	case *ast.StarExpr:
+		return map[*ast.Ident]struct{}{}
+	default:
+		return idents(node)
+	}
+}
+
+// decls extracts any local variables that are declared (and implicitly or
+// explicitly assigned a value) in the given statement.
+func decls(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 	idnts := make(map[*ast.Ident]struct{})
 
 	switch stmt := stmt.(type) {
@@ -47,20 +124,20 @@ func defs(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 			}
 			return true
 		})
-	case *ast.IncDecStmt: // i++, i--
-		idnts = idents(stmt.X)
-	case *ast.AssignStmt: // :=, =, &=, etc. except x[i] (IndexExpr)
-		for _, x := range stmt.Lhs {
-			indExp := false
-			ast.Inspect(x, func(n ast.Node) bool {
-				if _, ok := n.(*ast.IndexExpr); ok {
-					indExp = true
-					return false
+	case *ast.AssignStmt: // := except x[i] (IndexExpr)
+		if stmt.Tok == token.DEFINE {
+			for _, x := range stmt.Lhs {
+				indExp := false
+				ast.Inspect(x, func(n ast.Node) bool {
+					if _, ok := n.(*ast.IndexExpr); ok {
+						indExp = true
+						return false
+					}
+					return true
+				})
+				if !indExp {
+					idnts = union(idnts, idents(x))
 				}
-				return true
-			})
-			if !indExp {
-				idnts = union(idnts, idents(x))
 			}
 		}
 	case *ast.RangeStmt: // only [ x, y ] on Lhs
@@ -86,11 +163,17 @@ func defs(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 		return vars
 	}
 
+	return collectVars(idnts, info)
+}
+
+func collectVars(idnts map[*ast.Ident]struct{}, info *loader.PackageInfo) []*types.Var {
 	var vars []*types.Var
 	// should all map to types.Var's, if not we don't want anyway
 	for i, _ := range idnts {
 		if v, ok := info.ObjectOf(i).(*types.Var); ok {
-			vars = append(vars, v)
+			if v.Pkg() == info.Pkg && !v.IsField() {
+				vars = append(vars, v)
+			}
 		}
 	}
 	return vars
@@ -116,13 +199,12 @@ func uses(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 			// some LHS are uses, e.g. x[i]
 			for _, x := range stmt.Lhs {
 				indExp := false
-				ast.Inspect(stmt, func(n ast.Node) bool {
-					if _, ok := n.(*ast.IndexExpr); ok {
-						indExp = true
-						return false
-					}
-					return true
-				})
+				switch T := x.(type) {
+				case *ast.IndexExpr:
+					indExp = true
+				case *ast.SelectorExpr:
+					idnts = union(idnts, idents(T))
+				}
 				if indExp || // x[i] is a uses of x and i
 					(stmt.Tok != token.ASSIGN &&
 						stmt.Tok != token.DEFINE) { // e.g. +=, ^=, etc.
@@ -135,38 +217,34 @@ func uses(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 			}
 		case *ast.BlockStmt: // no uses, skip - should not appear in cfg
 		case *ast.BranchStmt: // no uses, skip
-		case *ast.CaseClause: // no uses, skip
+		case *ast.CaseClause:
+			for _, i := range stmt.List {
+				idnts = union(idnts, idents(i))
+			}
 		case *ast.CommClause: // no uses, skip
 		case *ast.DeclStmt: // no uses, skip
 		case *ast.DeferStmt:
-			idnts = idents(stmt.Call)
+			idnts = union(idnts, idents(stmt.Call))
 		case *ast.ForStmt:
-			idnts = idents(stmt.Cond)
+			idnts = union(idnts, idents(stmt.Cond))
 		case *ast.IfStmt:
-			idnts = idents(stmt.Cond)
+			idnts = union(idnts, idents(stmt.Cond))
 		case *ast.LabeledStmt: // no uses, skip
 		case *ast.RangeStmt: // list in _, _ = range [ list ]
-			idnts = idents(stmt.X)
+			idnts = union(idnts, idents(stmt.X))
 		case *ast.SelectStmt: // no uses, skip
 		case *ast.SwitchStmt:
-			idnts = idents(stmt.Tag)
-		case *ast.TypeSwitchStmt: // no uses, skip
+			idnts = union(idnts, idents(stmt.Tag))
+		case *ast.TypeSwitchStmt:
+			idnts = union(idnts, idents(stmt.Assign))
 		case ast.Stmt: // everything else is all uses
-			idnts = idents(stmt)
+			idnts = union(idnts, idents(stmt))
+
 		}
 		return true
 	})
 
-	var vars []*types.Var
-
-	// should all map to types.Var's, if not we don't want anyway
-	for i, _ := range idnts {
-		if v, ok := info.ObjectOf(i).(*types.Var); ok {
-			vars = append(vars, v)
-		}
-	}
-
-	return vars
+	return collectVars(idnts, info)
 }
 
 // idents returns the set of all identifiers in given node.

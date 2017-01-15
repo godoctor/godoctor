@@ -1,4 +1,4 @@
-// Copyright 2015 Auburn University. All rights reserved.
+// Copyright 2016 Auburn University. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -51,7 +51,7 @@ The <args> following the refactoring name vary depending on the refactoring.
 To display usage information for a particular refactoring, such as rename, use:
     %% godoctor rename
 
-For complete usage information, see the user manual:  FIXME: URL`)
+For complete usage information, see the user manual: http://gorefactor.org/doc.html`)
 }
 
 type CLIFlags struct {
@@ -91,7 +91,7 @@ func Flags() *CLIFlags {
 	flags.jsonFlag = flags.Bool("json", false,
 		"Accept commands in OpenRefactory JSON protocol format")
 	flags.docFlag = flags.String("doc", "",
-		"Output the user's guide (HTML) or man page and exit")
+		"Output documentation (install, user, man, or vim) and exit")
 	return &flags
 }
 
@@ -126,13 +126,15 @@ func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, 
 		switch *flags.docFlag {
 		case "man":
 			doc.PrintManPage(aboutText, flags.FlagSet, stdout)
+		case "install":
+			doc.PrintInstallGuide(aboutText, flags.FlagSet, stdout)
 		case "user":
 			doc.PrintUserGuide(aboutText, flags.FlagSet, stdout)
 		case "vim":
 			doc.PrintVimdoc(aboutText, flags.FlagSet, stdout)
 		default:
 			fmt.Fprintln(stderr, "Error: The -doc flag must be "+
-				"\"man\", \"user\", or \"vim\"")
+				"\"man\", \"install\", \"user\", or \"vim\"")
 			return 1
 		}
 		return 0

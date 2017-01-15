@@ -10,13 +10,14 @@ package refactoring
 import (
 	"go/ast"
 	"go/token"
+	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
 	"runtime"
 	"strings"
 
-	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/loader"
 
 	"github.com/godoctor/godoctor/analysis/names"
 	"github.com/godoctor/godoctor/text"
@@ -128,7 +129,9 @@ func (r *Rename) rename(ident *ast.Ident, pkgInfo *loader.PackageInfo) {
 	obj := pkgInfo.ObjectOf(ident)
 
 	if obj == nil && r.selectedTypeSwitchVar() == nil {
-		r.base.Log.Errorf("Package renaming is not supported")
+		r.base.Log.Errorf("The selected identifier cannot be " +
+			"renamed.  (Package and cgo renaming are not " +
+			"currently supported.)")
 		r.base.Log.AssociateNode(ident)
 		return
 	}
@@ -220,7 +223,11 @@ func (r *Rename) addOccurrences(name string, allOccurrences map[string][]*text.E
 }
 
 func isInGoRoot(absPath string) bool {
-	goRoot := runtime.GOROOT()
+	goRoot := os.Getenv("GOROOT")
+	if goRoot == "" {
+		goRoot = runtime.GOROOT()
+	}
+
 	if !strings.HasSuffix(goRoot, string(filepath.Separator)) {
 		goRoot += string(filepath.Separator)
 	}
@@ -247,7 +254,7 @@ const renameDoc = `
   supported.</p>
 
   <h4>Usage</h4>
-  <ol>
+  <ol class="enum">
     <li>Select an identifier to be renamed.</li>
     <li>Activate the Rename refactoring.</li>
     <li>Enter a new name for the identifier.</li>
@@ -286,7 +293,7 @@ func main() {
     fmt.Println(hello)
 }</pre>
       </td>
-      <td>&nbsp;&nbsp;&rArr;&nbsp&nbsp;</td>
+      <td>&nbsp;&nbsp;&nbsp;&nbsp;&rArr;&nbsp&nbsp;&nbsp;&nbsp;</td>
       <td class="dotted">
         <pre>package main
 import "fmt"

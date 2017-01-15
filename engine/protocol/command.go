@@ -20,31 +20,22 @@ import (
 	"github.com/godoctor/godoctor/text"
 )
 
-type Command interface {
-	Run(*State, map[string]interface{}) (Reply, error)
-	Validate(*State, map[string]interface{}) (bool, error)
-}
+type Command func(*State, map[string]interface{}) (Reply, error)
 
 // -=-= About =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-type About struct {
-	aboutText string
-}
-
-func (a *About) Run(state *State, input map[string]interface{}) (Reply, error) {
-	if valid, err := a.Validate(state, input); valid {
-		return Reply{map[string]interface{}{"reply": "OK", "text": a.aboutText}}, nil
-	} else {
-		//err := errors.New("The about command requires a state of non-zero")
+func about(state *State, input map[string]interface{}) (Reply, error) {
+	if err := aboutValidate(state, input); err != nil {
 		return Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}}, err
 	}
+	return Reply{map[string]interface{}{"reply": "OK", "text": state.About}}, nil
 }
 
-func (a *About) Validate(state *State, input map[string]interface{}) (bool, error) {
+func aboutValidate(state *State, input map[string]interface{}) error {
 	if state.State > 0 {
-		return true, nil
+		return nil
 	} else {
-		return false, errors.New("The about command requires a state of non-zero")
+		return errors.New("The about command requires a state of non-zero")
 	}
 }
 
@@ -52,53 +43,47 @@ func (a *About) Validate(state *State, input map[string]interface{}) (bool, erro
 
 // TODO add in implementation of fileselection and textselection keys
 
-type List struct {
-	Fileselection []string               `json:"fileselection"`
-	Textselection map[string]interface{} `json:"textselection"`
-	Quality       string                 `json:"quality" chk:"in_testing|in_development|production"`
-}
+var listQualityChk = "in_testing|in_development|production"
 
-func (l *List) Run(state *State, input map[string]interface{}) (Reply, error) {
-	if valid, err := l.Validate(state, input); valid {
-		hiddenOK := true
-		switch input["quality"].(string) {
-		case "in_testing":
-			hiddenOK = false
-		case "production":
-			hiddenOK = false
-		}
-
-		// get all of the refactoring names
-		namesList := make([]map[string]string, 0)
-		for _, shortName := range engine.AllRefactoringNames() {
-			refactoring := engine.GetRefactoring(shortName)
-			if hiddenOK || !refactoring.Description().Hidden {
-				namesList = append(namesList, map[string]string{"shortName": shortName, "name": refactoring.Description().Name})
-			}
-		}
-		return Reply{map[string]interface{}{"reply": "OK", "transformations": namesList}}, nil
-	} else {
+func list(state *State, input map[string]interface{}) (Reply, error) {
+	if err := listValidate(state, input); err != nil {
 		return Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}}, err
 	}
+	hiddenOK := true
+	switch input["quality"].(string) {
+	case "in_testing":
+		hiddenOK = false
+	case "production":
+		hiddenOK = false
+	}
+
+	// get all of the refactoring names
+	namesList := make([]map[string]string, 0)
+	for _, shortName := range engine.AllRefactoringNames() {
+		refactoring := engine.GetRefactoring(shortName)
+		if hiddenOK || !refactoring.Description().Hidden {
+			namesList = append(namesList, map[string]string{"shortName": shortName, "name": refactoring.Description().Name})
+		}
+	}
+	return Reply{map[string]interface{}{"reply": "OK", "transformations": namesList}}, nil
 }
 
-func (l *List) Validate(state *State, input map[string]interface{}) (bool, error) {
+func listValidate(state *State, input map[string]interface{}) error {
 	if state.State < 1 {
 		err := errors.New("The about command requires a state of non-zero")
-		return false, err
+		return err
 	}
 	// check for required keys
 	if _, found := input["quality"]; !found {
 		err := errors.New("Quality key not found")
-		return false, err
-	} else {
-		// check quality matches
-		field, _ := reflect.TypeOf(l).Elem().FieldByName("Quality")
-		qualityValidator := regexp.MustCompile(field.Tag.Get("chk"))
+		return err
+	}
 
-		if valid := qualityValidator.MatchString(input["quality"].(string)); !valid {
-			return false, errors.New("Quality key must be \"in_testing|in_development|production\"")
-		}
+	// check quality matches
+	qualityValidator := regexp.MustCompile(listQualityChk)
+
+	if valid := qualityValidator.MatchString(input["quality"].(string)); !valid {
+		return errors.New("Quality key must be \"in_testing|in_development|production\"")
 	}
 
 	// validate text/file selection
@@ -107,71 +92,59 @@ func (l *List) Validate(state *State, input map[string]interface{}) (bool, error
 	_, fsfound := input["fileselection"]
 
 	if tsfound && fsfound {
-		return false, errors.New("Both textseleciton and fileselection cannot be used together")
+		return errors.New("Both textseleciton and fileselection cannot be used together")
 	} else if tsfound {
 		if state.State < 2 {
-			return false, errors.New("File system not yet configured, cannot use textselection")
+			return errors.New("File system not yet configured, cannot use textselection")
 		}
 		_, err := parseSelection(state, textselection.(map[string]interface{}))
 		if err != nil {
-			return false, err
+			return err
 		}
 	} else if fsfound {
 		if state.State < 2 {
-			return false, errors.New("File system not yet configured, cannot use fileselection")
+			return errors.New("File system not yet configured, cannot use fileselection")
 		}
 	}
-	return true, nil
+	return nil
 }
 
 // -=-= Open =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 // TODO open with version
 
-type Open struct {
-	Version float64 `json:"version"`
-}
-
-func (o *Open) Run(state *State, input map[string]interface{}) (Reply, error) {
+func open(state *State, input map[string]interface{}) (Reply, error) {
 	state.State = 1
-	//printReply(Reply{"OK", ""})
 	return Reply{map[string]interface{}{"reply": "OK"}}, nil
 }
 
 // basically useless until we implement versioning...
-func (o *Open) Validate(state *State, input map[string]interface{}) (bool, error) {
-	return true, nil
+func openValidate(state *State, input map[string]interface{}) error {
+	return nil
 }
 
 // -=-= Params =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-type Params struct {
-	Transformation string                 `json:"transformation"`
-	Fileselection  []string               `json:"fileselection"`
-	Textselection  map[string]interface{} `json:"textselection"`
-}
-
-func (p *Params) Run(state *State, input map[string]interface{}) (Reply, error) {
+func params(state *State, input map[string]interface{}) (Reply, error) {
 	//refactoring := engine.GetRefactoring("rename")
-	if valid, err := p.Validate(state, input); valid {
-		refactoring := engine.GetRefactoring(input["transformation"].(string))
-		// since GetParams returns just a string, assume it as prompt and label
-		params := make([]map[string]interface{}, 0)
-		for _, param := range refactoring.Description().Params {
-			params = append(params, map[string]interface{}{"label": param.Label, "prompt": param.Prompt, "type": reflect.TypeOf(param.DefaultValue).String(), "default": param.DefaultValue})
-		}
-		return Reply{map[string]interface{}{"reply": "OK", "params": params}}, nil
-	} else {
+	if err := paramsValidate(state, input); err != nil {
 		return Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}}, err
 	}
+	refactoring := engine.GetRefactoring(input["transformation"].(string))
+	// since GetParams returns just a string, assume it as prompt and label
+	params := make([]map[string]interface{}, 0)
+	for _, param := range refactoring.Description().Params {
+		params = append(params, map[string]interface{}{"label": param.Label, "prompt": param.Prompt, "type": reflect.TypeOf(param.DefaultValue).String(), "default": param.DefaultValue})
+	}
+	return Reply{map[string]interface{}{"reply": "OK", "params": params}}, nil
 }
 
-func (p *Params) Validate(state *State, input map[string]interface{}) (bool, error) {
+func paramsValidate(state *State, input map[string]interface{}) error {
 	if state.State < 2 {
-		return false, errors.New("State of 2 (file system configured) is required")
+		return errors.New("State of 2 (file system configured) is required")
 	}
 	if _, found := input["transformation"]; !found {
-		return false, errors.New("Transformation key not found")
+		return errors.New("Transformation key not found")
 	}
 	// validate text/file selection
 	// TODO validate fileselection
@@ -179,27 +152,22 @@ func (p *Params) Validate(state *State, input map[string]interface{}) (bool, err
 	_, fsfound := input["fileselection"]
 
 	if tsfound && fsfound {
-		return false, errors.New("Both textseleciton and fileselection cannot be used together")
+		return errors.New("Both textseleciton and fileselection cannot be used together")
 	} else if tsfound {
 		_, err := parseSelection(state, textselection.(map[string]interface{}))
 		if err != nil {
-			return false, err
+			return err
 		}
 	} else if fsfound {
 
 	}
-	return true, nil
+	return nil
 }
 
 // -=-= Put -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-type Put struct {
-	Filename string `json:"filename"`
-	Content  string `json:"content"`
-}
-
-func (p *Put) Run(state *State, input map[string]interface{}) (Reply, error) {
-	if valid, err := p.Validate(state, input); !valid {
+func put(state *State, input map[string]interface{}) (Reply, error) {
+	if err := putValidate(state, input); err != nil {
 		return Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}}, err
 	}
 
@@ -218,117 +186,106 @@ func (p *Put) Run(state *State, input map[string]interface{}) (Reply, error) {
 	return Reply{map[string]interface{}{"reply": "OK"}}, nil
 }
 
-func (p *Put) Validate(state *State, input map[string]interface{}) (bool, error) {
+func putValidate(state *State, input map[string]interface{}) error {
 	// validate state
 	if state.State < 2 {
-		return false, fmt.Errorf("put requires state of 2 (file system configured)")
+		return fmt.Errorf("put requires state of 2 (file system configured)")
 	}
 	if state.Mode != "web" {
-		return false, fmt.Errorf("put can only be executed in Web mode")
+		return fmt.Errorf("put can only be executed in Web mode")
 	}
 
 	// validate input
 	if _, found := input["filename"]; !found {
-		return false, fmt.Errorf("filename is required")
+		return fmt.Errorf("filename is required")
 	}
 	if _, found := input["content"]; !found {
-		return false, fmt.Errorf("content is required")
+		return fmt.Errorf("content is required")
 	}
 
 	// validate filesystem
 	if _, ok := state.Filesystem.(*filesystem.EditedFileSystem); !ok {
-		return false, fmt.Errorf("put can only be executed in Web mode")
+		return fmt.Errorf("put can only be executed in Web mode")
 	}
 
 	if input["filename"] != filesystem.FakeStdinFilename {
 		//return Reply{map[string]interface{}{"reply": "Error", "message": fmt.Sprintf("put filename must be \"%s\"", filesystem.FakeStdinFilename)}},
-		return false, fmt.Errorf("put filename must be \"%s\"", filesystem.FakeStdinFilename)
+		return fmt.Errorf("put filename must be \"%s\"", filesystem.FakeStdinFilename)
 	}
 
-	return true, nil
+	return nil
 }
 
 // -=-= Setdir =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-type Setdir struct {
-	Mode string `json:"mode" chk:"local|web"`
-}
+var setdirModeChk = "local|web"
 
-func (s *Setdir) Run(state *State, input map[string]interface{}) (Reply, error) {
+func setdir(state *State, input map[string]interface{}) (Reply, error) {
 
-	if valid, err := s.Validate(state, input); valid {
-		// assuming everything is good?
-		mode := input["mode"]
-		state.Mode = mode.(string)
-
-		// local mode? get directory and local filesystem
-		if mode == "local" {
-			state.Dir = input["directory"].(string)
-			state.Filesystem = filesystem.NewLocalFileSystem()
-		}
-
-		// web mode? use edited filesystem
-		if mode == "web" {
-			state.Dir = "."
-			state.Filesystem = filesystem.NewEditedFileSystem(
-				filesystem.NewLocalFileSystem(),
-				map[string]*text.EditSet{})
-		}
-
-		state.State = 2
-		return Reply{map[string]interface{}{"reply": "OK"}}, nil
-	} else {
+	if err := setdirValidate(state, input); err != nil {
 		return Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}}, err
 	}
+	// assuming everything is good?
+	mode := input["mode"]
+	state.Mode = mode.(string)
 
+	// local mode? get directory and local filesystem
+	if mode == "local" {
+		state.Dir = input["directory"].(string)
+		state.Filesystem = filesystem.NewLocalFileSystem()
+	}
+
+	// web mode? use edited filesystem
+	if mode == "web" {
+		state.Dir = "."
+		state.Filesystem = filesystem.NewEditedFileSystem(
+			filesystem.NewLocalFileSystem(),
+			map[string]*text.EditSet{})
+	}
+
+	state.State = 2
+	return Reply{map[string]interface{}{"reply": "OK"}}, nil
 }
 
-func (s *Setdir) Validate(state *State, input map[string]interface{}) (bool, error) {
+func setdirValidate(state *State, input map[string]interface{}) error {
 	if state.State < 1 {
-		return false, errors.New("State must be non-zero for \"setdir\" command")
+		return errors.New("State must be non-zero for \"setdir\" command")
 	}
 
 	// mode key?
-	if mode, found := input["mode"]; !found {
+	mode, found := input["mode"]
+	if !found {
 		err := errors.New("\"mode\" key is required")
-		return false, err
-	} else {
-		// validate the mode value
-		field, _ := reflect.TypeOf(s).Elem().FieldByName("Mode")
-		modeValidator := regexp.MustCompile(field.Tag.Get("chk"))
-		if valid := modeValidator.MatchString(mode.(string)); !valid {
-			return false, errors.New("\"mode\" key must be \"web|local\"")
+		return err
+	}
+
+	// validate the mode value
+	modeValidator := regexp.MustCompile(setdirModeChk)
+	if valid := modeValidator.MatchString(mode.(string)); !valid {
+		return errors.New("\"mode\" key must be \"web|local\"")
+	}
+	// check for directory key if mode == local
+	if mode == "local" {
+		if _, found := input["directory"]; !found {
+			return errors.New("\"directory\" key required if \"mode\" is local")
 		}
-		// check for directory key if mode == local
-		if mode == "local" {
-			if _, found := input["directory"]; !found {
-				return false, errors.New("\"directory\" key required if \"mode\" is local")
-			}
-			// validate directory
-			fs := filesystem.NewLocalFileSystem()
-			_, err := fs.ReadDir(input["directory"].(string))
-			if err != nil {
-				return false, err
-			}
+		// validate directory
+		fs := filesystem.NewLocalFileSystem()
+		_, err := fs.ReadDir(input["directory"].(string))
+		if err != nil {
+			return err
 		}
 	}
-	return true, nil
+	return nil
 }
 
 // -=-= XRun =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-type XRun struct {
-	Transformation string                 `json:"transformation"`
-	Fileselection  []string               `json:"fileselection"`
-	Textselection  map[string]interface{} `json:"textselection"`
-	Arguments      []interface{}          `json:"arguments"`
-	Limit          int                    `json:"limit"`
-	Mode           string                 `json:"mode" chk:"text|patch"`
-}
+var xRunModeChk = "text|patch"
 
 // TODO implement
-func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
-	if valid, err := x.Validate(state, input); !valid {
+func xRun(state *State, input map[string]interface{}) (Reply, error) {
+	if err := xRunValidate(state, input); err != nil {
 		return Reply{map[string]interface{}{"reply": "Error", "message": err.Error()}}, err
 	}
 	// setup text selection
@@ -364,8 +321,12 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 	result := refac.Run(config)
 
 	// grab logs
+	limit, found := input["limit"].(int)
+	if !found || limit > len(result.Log.Entries) {
+		limit = len(result.Log.Entries)
+	}
 	logs := make([]map[string]interface{}, 0)
-	for _, entry := range result.Log.Entries {
+	for _, entry := range result.Log.Entries[:limit] {
 		var severity string
 		switch entry.Severity {
 		case refactoring.Info:
@@ -392,8 +353,6 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 			}
 			diffFile, err := os.Create(strings.Join([]string{f, ".diff"}, ""))
 			p.Write(f, f, time.Time{}, time.Time{}, diffFile)
-			//fmt.Println(f)
-			//fmt.Println(diffFile.Name())
 			changes = append(changes, map[string]string{"filename": f, "patchFile": diffFile.Name()})
 			diffFile.Close()
 		}
@@ -412,14 +371,14 @@ func (x *XRun) Run(state *State, input map[string]interface{}) (Reply, error) {
 }
 
 // TODO validate TextSelection, FileSelection, arguments
-func (x *XRun) Validate(state *State, input map[string]interface{}) (bool, error) {
+func xRunValidate(state *State, input map[string]interface{}) error {
 	if state.State < 2 {
-		return false, errors.New("State of 2 (file system configured) is required")
+		return errors.New("State of 2 (file system configured) is required")
 	}
 
 	// check transformation is valid
 	if engine.GetRefactoring(input["transformation"].(string)) == nil {
-		return false, errors.New("Transformation given is not a valid refactoring name")
+		return errors.New("Transformation given is not a valid refactoring name")
 	}
 
 	// validate text/file selection
@@ -428,11 +387,11 @@ func (x *XRun) Validate(state *State, input map[string]interface{}) (bool, error
 	_, fsfound := input["fileselection"]
 
 	if tsfound && fsfound {
-		return false, errors.New("Both textseleciton and fileselection cannot be used together")
+		return errors.New("Both textselection and fileselection cannot be used together")
 	} else if tsfound {
 		_, err := parseSelection(state, textselection.(map[string]interface{}))
 		if err != nil {
-			return false, err
+			return err
 		}
 	} else if fsfound {
 
@@ -441,22 +400,21 @@ func (x *XRun) Validate(state *State, input map[string]interface{}) (bool, error
 	// check limit is > 0 if exists
 	if limit, found := input["limit"]; found {
 		if limit.(int) < 0 {
-			return false, errors.New("\"limit\" key must be a positive integer")
+			return errors.New("\"limit\" key must be a positive integer")
 		}
 	}
 
 	// check mode key if exists
 	if mode, found := input["mode"]; found {
-		field, _ := reflect.TypeOf(x).Elem().FieldByName("Mode")
-		qualityValidator := regexp.MustCompile(field.Tag.Get("chk"))
+		qualityValidator := regexp.MustCompile(xRunModeChk)
 
 		if valid := qualityValidator.MatchString(mode.(string)); !valid {
-			return false, errors.New("\"mode\" key must be \"text|patch\"")
+			return errors.New("\"mode\" key must be \"text|patch\"")
 		}
 	}
 
 	// all good?
-	return true, nil
+	return nil
 }
 
 // -=-= Helpers =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -478,10 +436,7 @@ func parseSelection(state *State, input map[string]interface{}) (text.Selection,
 	// determine if offset/length or line/col
 	offset, offsetFound := input["offset"]
 	length, lengthFound := input["length"]
-
-	if !offsetFound || !lengthFound {
-		return nil, fmt.Errorf("invalid offset/length combo: value(s) missing")
-	} else {
+	if offsetFound && lengthFound {
 		// validate
 		if reflect.TypeOf(offset).Kind() != reflect.Float64 ||
 			reflect.TypeOf(length).Kind() != reflect.Float64 {
@@ -501,11 +456,12 @@ func parseSelection(state *State, input map[string]interface{}) (text.Selection,
 	el, elfound := input["endline"]
 	ec, ecfound := input["endcol"]
 
-	if !slfound || !scfound || !elfound || !ecfound {
-		return nil, fmt.Errorf("invalid line/col combo: value(s) missing")
-	} else {
+	if slfound && scfound && elfound && ecfound {
 		// validate
-		if reflect.TypeOf(sl).Kind() != reflect.Int || reflect.TypeOf(sc).Kind() != reflect.Int || reflect.TypeOf(el).Kind() != reflect.Int || reflect.TypeOf(ec).Kind() != reflect.Int {
+		if reflect.TypeOf(sl).Kind() != reflect.Float64 ||
+			reflect.TypeOf(sc).Kind() != reflect.Float64 ||
+			reflect.TypeOf(el).Kind() != reflect.Float64 ||
+			reflect.TypeOf(ec).Kind() != reflect.Float64 {
 			return nil, fmt.Errorf("invalid type(s) given for line/col combo")
 		}
 		pos := fmt.Sprintf("%d,%d:%d,%d", int(sl.(float64)), int(sc.(float64)), int(el.(float64)), int(ec.(float64)))
@@ -516,4 +472,5 @@ func parseSelection(state *State, input map[string]interface{}) (text.Selection,
 		return ts, nil
 	}
 
+	return nil, fmt.Errorf("invalid selection (offset/length or line/col")
 }

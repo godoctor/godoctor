@@ -1,0 +1,13 @@
+Tue Sep 27 20:42:22 EDT 2016
+
+./golang.org/x/tools
+origin	https://github.com/golang/tools.git (fetch)
+fc2b74b64ef08c618146ebc92062f6499db5314c  (HEAD, origin/master, origin/HEAD, master) refactor/rename: don't stop because of "soft" errors
+
+./github.com/cheggaaa/pb
+origin	https://github.com/cheggaaa/pb.git (fetch)
+ad4efe000aa550bb54918c06ebbadc0ff17687b9  (HEAD, origin/master, origin/HEAD, master) Merge pull request #84 from jun06t/time
+
+./github.com/willf/bitset
+origin	https://github.com/willf/bitset.git (fetch)
+24b253213c7bdcdd6cde7d6c73760eb16d98551c  (HEAD, origin/master, origin/HEAD, master) Merge pull request #45 from lemire/master

@@ -4,7 +4,10 @@
 
 package names
 
-import "github.com/godoctor/godoctor/internal/golang.org/x/tools/go/types"
+import (
+	"go/token"
+	"go/types"
+)
 
 // FindConflict determines if there already exists an identifier with the given
 // newName such that the given ident cannot be renamed to name.  It returns
@@ -36,7 +39,7 @@ func FindConflict(obj types.Object, name string) types.Object {
 	}
 
 	// Check for possible conflicts from a parent scope
-	if _, obj := obj.Parent().LookupParent(name); obj != nil {
+	if _, obj := obj.Parent().LookupParent(name, token.NoPos); obj != nil {
 		return obj
 	}
 

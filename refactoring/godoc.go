@@ -133,9 +133,8 @@ const godocDoc = `
   input.</p>
 
   <h4>Example</h4>
-  <p>In the following example, Exported, Shaper, and Rectangle are all
-  exported, but they do not have doc comments.  This refactoring adds a
-  TODO comment for each of these.</p>
+  <p>In the following example, Exported, Shaper, and Rectangle are all exported
+  but lack doc comments.  This refactoring adds a TODO comment for each.</p>
   <table cellspacing="5" cellpadding="15" style="border: 0;">
     <tr>
       <th>Before</th><th>&nbsp;</th><th>After</th>
@@ -160,7 +159,7 @@ type Rectangle struct {
 }
   </pre>
       </td>
-      <td>&nbsp;&nbsp;&rArr;&nbsp;&nbsp;</td>
+      <td>&nbsp;&nbsp;&nbsp;&nbsp;&rArr;&nbsp;&nbsp;&nbsp;&nbsp;</td>
       <td class="dotted">
       <pre>package main
 import "fmt"

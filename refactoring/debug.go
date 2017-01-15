@@ -16,13 +16,13 @@ import (
 	"fmt"
 	"go/ast"
 	"go/printer"
+	"go/types"
 	"io"
 	"os"
 	"sort"
 	"strings"
 
-	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/loader"
-	"github.com/godoctor/godoctor/internal/golang.org/x/tools/go/types"
+	"golang.org/x/tools/go/loader"
 
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"github.com/godoctor/godoctor/analysis/dataflow"
@@ -200,9 +200,15 @@ func (r *Debug) showCFG(out io.Writer) {
 
 func (r *Debug) describeDefsUses(stmt ast.Stmt) string {
 	var buf bytes.Buffer
-	defs, uses := dataflow.ReferencedVars([]ast.Stmt{stmt}, r.base.SelectedNodePkg)
-	if len(defs) > 0 {
-		fmt.Fprintf(&buf, "Defs: %s\n", listNames(defs))
+	asgts, updts, decls, uses := dataflow.ReferencedVars([]ast.Stmt{stmt}, r.base.SelectedNodePkg)
+	if len(asgts) > 0 {
+		fmt.Fprintf(&buf, "Asgts: %s\n", listNames(asgts))
+	}
+	if len(updts) > 0 {
+		fmt.Fprintf(&buf, "Updts: %s\n", listNames(updts))
+	}
+	if len(decls) > 0 {
+		fmt.Fprintf(&buf, "Decls: %s\n", listNames(decls))
 	}
 	if len(uses) > 0 {
 		fmt.Fprintf(&buf, "Uses: %s\n", listNames(uses))
