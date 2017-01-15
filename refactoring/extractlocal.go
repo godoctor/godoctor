@@ -149,12 +149,12 @@ func (r *ExtractLocal) checkExpressionType() bool {
 	exprType := r.SelectedNodePkg.TypeOf(r.SelectedNode.(ast.Expr))
 
 	if _, isFunctionType := exprType.(*types.Tuple); isFunctionType {
-		r.Log.Error("The selected expression cannot be assigned to a variable.")
+		r.Log.Errorf("The selected expression cannot be assigned to a variable since it has a tuple type %s", exprType)
 		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
 		return false
 	}
 
-	if basic, isBasic := exprType.(*types.Basic); isBasic && basic.Info() == types.IsUntyped {
+	if basic, isBasic := exprType.(*types.Basic); isBasic && (basic.Kind() == types.Invalid || basic.Info() == types.IsUntyped) {
 		r.Log.Error("The selected expression cannot be assigned to a variable.")
 		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
 		return false
@@ -435,11 +435,15 @@ func (r *ExtractLocal) addEdits(insertBefore ast.Stmt) {
 	selectedExprEnd := r.getEndOffset(r.SelectedNode)
 	selectedExprLen := selectedExprEnd - selectedExprOffset
 
+	// First, replace the original expression.
+	r.Edits[r.Filename].Add(&text.Extent{selectedExprOffset, selectedExprLen}, r.varName)
+
+	// Then, add the assignment statement afterward.
+	// If this inserts at the same position as the replacement, this
+	// guarantees that it will be inserted before it, which is what we want
 	expression := string(r.FileContents[selectedExprOffset:selectedExprEnd])
 	assignment := r.varName + " := " + expression + "\n"
 	r.Edits[r.Filename].Add(&text.Extent{r.getOffset(insertBefore), 0}, assignment)
-
-	r.Edits[r.Filename].Add(&text.Extent{selectedExprOffset, selectedExprLen}, r.varName)
 }
 
 func (r *ExtractLocal) getOffset(node ast.Node) int {
