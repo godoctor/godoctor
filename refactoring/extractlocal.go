@@ -5,10 +5,15 @@
 package refactoring
 
 import (
+	"fmt"
 	"go/ast"
+	"go/types"
+	"reflect"
 	"regexp"
 	"strconv"
 
+	"github.com/godoctor/godoctor/analysis/cfg"
+	"github.com/godoctor/godoctor/analysis/dataflow"
 	"github.com/godoctor/godoctor/text"
 
 	"golang.org/x/tools/go/ast/astutil"
@@ -60,10 +65,216 @@ func (r *ExtractLocal) Run(config *Config) *Result {
 		return &r.Result
 	}
 
-	r.doExtract()
-	r.FormatFileInEditor()
-	r.UpdateLog(config, false)
+	if r.doExtract2() {
+		//r.doExtract()
+		r.FormatFileInEditor()
+		r.UpdateLog(config, false)
+	}
 	return &r.Result
+}
+
+func isTypeNode(node ast.Node) bool {
+	switch node.(type) {
+	case *ast.ArrayType:
+		return true
+	case *ast.InterfaceType:
+		return true
+	case *ast.MapType:
+		return true
+	case *ast.StructType:
+		return true
+	case *ast.TypeSpec:
+		return true
+	default:
+		return false
+	}
+}
+
+func (r *ExtractLocal) doExtract2() bool {
+	enclosing, _ := astutil.PathEnclosingInterval(r.File, r.SelectedNode.Pos(), r.SelectedNode.End())
+	for i, node := range enclosing {
+		fmt.Printf("%d: %s\n", i, reflect.TypeOf(node))
+	}
+
+	if _, ok := r.SelectedNode.(ast.Expr); !ok {
+		r.Log.Error("Please select an expression to extract.")
+		r.Log.Errorf("(Selected node: %s)", reflect.TypeOf(r.SelectedNode))
+		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+		return false
+	}
+	selectedExpr := r.SelectedNode.(ast.Expr)
+
+	exprType := r.SelectedNodePkg.TypeOf(selectedExpr)
+	fmt.Printf("Type: %s\n", exprType) // FIXME
+	if _, isFunctionType := exprType.(*types.Tuple); isFunctionType {
+		r.Log.Error("The selected expression cannot be assigned to a variable.")
+		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+		return false
+	}
+	if basic, isBasic := exprType.(*types.Basic); isBasic && basic.Info() == types.IsUntyped {
+		r.Log.Error("The selected expression cannot be assigned to a variable.")
+		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+		return false
+	}
+
+	if selectorExpr, found := enclosing[1].(*ast.SelectorExpr); found {
+		if selectorExpr.Sel == r.SelectedNode {
+			r.Log.Error("A field selector cannot be extracted.")
+			r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+			return false
+		}
+	}
+
+	for _, node := range enclosing {
+		if isTypeNode(node) {
+			r.Log.Error("An expression used to specify a type cannot be extracted.")
+			r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+			return false
+		}
+	}
+
+	parent := enclosing[1]
+	if call, ok := parent.(*ast.CallExpr); ok {
+		fmt.Printf("FOUND\n")                                       // FIXME remove
+		fmt.Printf("Selected %s\n", reflect.TypeOf(r.SelectedNode)) // FIXME remove
+		fmt.Printf("Fun is %s\n", reflect.TypeOf(call.Fun))         // FIXME remove
+		if r.SelectedNode == call.Fun {
+			r.Log.Error("The function name in a function call expression cannot be extracted.")
+			r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+			return false
+		}
+	}
+
+	enclosingStmt := -1
+	for i, node := range enclosing {
+		if _, ok := node.(ast.Stmt); ok {
+			enclosingStmt = i
+			break
+		}
+	}
+	if enclosingStmt < 0 {
+		r.Log.Error("The selected expression cannot be extracted " +
+			"since it is not in an executable statement.")
+		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+		return false
+	}
+
+	var enclosingFunc *ast.FuncDecl
+	for _, node := range enclosing {
+		if fn, ok := node.(*ast.FuncDecl); ok {
+			enclosingFunc = fn
+			break
+		}
+	}
+	if enclosingFunc == nil {
+		r.Log.Error("The selected expression cannot be extracted " +
+			"since it is not in a function declaration.")
+		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+		return false
+	}
+
+	if _, found := enclosing[enclosingStmt+1].(*ast.TypeSwitchStmt); found {
+		r.Log.Error("The selected expression cannot be extracted " +
+			"since it is in the header of a type switch statement.")
+		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+		return false
+	}
+
+	/*
+		// FIXME (jeff) we can handle this
+		// Insert before the IfStmt, not before the init stmt
+		// Make sure we don't end up putting a variable before its declaration/definition
+		if ifStmt, found := enclosing[enclosingStmtIdx+1].(*ast.IfStmt); found {
+			if enclosingStmt == ifStmt.Init {
+				r.Log.Error("The selected expression cannot be extracted " +
+					"since it is in the initialization portion of an if statement.")
+				r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+				return false
+			}
+		}
+	*/
+
+	var insertBefore ast.Node = enclosing[enclosingStmt]
+
+	switch stmt := enclosing[enclosingStmt].(type) {
+	case *ast.AssignStmt:
+		for _, lhsExpr := range stmt.Lhs {
+			if r.SelectedNode == lhsExpr {
+				r.Log.Error("The selected expression cannot be extracted " +
+					"since it is in the left-hand side of an assignment.")
+				r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+				return false
+			}
+		}
+		break
+	case *ast.CaseClause:
+		if _, found := enclosing[enclosingStmt+2].(*ast.TypeSwitchStmt); found {
+			r.Log.Error("The selected expression cannot be extracted " +
+				"since it is in a case clause for a type switch statement.")
+			r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+			return false
+		}
+		insertBefore = enclosing[enclosingStmt+2] // grandparent
+		break
+	//case *ast.DeclStmt: // const, type, or var... is this ok?
+	//	break
+	//case *ast.DeferStmt:
+	//	break
+	// EmptyStmt impossible
+	case *ast.ExprStmt:
+		break
+	// ForStmt not allowed (control flow) - must be in init expr
+	//case *ast.GoStmt:
+	//	break
+	case *ast.IfStmt: // really?
+		c := cfg.FromFunc(enclosingFunc)
+		in, _ := dataflow.ReachingDefs(c, r.SelectedNodePkg)
+		if _, found := in[stmt][stmt.Init]; found {
+			r.Log.Error("The selected expression cannot be extracted " +
+				"since the \"if\" condition depends on variables " +
+				"defined in the \"if\" statement initialization.")
+			r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+			return false
+		}
+
+		// If inside an else if statement, find outermost if
+		for j := enclosingStmt; j < len(enclosing); j++ {
+			if ifStmt, ok := enclosing[j].(*ast.IfStmt); ok {
+				insertBefore = ifStmt
+			} else {
+				break
+			}
+		}
+		break
+	//case *ast.IncDecStmt: // really?
+	//	break
+	// LabeledStmt not allowed - label cannot be extracted
+	case *ast.RangeStmt: // ??
+		break
+	case *ast.ReturnStmt:
+		break
+	//case *ast.SelectStmt: // check type
+	//	break
+	//case *ast.SendStmt: // ?
+	//	break
+	//case *ast.SwitchStmt:
+	//	break
+	//case *ast.TypeSwitchStmt:
+	//	break
+	default:
+		r.Log.Error("The selected expression cannot be extracted.")
+		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+		return false
+	}
+
+	off1 := r.posOff(insertBefore)
+	assignment := r.createVar(selectedExpr)
+	r.Edits[r.Filename].Add(&text.Extent{off1, 0}, assignment)
+
+	off2 := r.posOff(r.SelectedNode)
+	off3 := r.endOff(r.SelectedNode) - off2
+	r.Edits[r.Filename].Add(&text.Extent{off2, off3}, r.varName)
+	return true
 }
 
 // doExtract locates the position of the selection and will
@@ -224,7 +435,7 @@ func (r *ExtractLocal) doExtract() {
 		return false
 
 	})
-	r.errorCheck(errorType)
+	// FIXME (jeff) r.errorCheck(errorType)
 }
 func (r *ExtractLocal) posOff(node ast.Node) int {
 	return r.Program.Fset.Position(node.Pos()).Offset

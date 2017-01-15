@@ -15,6 +15,6 @@ func main() {
 	case 10:
 		fmt.Printf("this is an apple: %i ", apple)
 		fmt.Printf("this has a branchStmt")
-		break //<<<<< extractLocal,18,3,18,8,newVar,pass
+		break //<<<<< extractLocal,18,3,18,8,newVar,fail
 	}
 }

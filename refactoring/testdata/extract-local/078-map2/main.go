@@ -6,7 +6,7 @@ func main() {
 	x := 2
 	y := 5
 	var m map[string]int
-	m = make(map[string]int) //<<<<< extractLocal,9,22,9,25,newVar,fail
+	m = make(map[string]int) //<<<<< extractLocal,9,22,9,25,newVar,pass
 	m["route"] = 66
 	fmt.Println("please choose: x + x, x * y?")
 	//fmt.Printf("map keyvalue is: %s and route", m["route"])
