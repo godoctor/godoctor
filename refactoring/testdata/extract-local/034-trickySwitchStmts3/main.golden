@@ -11,7 +11,7 @@ func main() {
 	var choice ast.Node
 	fmt.Println("please choose: x + x, x * y?")
 	switch choice.(type) {
-	case *ast.AssignStmt: // <<<<< extractLocal,14,7,14,21,newVar,fail
+	case *ast.AssignStmt: // <<<<< var,14,7,14,21,newVar,fail
 		fmt.Println(x + x)
 	case *ast.GenDecl:
 		fmt.Println(x * y)

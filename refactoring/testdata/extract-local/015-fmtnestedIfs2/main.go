@@ -10,7 +10,7 @@ func main() {
 		fmt.Println("")
 		a = 5
 		b = 6
-		fmt.Println(a + b) // <<<<< extractLocal,13,15,13,19,newVar,pass
+		fmt.Println(a + b) // <<<<< var,13,15,13,19,newVar,pass
 		if a+b < c {
 			fmt.Println("this is the area of a rectangle: ")
 		}

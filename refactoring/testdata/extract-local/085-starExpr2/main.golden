@@ -8,7 +8,7 @@ func zeroval(ival int) {
 
 func zeroptr(iptr *int) {
 	newVar := iptr
-	*newVar = 0 // <<<<< extractLocal,10,3,10,6,newVar,pass
+	*newVar = 0 // <<<<< var,10,3,10,6,newVar,pass
 }
 
 func main() {

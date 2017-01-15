@@ -57,7 +57,7 @@ func main() {
 	}
 	ast.Print(fset, f)
 	for _, d := range f.Decls {
-		switch decl := d.(type) { // <<<<< extractLocal,60,18,60,25,newVar,fail
+		switch decl := d.(type) { // <<<<< var,60,18,60,25,newVar,fail
 		case *ast.FuncDecl:
 			fmt.Println("funcDecl" + decl.Name.Name)
 		case *ast.GenDecl: // types (including structs/interfaces)

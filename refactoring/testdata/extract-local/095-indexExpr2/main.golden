@@ -6,7 +6,7 @@ func main() {
 	p := make([]string, 1)
 	p[0] = "string"
 	newVar := 0
-	if p[newVar] != "/" { // <<<<< extractLocal,8,7,8,7,newVar,pass
+	if p[newVar] != "/" { // <<<<< var,8,7,8,7,newVar,pass
 		fmt.Println("Hello, 世界")
 	}
 }

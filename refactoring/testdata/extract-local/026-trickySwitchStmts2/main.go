@@ -15,7 +15,7 @@ func main() {
 	switch iChoice {
 	case x + x:
 		fmt.Println(x + x)
-	case x * y: // <<<<< extractLocal,18,6,18,10,newVar,pass
+	case x * y: // <<<<< var,18,6,18,10,newVar,pass
 		fmt.Println(x * y)
 	default:
 		fmt.Println("didn't work")

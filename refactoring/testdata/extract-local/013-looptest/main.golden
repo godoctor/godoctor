@@ -8,7 +8,7 @@ func main() {
 	z := 0
 	for x = 1; x < y; x++ {
 		newVar := x + y
-		z = newVar // <<<<< extractLocal,10,6,10,11,newVar,pass
+		z = newVar // <<<<< var,10,6,10,11,newVar,pass
 	}
 	fmt.Println(z)
 	fmt.Println("x", x, "y", y)

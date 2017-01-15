@@ -15,7 +15,7 @@ func (a *Apple) length() string {
 
 func (a *Apple) orange() {
 	c := ""
-	b := (*a).length() // <<<<< extractLocal,18,7,18,10,newVar,pass
+	b := (*a).length() // <<<<< var,18,7,18,10,newVar,pass
 	if c == b {
 		fmt.Println("ka;ldskjf")
 	}

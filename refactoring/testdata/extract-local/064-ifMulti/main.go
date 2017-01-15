@@ -5,7 +5,7 @@ import "fmt"
 func main() {
 	x := 2
 	y := 5
-	if z := x + y; z != 0 { //<<<<< extractLocal,8,22,8,23,newVar,fail
+	if z := x + y; z != 0 { //<<<<< var,8,22,8,23,newVar,fail
 		// don't allow to extract from if with _;_ in it
 		fmt.Println("got this test to work right.")
 	}

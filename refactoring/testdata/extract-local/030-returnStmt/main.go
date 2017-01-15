@@ -9,5 +9,5 @@ func main() {
 
 func run() int {
 	fmt.Println("works")
-	return 1 + 2 // <<<<< extractLocal,12,8,12,13,newVar,pass
+	return 1 + 2 // <<<<< var,12,8,12,13,newVar,pass
 }

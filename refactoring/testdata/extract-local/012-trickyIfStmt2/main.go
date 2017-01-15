@@ -4,7 +4,7 @@ import "fmt"
 
 func main() {
 	x := 5.0
-	if i, err := x, false; i < 10 { // <<<<< extractLocal,7,25,7,31,i < 10,newVar,fail
+	if i, err := x, false; i < 10 { // <<<<< var,7,25,7,31,i < 10,newVar,fail
 		if err == true {
 			fmt.Println(err)
 		}

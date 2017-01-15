@@ -20,6 +20,6 @@ func main() {
 		tag = "yes"
 	}
 	if len(tag) != 0 {
-		tags = append(tags, tag) // <<<<< extractLocal,23,3,23,6,newVar,fail
+		tags = append(tags, tag) // <<<<< var,23,3,23,6,newVar,fail
 	}
 }

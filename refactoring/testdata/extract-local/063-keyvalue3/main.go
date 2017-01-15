@@ -5,7 +5,7 @@ import "fmt"
 func main() {
 	x := 2
 	y := 5
-	var m map[string]string //<<<<< extractLocal,8,19,8,25,newVar,fail
+	var m map[string]string //<<<<< var,8,19,8,25,newVar,fail
 	m = map[string]string{
 		"apple":   "pie",
 		"potatoe": "tomato",

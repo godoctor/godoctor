@@ -13,7 +13,7 @@ func main() {
 
 		case 2:
 			i := new(int)
-			if dv != 0 { // <<<<< extractLocal,16,7,16,9,newVar,pass
+			if dv != 0 { // <<<<< var,16,7,16,9,newVar,pass
 				*i = dv
 			}
 		}

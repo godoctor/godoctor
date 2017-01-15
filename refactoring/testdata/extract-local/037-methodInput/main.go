@@ -15,6 +15,6 @@ func main() {
 type Apple struct {
 }
 
-func (a *Apple) printLine(num int) { // <<<<< extractLocal,18,27,18,30,newVar,fail
+func (a *Apple) printLine(num int) { // <<<<< var,18,27,18,30,newVar,fail
 	fmt.Println("number: " + strconv.Itoa(num))
 }

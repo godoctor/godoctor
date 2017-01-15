@@ -7,7 +7,7 @@ func main() {
 	newVar := x < 10
 	if x < 0 {
 
-	} else if newVar { // <<<<< extractLocal,9,11,9,17,newVar,pass
+	} else if newVar { // <<<<< var,9,11,9,17,newVar,pass
 		fmt.Println("divisible by 5:")
 	}
 }

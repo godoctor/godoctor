@@ -10,7 +10,7 @@ func main() {
 }
 
 func average(a int, b int) {
-	if a == b { //<<<<< extractLocal,13,5,13,5,newVar,pass
+	if a == b { //<<<<< var,13,5,13,5,newVar,pass
 		fmt.Printf("a*b == %i", a*b)
 	}
 }

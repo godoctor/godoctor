@@ -7,7 +7,7 @@ import (
 
 func main() {
 	x := 5
-	i, err := x, false // <<<<< extractLocal,10,2,10,8,newVar,fail
+	i, err := x, false // <<<<< var,10,2,10,8,newVar,fail
 	if err == true {
 		fmt.Println(err)
 	}

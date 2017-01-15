@@ -19,6 +19,6 @@ func main() {
 
 	o2 := fruit{"os"}
 	s := o2.orange()
-	s.name = "happy" // <<<<< extractLocal,22,2,22,7,newVar,fail
+	s.name = "happy" // <<<<< var,22,2,22,7,newVar,fail
 	fmt.Println(s)
 }

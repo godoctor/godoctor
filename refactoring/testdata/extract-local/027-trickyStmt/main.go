@@ -7,7 +7,7 @@ func main() {
 	var x int
 	goto a
 b:
-	x = i + i // <<<<< extractLocal,10,5,10,10,newVar,pass
+	x = i + i // <<<<< var,10,5,10,10,newVar,pass
 	goto c
 a:
 	i = 3

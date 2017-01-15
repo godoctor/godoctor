@@ -32,7 +32,7 @@ func (r *Null) Run(config *Config) *Result {
 	r.refactoringBase.Run(config)
 
 	if !validateArgs(config, r.Description(), r.Log) {
-		return &r.Result // <<<<< extractLocal,35,9,35,18,newVar,pass
+		return &r.Result // <<<<< var,35,9,35,18,newVar,pass
 	}
 
 	if config.Args[0].(bool) {

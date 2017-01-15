@@ -33,7 +33,7 @@ func (r *Null) Run(config *Config) *Result {
 
 	if !validateArgs(config, r.Description(), r.Log) {
 		newVar := &r.Result
-		return newVar // <<<<< extractLocal,35,9,35,18,newVar,pass
+		return newVar // <<<<< var,35,9,35,18,newVar,pass
 	}
 
 	if config.Args[0].(bool) {

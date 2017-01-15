@@ -19,7 +19,7 @@ func (f *fruit) orange() string {
 
 func main() {
 
-	o2 := fruit{name: "os", // <<<<< extractLocal,22,14,24,17,newVar,pass
+	o2 := fruit{name: "os", // <<<<< var,22,14,24,17,newVar,pass
 		vars:    map[string]string{"apple": "orange", "pineapple": "strawberry"},
 		isthere: true}
 	s := o2.orange()

@@ -4,7 +4,7 @@ import "fmt"
 
 func main() {
 	x := new(Node)
-	if x.next == nil { // <<<<< extractLocal,7,15,7,18,newVar,fail
+	if x.next == nil { // <<<<< var,7,15,7,18,newVar,fail
 		fmt.Println("there's a name in there")
 	}
 }

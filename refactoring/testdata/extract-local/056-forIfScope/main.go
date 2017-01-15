@@ -8,7 +8,7 @@ func main() {
 	if y == 6 {
 		for _, name := range x {
 			value, exists := isThere(name)
-			if exists { // <<<<< extractLocal,11,7,11,13,newVar,pass
+			if exists { // <<<<< var,11,7,11,13,newVar,pass
 				fmt.Println("there's a name in there")
 			}
 			if value != "" {

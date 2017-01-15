@@ -7,7 +7,7 @@ func main() {
 	y := 5
 	var m map[string]string
 	m = map[string]string{
-		"apple":    "pie", //<<<<< extractLocal,10,3,10,9,newVar,fail
+		"apple":    "pie", //<<<<< var,10,3,10,9,newVar,fail
 		"potatoe": "tomato",
 		"pizza":   "curry",
 	}

@@ -6,7 +6,7 @@ func main() {
 	apple := 10
 
 	if apple < 10 {
-		goto L //<<<<< extractLocal,9,3,9,7,newVar,fail
+		goto L //<<<<< var,9,3,9,7,newVar,fail
 		apple = 2
 	} else {
 		goto J

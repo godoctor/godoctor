@@ -16,7 +16,7 @@ func main() {
 		default:
 		}
 		switch {
-		case data[index] < 10: // <<<<< extractLocal,19,8,19,18,newVar,pass
+		case data[index] < 10: // <<<<< var,19,8,19,18,newVar,pass
 			fmt.Printf("this is a test: 9")
 		default:
 		}

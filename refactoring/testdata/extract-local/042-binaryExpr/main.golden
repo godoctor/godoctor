@@ -14,7 +14,7 @@ func main() {
 		case 2:
 			i := new(int)
 			newVar := dv
-			if newVar != 0 { // <<<<< extractLocal,16,7,16,9,newVar,pass
+			if newVar != 0 { // <<<<< var,16,7,16,9,newVar,pass
 				*i = dv
 			}
 		}

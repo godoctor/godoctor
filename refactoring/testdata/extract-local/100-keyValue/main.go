@@ -7,6 +7,6 @@ type s struct {
 }
 
 func main() {
-	v := s{name: "foo"} // <<<<< extractLocal,10,9,10,12,newVar,fail
+	v := s{name: "foo"} // <<<<< var,10,9,10,12,newVar,fail
 	fmt.Println(v.name)
 }

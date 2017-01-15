@@ -26,7 +26,7 @@ func main() {
 	case 10:
 		fmt.Printf("this is an apple: %i ", apple)
 		fmt.Printf("this has a branchStmt")
-		break //<<<<< extractLocal,18,3,18,8,newVar,fail
+		break //<<<<< var,18,3,18,8,newVar,fail
 	}
 }`
 
@@ -52,7 +52,7 @@ func main() {
 }
 
 func fieldListCheck(f *ast.FieldList) bool {
-	if f == nil { //<<<<< extractLocal,55,5,55,5,newVar,pass
+	if f == nil { //<<<<< var,55,5,55,5,newVar,pass
 		return true
 	}
 	return false

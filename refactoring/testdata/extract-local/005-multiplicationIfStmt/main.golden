@@ -13,7 +13,7 @@ func main() {
 		fmt.Println("this is the area of a square: ")
 	}
 	newVar := a * b
-	if newVar < c { // <<<<< extractLocal,15,4,15,7,newVar,pass
+	if newVar < c { // <<<<< var,15,4,15,7,newVar,pass
 		fmt.Println("")
 	}
 }

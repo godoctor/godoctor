@@ -18,7 +18,7 @@ func main() {
 
 		} else if x > 18 {
 			fmt.Println("divisible by 5:")
-		} else if newVar { // <<<<< extractLocal,20,12,20,18,newVar,pass
+		} else if newVar { // <<<<< var,20,12,20,18,newVar,pass
 			fmt.Println("divisible by 5:")
 		}
 

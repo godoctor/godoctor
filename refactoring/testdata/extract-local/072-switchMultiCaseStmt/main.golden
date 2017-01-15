@@ -14,7 +14,7 @@ func main() {
 	iChoice, _ := strconv.Atoi(choice)
 	newVar := x + y
 	switch iChoice {
-	case x + x, newVar, x - y: // <<<<< extractLocal,16,14,16,19,newVar,pass
+	case x + x, newVar, x - y: // <<<<< var,16,14,16,19,newVar,pass
 		fmt.Println(x + x)
 	case x * y:
 		fmt.Println(x * y)

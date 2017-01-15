@@ -8,7 +8,7 @@ func main() {
 	goto a
 b:
 	if x > i {
-		x = i + i // <<<<< extractLocal,11,7,11,11,newVar,pass
+		x = i + i // <<<<< var,11,7,11,11,newVar,pass
 	}
 	goto c
 a:

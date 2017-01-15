@@ -10,5 +10,5 @@ func main() {
 func run() int {
 	fmt.Println("works")
 	newVar := 1 + 2
-	return newVar // <<<<< extractLocal,12,8,12,13,newVar,pass
+	return newVar // <<<<< var,12,8,12,13,newVar,pass
 }

@@ -24,7 +24,7 @@ func init() {
 
 	AddRefactoring("rename", new(refactoring.Rename))
 	AddRefactoring("extract", new(refactoring.ExtractFunc))
-	AddRefactoring("extractLocal", new(refactoring.ExtractLocal))
+	AddRefactoring("var", new(refactoring.ExtractLocal))
 	AddRefactoring("toggle", new(refactoring.ToggleVar))
 	AddRefactoring("godoc", new(refactoring.AddGoDoc))
 	AddRefactoring("debug", new(refactoring.Debug))

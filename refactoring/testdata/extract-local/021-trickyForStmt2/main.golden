@@ -13,7 +13,7 @@ func main() {
 	for x < 10 {
 		x++
 		newVar := z + y
-		if x > newVar { // <<<<< extractLocal,15,9,15,12,newVar,pass
+		if x > newVar { // <<<<< var,15,9,15,12,newVar,pass
 			fmt.Println("big")
 		}
 	}

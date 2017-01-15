@@ -13,7 +13,7 @@ func main() {
 	fmt.Scanf(choice)
 	iChoice, _ := strconv.Atoi(choice)
 	switch iChoice {
-	case x + x: // <<<<< extractLocal,16,6,16,10,newVar,pass
+	case x + x: // <<<<< var,16,6,16,10,newVar,pass
 		fmt.Println(x + x)
 	case x * y:
 		fmt.Println(x * y)

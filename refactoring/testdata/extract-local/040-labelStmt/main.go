@@ -10,7 +10,7 @@ func main() {
 	if x == 5 {
 		goto vars
 	}
-vars: // <<<<< extractLocal,13,1,13,5,newVar,fail
+vars: // <<<<< var,13,1,13,5,newVar,fail
 	a := []string{"subdomain", "foo", "category", "technology", "id", "42"}
 	fmt.Println(a)
 	goto url

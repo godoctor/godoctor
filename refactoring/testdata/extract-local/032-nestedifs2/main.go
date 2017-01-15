@@ -34,7 +34,7 @@ type Apple struct {
 		if decl, ok := d.(*ast.GenDecl); ok {
 			for j, spec := range decl.Specs {
 				if spec, ok := spec.(*ast.TypeSpec); ok {
-					if ast.IsExported(spec.Name.Name) && spec.Doc == nil && j > 0 { // <<<<< extractLocal,37,24,37,37,newVar,pass
+					if ast.IsExported(spec.Name.Name) && spec.Doc == nil && j > 0 { // <<<<< var,37,24,37,37,newVar,pass
 						fmt.Println("works")
 					}
 				}

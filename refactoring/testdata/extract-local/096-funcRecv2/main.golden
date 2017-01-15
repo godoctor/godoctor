@@ -11,7 +11,7 @@ type fruit struct {
 	name string
 }
 
-func (f *fruit) orange() string { // <<<<< extractLocal,14,6,14,15,newVar,fail
+func (f *fruit) orange() string { // <<<<< var,14,6,14,15,newVar,fail
 	return "helloz worldz"
 }
 

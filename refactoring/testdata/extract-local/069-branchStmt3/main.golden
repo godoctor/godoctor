@@ -10,7 +10,7 @@ AppleLoop:
 	for i := 0; i < apple; i++ {
 		for index2 := 0; index2 < orange; index2++ {
 			if index2 == 3 {
-				continue AppleLoop //<<<<< extractLocal,13,5,13,13,newVar,fail
+				continue AppleLoop //<<<<< var,13,5,13,13,newVar,fail
 			}
 			orange++
 		}

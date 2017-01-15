@@ -11,7 +11,7 @@ func main() {
 	m := uint64(n[0]) * uint64(n[0])
 	newVar := 2
 	m = (m + fieldBase) +
-		newVar*uint64(n[0])*uint64(n[6]) + // <<<<< extractLocal,13,3,13,3,newVar,pass
+		newVar*uint64(n[0])*uint64(n[6]) + // <<<<< var,13,3,13,3,newVar,pass
 
 		2*uint64(n[1])*uint64(n[5]) +
 		2*uint64(n[2])*uint64(n[4]) +

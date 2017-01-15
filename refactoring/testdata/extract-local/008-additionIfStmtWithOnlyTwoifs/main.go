@@ -9,7 +9,7 @@ func main() {
 	if a <= b {
 		fmt.Println("this is the area of a square: ")
 	}
-	if a+b < c { // <<<<< extractLocal,12,4,12,7,newVar,pass
+	if a+b < c { // <<<<< var,12,4,12,7,newVar,pass
 		fmt.Println("")
 	}
 }

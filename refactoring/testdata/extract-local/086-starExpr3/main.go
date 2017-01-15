@@ -11,7 +11,7 @@ func zeroptr(iptr *int) {
 }
 
 func newVal(oldVal *int, oldVal2 *int32) {
-	*oldVal = *oldVal + 100 // <<<<< extractLocal,14,12,14,18,newVar,pass
+	*oldVal = *oldVal + 100 // <<<<< var,14,12,14,18,newVar,pass
 	*oldVal2 = *oldVal2 + 2
 }
 

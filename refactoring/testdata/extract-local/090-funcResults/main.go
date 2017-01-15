@@ -2,7 +2,7 @@ package main
 
 import "fmt"
 
-func apple(val int) string {// <<<<< extractLocal,5,21,5,26,newVar,fail
+func apple(val int) string {// <<<<< var,5,21,5,26,newVar,fail
 		a := "apple +"
 		return a
 }

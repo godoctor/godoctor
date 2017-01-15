@@ -6,7 +6,7 @@ func main() {
 	a := 1
 	b := 2
 	c := 3
-	if a*b < c { // <<<<< extractLocal,9,4,9,7,newVar,pass
+	if a*b < c { // <<<<< var,9,4,9,7,newVar,pass
 		fmt.Println("")
 	}
 }
