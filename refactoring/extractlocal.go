@@ -133,6 +133,14 @@ func (r *ExtractLocal) checkExpressionContext() bool {
 		}
 	}
 
+	// This isn't completely correct, since &((((x)))) also takes an address,
+	// but it's close enough for now
+	if unary, ok := parentNode.(*ast.UnaryExpr); ok && unary.Op == token.AND {
+		r.Log.Error("An expression cannot be extracted if its address is taken.")
+		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+		return false
+	}
+
 	for _, node := range r.enclosingNodes {
 		if isTypeNode(node) {
 			r.Log.Error("An expression used to specify a type cannot be extracted.")
@@ -141,9 +149,9 @@ func (r *ExtractLocal) checkExpressionContext() bool {
 		}
 	}
 
-	for _, node := range r.enclosingNodes {
-		if unary, ok := node.(*ast.UnaryExpr); ok && unary.Op == token.AND && node != r.SelectedNode {
-			r.Log.Error("An expression cannot be extracted if its address is taken.")
+	for i, node := range r.enclosingNodes {
+		if kv, ok := node.(*ast.KeyValueExpr); ok && i > 0 && r.enclosingNodes[i-1] == kv.Key {
+			r.Log.Error("The key in a key-value expression cannot be extracted.")
 			r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
 			return false
 		}
