@@ -69,114 +69,114 @@ func (r *ExtractLocal) Run(config *Config) *Result {
 // doExtract locates the position of the selection and will
 // replace it with a new variable of the user's chosing
 func (r *ExtractLocal) doExtract() {
-	var switchList, typeSwitchFound []ast.Stmt
-	var plists, rlists, recLists []*ast.Field
+	var enclosingSwitchStmtBodyList, enclosingTypeSwitchBodyList []ast.Stmt
+	var enclosingFuncParams, enclosingFuncResults, enclosingFuncRecv []*ast.Field
 	var lhs, rhs []ast.Expr
-	var fini, fcond, fpost, parentNode, switchNode, ifInitAssign, ifElse, condition, assign ast.Node
+	var enclosingForStmtInit, enclosingForStmtCond, enclosingForStmtPos, parentNode, enclosingSwitchStmt, enclosingIfStmtInitAssign, enclosingIfStmtElse, enclosingTypeSwitchInit, enclosingTypeSwitchAssign ast.Node
 	found, isBranchStmt, isLabelStmt := false, false, false
 	errorType := ""
 	ast.Inspect(r.File, func(n ast.Node) bool {
-		switch selectedNode := n.(type) {
+		switch curNode := n.(type) {
 		case *ast.FuncDecl:
-			if selectedNode.Type.Params != nil {
-				plists = selectedNode.Type.Params.List
+			if curNode.Type.Params != nil {
+				enclosingFuncParams = curNode.Type.Params.List
 			}
-			if selectedNode.Type.Results != nil {
-				rlists = selectedNode.Type.Results.List
+			if curNode.Type.Results != nil {
+				enclosingFuncResults = curNode.Type.Results.List
 			}
-			if selectedNode.Recv != nil {
-				recLists = selectedNode.Recv.List
+			if curNode.Recv != nil {
+				enclosingFuncRecv = curNode.Recv.List
 			}
 		case ast.Stmt:
-			parentNode = selectedNode
-			if sNode, ok := selectedNode.(*ast.SwitchStmt); ok {
-				switchNode = sNode
-				switchList = sNode.Body.List
-			} else if ifNode, ok := selectedNode.(*ast.IfStmt); ok {
+			parentNode = curNode
+			if sNode, ok := curNode.(*ast.SwitchStmt); ok {
+				enclosingSwitchStmt = sNode
+				enclosingSwitchStmtBodyList = sNode.Body.List
+			} else if ifNode, ok := curNode.(*ast.IfStmt); ok {
 				if assignNode, ok := ifNode.Init.(*ast.AssignStmt); ok {
-					ifInitAssign = assignNode
+					enclosingIfStmtInitAssign = assignNode
 				} else if ifNode.Else != nil {
-					ifElse = ifNode.Else
+					enclosingIfStmtElse = ifNode.Else
 				}
-			} else if fNode, ok := selectedNode.(*ast.ForStmt); ok {
-				fini = fNode.Init
-				fcond = fNode.Cond
-				fpost = fNode.Post
-				isForCond := r.forCheck()
+			} else if fNode, ok := curNode.(*ast.ForStmt); ok {
+				enclosingForStmtInit = fNode.Init
+				enclosingForStmtCond = fNode.Cond
+				enclosingForStmtPos = fNode.Post
+				isForCond := r.selectedNodeIsInForLoopHeader()
 				if isForCond {
 					found = true
 					errorType = "for"
 				}
-			} else if typeSwitch, ok := selectedNode.(*ast.TypeSwitchStmt); ok {
+			} else if typeSwitch, ok := curNode.(*ast.TypeSwitchStmt); ok {
 				body := typeSwitch.Body.List
 				if len(body) != 0 {
-					typeSwitchFound = body
+					enclosingTypeSwitchBodyList = body
 				}
 				if typeSwitch.Init != nil {
-					condition = typeSwitch.Init
+					enclosingTypeSwitchInit = typeSwitch.Init
 				} else if typeSwitch.Assign != nil {
-					assign = typeSwitch.Assign
+					enclosingTypeSwitchAssign = typeSwitch.Assign
 				}
-			} else if assignment, ok := selectedNode.(*ast.AssignStmt); ok {
+			} else if assignment, ok := curNode.(*ast.AssignStmt); ok {
 				lhs, rhs = assignment.Lhs, assignment.Rhs
-			} else if block, ok := selectedNode.(*ast.BlockStmt); ok {
+			} else if block, ok := curNode.(*ast.BlockStmt); ok {
 				if block == r.SelectedNode {
 					errorType = "blockSelected"
 					found = true
 				}
-			} else if branch, ok := selectedNode.(*ast.BranchStmt); ok {
-				if branch == r.SelectedNode || branch.Label == r.SelectedNode || r.posLine(branch) == r.posLine(r.SelectedNode) {
+			} else if branch, ok := curNode.(*ast.BranchStmt); ok {
+				if /*branch == r.SelectedNode ||*/ branch.Label == r.SelectedNode || r.posLine(branch) == r.posLine(r.SelectedNode) {
 					isBranchStmt = true
 				}
-			} else if label, ok := selectedNode.(*ast.LabeledStmt); ok {
+			} else if label, ok := curNode.(*ast.LabeledStmt); ok {
 				if label == r.SelectedNode {
 					isLabelStmt = true
 				}
 			}
 		case ast.Expr:
-			multiAssignVar := r.multiAssignVarCheck(lhs, rhs)
-			isVarStmt := r.varStmtCheck()
-			isLhsAssignVar := r.lhsAssignVarCheck()
-			isCallExpr := r.callCheck(selectedNode)
-			isSelectorType := r.selectorCheck(selectedNode)
-			isNil := r.checkNil(selectedNode)
-			isKeyValueExpr := r.keyValueCheck()
-			isCompositeLit := r.checkComposite()
-			isIdentInAssign := r.checkAssignIdents()
-			funcInput := r.funcInputCheck(plists, rlists, recLists)
+			isInMultiLHSAssignment := r.isInMultiLHSAssignment(lhs, rhs)
+			isInDeclStmt := r.isInDeclStmt()
+			isInLHSofAssignStmt := r.isInLHSofAssignStmt()
+			isInCallExprNotInArgs := r.isInCallExprNotInArgs(curNode)
+			isSelectorExprAndIsEqualToSelectedNode := r.isSelectorExprAndIsEqualToSelectedNode(curNode)
+			isIdentNamedNilAndIsEqualToSelectedNode := r.isIdentNamedNilAndIsEqualToSelectedNode(curNode)
+			selectedNodeIsKeyValueExpr := r.selectedNodeIsKeyValueExpr()
+			selectedNodeIsCompositeLit := r.selectedNodeIsCompositeLit()
+			selectedNodeIsOKOnRHSofAssign := r.selectedNodeIsIdentOnRHSofAssignButNotInSelectorExpr()
+			isInFuncParamResultOrRecv := r.isInFuncParamResultOrRecv(enclosingFuncParams, enclosingFuncResults, enclosingFuncRecv)
 			// might not need this one, will have to wait till after
-			isSwitchCaseSelector := r.caseSelectorCheck(switchList)
-			if multiAssignVar { // check if selected node is from part a _, _ := _, _ stmt
+			selectedNodeIsCaseClause := r.selectedNodeIsCaseClause(enclosingSwitchStmtBodyList)
+			if isInMultiLHSAssignment { // check if selected node is from part a _, _ := _, _ stmt
 				errorType = "mulitAssign"
 				found = true
 			} else if r.isPreDeclaredIdent() {
 				errorType = "preIdent"
 				found = true
-			} else if isVarStmt { // checks if its a var _ _ stmt
+			} else if isInDeclStmt { // checks if its a var _ _ stmt
 				errorType = "assignStmt"
 				found = true
-			} else if isLhsAssignVar { // checks if its from the lhs of assign stmt
+			} else if isInLHSofAssignStmt { // checks if its from the lhs of enclosingTypeSwitchAssign stmt
 				errorType = "lhsAssign"
 				found = true
-			} else if isCallExpr { // checks if it's in call expr
+			} else if isInCallExprNotInArgs { // checks if it's in call expr
 				errorType = "callExpr"
 				found = true
-			} else if funcInput { // check if selected node is from the function definition
+			} else if isInFuncParamResultOrRecv { // check if selected node is from the function definition
 				errorType = "funcInput"
 				found = true
-			} else if isSelectorType { // check for when a selector type
+			} else if isSelectorExprAndIsEqualToSelectedNode { // check for when a selector type
 				errorType = "selectorType"
 				found = true
-			} else if isSwitchCaseSelector { // checks if its from the switch type (ie switch node, checks if its node)
+			} else if selectedNodeIsCaseClause { // checks if its from the switch type (ie switch node, checks if its node)
 				errorType = "switchKey"
 				found = true
-			} else if isNil { // checks if it's nil
+			} else if isIdentNamedNilAndIsEqualToSelectedNode { // checks if it's nil
 				errorType = "nil"
 				found = true
-			} else if isKeyValueExpr { // check to see if from a key:value
+			} else if selectedNodeIsKeyValueExpr { // check to see if from a key:value
 				errorType = "keyValue"
 				found = true
-			} else if isCompositeLit {
+			} else if selectedNodeIsCompositeLit {
 				errorType = "blockSelected"
 				found = true
 			} else if isBranchStmt {
@@ -185,27 +185,27 @@ func (r *ExtractLocal) doExtract() {
 			} else if isLabelStmt {
 				errorType = "labelStmt"
 				found = true
-			} else if isIdentInAssign {
+			} else if selectedNodeIsOKOnRHSofAssign {
 				newVar := r.createVar(r.SelectedNode)
 				found = r.createParent(newVar)
-			} else if selectedNode == r.SelectedNode {
-				typeCase := r.typeSwitchCheck(typeSwitchFound, condition, assign)
-				isIfMult := r.ifMultLeftCheck(ifInitAssign, selectedNode)
-				isSwitchCase := r.switchCheck(switchList, selectedNode)
-				line1 := r.endLine(selectedNode)
+			} else if curNode == r.SelectedNode {
+				typeCase := r.selectedNodeIsInCaseClause(enclosingTypeSwitchBodyList, enclosingTypeSwitchInit, enclosingTypeSwitchAssign)
+				isIfMult := r.isInIfStmtInitAssign(enclosingIfStmtInitAssign, curNode)
+				isSwitchCase := r.isInSwitchStmtBodyList(enclosingSwitchStmtBodyList, curNode)
+				line1 := r.endLine(curNode)
 				line2 := r.endLine(r.SelectedNode)
-				//isIndexExpr := r.checkIndexExpr(selectedNode)
+				//isIndexExpr := r.checkIndexExpr(curNode)
 				if isSwitchCase { // check for switch stmts
-					newVar := r.createVar(selectedNode)
-					found = r.addForSwitch(switchNode, selectedNode, newVar)
+					newVar := r.createVar(curNode)
+					found = r.addForSwitch(enclosingSwitchStmt, curNode, newVar)
 				} else if typeCase { // check if selected node is from part of the type switch
 					errorType = "typeSwitchCase"
 					found = true
-				} else if isIfMult { // check for for loops or if mutli assign
+				} else if isIfMult { // check for for loops or if mutli enclosingTypeSwitchAssign
 					found = true
 					errorType = "ifMulti"
-				} else if line1 == line2 || ifElse != nil {
-					newVar := r.createVar(selectedNode)
+				} else if line1 == line2 || enclosingIfStmtElse != nil {
+					newVar := r.createVar(curNode)
 					found = r.createParent(newVar)
 				} /* else if isStarExpr { // checks if it's a star expr
 						errorType = "starExpr"
@@ -239,8 +239,8 @@ func (r *ExtractLocal) posLine(node ast.Node) int {
 	return r.Program.Fset.Position(node.Pos()).Line
 }
 
-// switchCheck switch case check for switch version of extraction
-func (r *ExtractLocal) switchCheck(switchList []ast.Stmt, selectedNode ast.Node) bool {
+// isInSwitchStmtBodyList switch case check for switch version of extraction
+func (r *ExtractLocal) isInSwitchStmtBodyList(switchList []ast.Stmt, selectedNode ast.Node) bool {
 	for index, _ := range switchList {
 		line1 := r.posLine(switchList[index])
 		line2 := r.posLine(selectedNode)
@@ -251,8 +251,8 @@ func (r *ExtractLocal) switchCheck(switchList []ast.Stmt, selectedNode ast.Node)
 	return false
 }
 
-// forCheck for loop init/cond/post test
-func (r *ExtractLocal) forCheck() bool {
+// selectedNodeIsInForLoopHeader for loop init/cond/post test
+func (r *ExtractLocal) selectedNodeIsInForLoopHeader() bool {
 	off1 := r.posLine(r.SelectedNode)
 	enclosing, _ := astutil.PathEnclosingInterval(r.File, r.SelectedNode.Pos(), r.SelectedNode.End())
 	for _, index2 := range enclosing {
@@ -265,8 +265,8 @@ func (r *ExtractLocal) forCheck() bool {
 	return false
 }
 
-// ifMultLeftCheck if stmt check for _, _ conditions on the left
-func (r *ExtractLocal) ifMultLeftCheck(ifInitAssign ast.Node, selectedNode ast.Node) bool {
+// isInIfStmtInitAssign if stmt check for _, _ conditions on the left
+func (r *ExtractLocal) isInIfStmtInitAssign(ifInitAssign ast.Node, selectedNode ast.Node) bool {
 	if ifInitAssign != nil {
 		line1 := r.posLine(ifInitAssign)
 		line2 := r.posLine(selectedNode)
@@ -277,8 +277,8 @@ func (r *ExtractLocal) ifMultLeftCheck(ifInitAssign ast.Node, selectedNode ast.N
 	return false
 }
 
-// typeSwitchCheck sees if the switch is a type switch and if so returns true to produce an error
-func (r *ExtractLocal) typeSwitchCheck(typeSwitchFound []ast.Stmt, condition ast.Node, assign ast.Node) bool {
+// selectedNodeIsInCaseClause sees if the switch is a type switch and if so returns true to produce an error
+func (r *ExtractLocal) selectedNodeIsInCaseClause(typeSwitchFound []ast.Stmt, condition ast.Node, assign ast.Node) bool {
 	if len(typeSwitchFound) != 0 {
 		for _, index := range typeSwitchFound {
 			if caseClauses, ok := index.(*ast.CaseClause); ok {
@@ -310,9 +310,9 @@ func (r *ExtractLocal) typeSwitchCheck(typeSwitchFound []ast.Stmt, condition ast
 	return false
 }
 
-// funcInputCheck checks to see if selected node is a function parameter or result
+// isInFuncParamResultOrRecv checks to see if selected node is a function parameter or result
 // in the definition and returns true if it is so as to produce an error
-func (r *ExtractLocal) funcInputCheck(plists []*ast.Field, rlists []*ast.Field, recLists []*ast.Field) bool {
+func (r *ExtractLocal) isInFuncParamResultOrRecv(plists []*ast.Field, rlists []*ast.Field, recLists []*ast.Field) bool {
 	if len(plists) != 0 {
 		for _, index := range plists {
 			for _, name := range index.Names {
@@ -348,9 +348,9 @@ func (r *ExtractLocal) funcInputCheck(plists []*ast.Field, rlists []*ast.Field, 
 	return false
 }
 
-// multiAssignVarCheck checks if it's a multi assign stmt ie  _, _ := _, _
+// isInMultiLHSAssignment checks if it's a multi assign stmt ie  _, _ := _, _
 // and returns true if the selected node is on either side
-func (r *ExtractLocal) multiAssignVarCheck(lhs []ast.Expr, rhs []ast.Expr) bool {
+func (r *ExtractLocal) isInMultiLHSAssignment(lhs []ast.Expr, rhs []ast.Expr) bool {
 	if len(lhs) > 1 && r.posLine(lhs[0]) == r.posLine(r.SelectedNode) {
 		return true
 	}
@@ -360,10 +360,10 @@ func (r *ExtractLocal) multiAssignVarCheck(lhs []ast.Expr, rhs []ast.Expr) bool 
 /*// ifFmtWBinary checks if the if stmt has mulitple conditions/inital conditions
 // ie if x := a.Type(); x != y {
 // TODO: might not need, check all 400 tests to see
-func (r *ExtractLocal) ifFmtWBinary(parentNode ast.Node, childNode ast.Node, selectedNode ast.Node) bool {
+func (r *ExtractLocal) ifFmtWBinary(parentNode ast.Node, childNode ast.Node, curNode ast.Node) bool {
 	if parentNode != nil && childNode != nil {
 		line1 := r.posLine(childNode)
-		line2 := r.posLine(selectedNode)
+		line2 := r.posLine(curNode)
 		if line1 == line2 {
 			return true
 		}
@@ -371,18 +371,18 @@ func (r *ExtractLocal) ifFmtWBinary(parentNode ast.Node, childNode ast.Node, sel
 	return false
 } */
 
-// keyValueCheck checks if is a key value expr or a child of
+// selectedNodeIsKeyValueExpr checks if is a key value expr or a child of
 // a key value expr, so anything to do maps, or keys : values
-func (r *ExtractLocal) keyValueCheck() bool {
+func (r *ExtractLocal) selectedNodeIsKeyValueExpr() bool {
 	if _, ok := r.SelectedNode.(*ast.KeyValueExpr); ok {
 		return true
 	}
 	return false
 }
 
-// varStmtCheck check if it's a declartion stmt, and return true
+// isInDeclStmt check if it's a declartion stmt, and return true
 // if it is ie var apple int or var handler http.Handler
-func (r *ExtractLocal) varStmtCheck() bool {
+func (r *ExtractLocal) isInDeclStmt() bool {
 	enclosing, _ := astutil.PathEnclosingInterval(r.File, r.SelectedNode.Pos(), r.SelectedNode.End())
 	for _, index := range enclosing {
 		if _, ok := index.(*ast.DeclStmt); ok {
@@ -392,9 +392,9 @@ func (r *ExtractLocal) varStmtCheck() bool {
 	return false
 }
 
-// lhsAssignVarCheck checks if r.SelectedNode is on the lhs of an
-// assign statement
-func (r *ExtractLocal) lhsAssignVarCheck() bool {
+// isInLHSofAssignStmt checks if r.SelectedNode is on the lhs of an
+// enclosingTypeSwitchAssign statement
+func (r *ExtractLocal) isInLHSofAssignStmt() bool {
 	enclosing, _ := astutil.PathEnclosingInterval(r.File, r.SelectedNode.Pos(), r.SelectedNode.End())
 	for _, index := range enclosing {
 		if assign, ok := index.(*ast.AssignStmt); ok {
@@ -411,11 +411,11 @@ func (r *ExtractLocal) lhsAssignVarCheck() bool {
 	return false
 }
 
-// callCheck check for call expr and don't allow if its just
+// isInCallExprNotInArgs check for call expr and don't allow if its just
 // a call expr itself, or if part of the callexpr (although
 // inside the () of it should work)
-func (r *ExtractLocal) callCheck(selectedNode ast.Node) bool {
-	/*if call, ok := selectedNode.(*ast.CallExpr); ok {
+func (r *ExtractLocal) isInCallExprNotInArgs(selectedNode ast.Node) bool {
+	/*if call, ok := curNode.(*ast.CallExpr); ok {
 		if call == r.SelectedNode {
 			return true
 		} else if fun, ok := call.Fun.(*ast.SelectorExpr); ok {
@@ -461,9 +461,9 @@ func (r *ExtractLocal) callCheck(selectedNode ast.Node) bool {
 	return false
 }
 
-// selectorCheck this will check the selector expr and see if the
+// isSelectorExprAndIsEqualToSelectedNode this will check the selector expr and see if the
 // sel part (which is the type) is the r.SelectedNode
-func (r *ExtractLocal) selectorCheck(selectedNode ast.Node) bool {
+func (r *ExtractLocal) isSelectorExprAndIsEqualToSelectedNode(selectedNode ast.Node) bool {
 	if selector, ok := selectedNode.(*ast.SelectorExpr); ok {
 		if selector.Sel == r.SelectedNode {
 			return true
@@ -472,8 +472,8 @@ func (r *ExtractLocal) selectorCheck(selectedNode ast.Node) bool {
 	return false
 }
 
-// checkNil checks if nil is trying to be extracted
-func (r *ExtractLocal) checkNil(selectedNode ast.Node) bool {
+// isIdentNamedNilAndIsEqualToSelectedNode checks if nil is trying to be extracted
+func (r *ExtractLocal) isIdentNamedNilAndIsEqualToSelectedNode(selectedNode ast.Node) bool {
 
 	if name, ok := selectedNode.(*ast.Ident); ok {
 		if name == r.SelectedNode {
@@ -485,9 +485,9 @@ func (r *ExtractLocal) checkNil(selectedNode ast.Node) bool {
 	return false
 }
 
-// checkComposite checks if r.SelectedNode is a composite lit
+// selectedNodeIsCompositeLit checks if r.SelectedNode is a composite lit
 // which should be handled by extract, not extract local
-func (r *ExtractLocal) checkComposite() bool {
+func (r *ExtractLocal) selectedNodeIsCompositeLit() bool {
 	if _, ok := r.SelectedNode.(*ast.CompositeLit); ok {
 		return true
 	}
@@ -495,8 +495,8 @@ func (r *ExtractLocal) checkComposite() bool {
 }
 
 /*// checkIndexExpr checks to see if it's an index expr
-func (r *ExtractLocal) checkIndexExpr(selectedNode ast.Node) bool {
-	enclosing, _ := astutil.PathEnclosingInterval(r.File, selectedNode.Pos(), selectedNode.End())
+func (r *ExtractLocal) checkIndexExpr(curNode ast.Node) bool {
+	enclosing, _ := astutil.PathEnclosingInterval(r.File, curNode.Pos(), curNode.End())
 	for _, index := range enclosing {
 		if indexExpr, ok := index.(*ast.IndexExpr); ok {
 			if indexExpr.X == r.SelectedNode || indexExpr.Index == r.SelectedNode {
@@ -507,20 +507,20 @@ func (r *ExtractLocal) checkIndexExpr(selectedNode ast.Node) bool {
 	return false
 }*/
 
-// checkAssignIdents checks to see if an ident obj is inside an assign, which would be
+// selectedNodeIsIdentOnRHSofAssignButNotInSelectorExpr checks to see if an ident obj is inside an enclosingTypeSwitchAssign, which would be
 // allowed to be extracted
-func (r *ExtractLocal) checkAssignIdents() bool {
+func (r *ExtractLocal) selectedNodeIsIdentOnRHSofAssignButNotInSelectorExpr() bool {
 	/*if ident, ok := r.SelectedNode.(*ast.BasicLit); ok {
 		enclosing, _ := astutil.PathEnclosingInterval(r.File, ident.Pos(), ident.End())
 		for _, index := range enclosing {
-			if assign, ok := index.(*ast.AssignStmt); ok {
-				for _, index := range assign.Lhs {
+			if enclosingTypeSwitchAssign, ok := index.(*ast.AssignStmt); ok {
+				for _, index := range enclosingTypeSwitchAssign.Lhs {
 					if index == ident {
 						enclosing2, _ := astutil.PathEnclosingInterval(r.File, index.Pos(), index.End())
-						for _, index2 := range enclosing2 {
-							if _, ok := index2.(*ast.SelectorExpr); ok {
+						for _, node := range enclosing2 {
+							if _, ok := node.(*ast.SelectorExpr); ok {
 								return true
-							} else if index2 == assign {
+							} else if node == enclosingTypeSwitchAssign {
 								break
 							}
 						}
@@ -537,10 +537,10 @@ func (r *ExtractLocal) checkAssignIdents() bool {
 				for _, index := range assign.Rhs {
 					/*if index == ident {
 						enclosing2, _ := astutil.PathEnclosingInterval(r.File, index.Pos(), index.End())
-						for _, index2 := range enclosing2 {
-							if _, ok := index2.(*ast.SelectorExpr); ok {
+						for _, node := range enclosing2 {
+							if _, ok := node.(*ast.SelectorExpr); ok {
 								return true
-							} else if index2 == assign {
+							} else if node == enclosingTypeSwitchAssign {
 								break
 							}
 						}
@@ -559,8 +559,8 @@ func (r *ExtractLocal) checkAssignIdents() bool {
 	return false
 }
 
-// caseSelectorCheck check case clauses to see if the case part is trying to be extracted
-func (r *ExtractLocal) caseSelectorCheck(switchList []ast.Stmt) bool {
+// selectedNodeIsCaseClause check case clauses to see if the case part is trying to be extracted
+func (r *ExtractLocal) selectedNodeIsCaseClause(switchList []ast.Stmt) bool {
 	for _, index := range switchList {
 		if cases, ok := index.(*ast.CaseClause); ok {
 			if cases == r.SelectedNode {
@@ -601,9 +601,9 @@ func (r *ExtractLocal) createVar(selectedNode ast.Node) string {
 /*// createVar2 create new var as var _
   // just in case there is a extract that you have to do var a ___
   // rather than a := ______ ___
-func (r *ExtractLocal) createVar2(selectedNode ast.Node) string {
-	pos1 := r.posOff(selectedNode)
-	pos2 := r.endOff(selectedNode)
+func (r *ExtractLocal) createVar2(curNode ast.Node) string {
+	pos1 := r.posOff(curNode)
+	pos2 := r.endOff(curNode)
 	newVar := "var " + r.varName + " " + string(r.FileContents[int(pos1):int(pos2)]) + "\n"
 	return newVar
 } */
