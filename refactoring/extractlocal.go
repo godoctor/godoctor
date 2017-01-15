@@ -22,7 +22,7 @@ type ExtractLocal struct {
 func (r *ExtractLocal) Description() *Description {
 	return &Description{
 		Name:      "Extract Local Variable",
-		Synopsis:  "Extracts an expression, assigning it to a new variable",
+		Synopsis:  "Extracts an expression, assigning it to a variable",
 		Usage:     "<new_name>",
 		HTMLDoc:   extractLocalDoc,
 		Multifile: false,
@@ -512,16 +512,17 @@ func (r *ExtractLocal) getEndOffset(node ast.Node) int {
 
 const extractLocalDoc = `
   <h4>Purpose</h4>
-  <p>The Extract Local Variable refactoring creates a new variable FIXME,
-  then replaces the original expression with that variable.</p>
+  <p>The Extract Local Variable takes an expression, assigns it to a new
+  local variable, then replaces the original expression with a use of that
+  variable.</p>
 
   <h4>Usage</h4>
   <ol class="enum">
     <li>Select an expression in an existing statement.</li>
-    <li>Activate the Extract Local Variable refactoring.</li>
+    <li>Activate the Introduce Local Variable refactoring.</li>
     <li>Enter a name for the new variable that will be created.</li>
   </ol>
 
   <p>An error or warning will be reported if the selected expression cannot be
-  extracted into a new variable.  Usually, this occurs because FIXME.</p>
+  extracted into a variable assignment.</p>
 `
