@@ -62,9 +62,9 @@ func (r *ExtractLocal) Run(config *Config) *Result {
 	r.enclosingNodes, _ = astutil.PathEnclosingInterval(r.File,
 		r.SelectedNode.Pos(),
 		r.SelectedNode.End())
-	// for i, node := range r.enclosingNodes {
-	// 	fmt.Printf("%d: %s\n", i, reflect.TypeOf(node))
-	// }
+	//for i, node := range r.enclosingNodes {
+	//	fmt.Printf("%d: %s\n", i, reflect.TypeOf(node))
+	//}
 
 	var insertBefore ast.Stmt
 	if r.checkSelectedNodeIsExpr() &&
@@ -152,6 +152,12 @@ func (r *ExtractLocal) checkExpressionContext() bool {
 	for i, node := range r.enclosingNodes {
 		if kv, ok := node.(*ast.KeyValueExpr); ok && i > 0 && r.enclosingNodes[i-1] == kv.Key {
 			r.Log.Error("The key in a key-value expression cannot be extracted.")
+			r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+			return false
+		}
+
+		if ta, ok := node.(*ast.TypeAssertExpr); ok && i > 0 && r.enclosingNodes[i-1] == ta.Type {
+			r.Log.Error("The selected expression cannot be extracted since it is part of the type in a type assertion.")
 			r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
 			return false
 		}
