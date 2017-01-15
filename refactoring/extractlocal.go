@@ -1,16 +1,13 @@
-// Copyright 2014 The Go Authors. All rights reserved.
+// Copyright 2014-2017 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
-
-// This file will extract the local variables from
-// statements and put them into a variable to replae
-// them in the statements.
 
 package refactoring
 
 import (
 	"go/ast"
 	"regexp"
+	"strconv"
 
 	"github.com/godoctor/godoctor/text"
 
@@ -24,75 +21,58 @@ type ExtractLocal struct {
 
 func (r *ExtractLocal) Description() *Description {
 	return &Description{
-		Name:      "Extract Local Variable Refactoring",
-		Synopsis:  "Extract a selection to a new variable",
+		Name:      "Extract Local Variable",
+		Synopsis:  "Extracts an expression, assigning it to a new variable",
 		Usage:     "<new_name>",
+		HTMLDoc:   extractLocalDoc,
 		Multifile: false,
-		Params: []Parameter{
-			// args[0] which is the string that will replace the selected text
-			Parameter{
-				Label:        "newVar name: ",
-				Prompt:       "Please select name for the new Variable.",
-				DefaultValue: "",
-			}},
+		Params: []Parameter{Parameter{
+			Label:        "Name: ",
+			Prompt:       "Enter a name for the new variable.",
+			DefaultValue: "",
+		}},
 		Hidden: false,
 	}
 }
 
-// this run function will run the program
 func (r *ExtractLocal) Run(config *Config) *Result {
 	r.RefactoringBase.Run(config)
 	r.Log.ChangeInitialErrorsToWarnings()
 	if r.Log.ContainsErrors() {
 		return &r.Result
 	}
-	// get first variable
-	// check if there was a selected node from refactoring
+	if len(config.Args) != 1 {
+		r.Log.Error(errInvalidArgs("expected one argument, got: " +
+			strconv.Itoa(len(config.Args))))
+		return &r.Result
+	}
+
+	r.varName = config.Args[0].(string)
+	if !isIdentifierValid(r.varName) {
+		r.Log.Errorf("The name \"%s\" is not a valid Go identifier",
+			r.varName)
+		return &r.Result
+	}
+
 	if r.SelectedNode == nil {
 		r.Log.Error("Please select an expression to extract.")
 		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
 		return &r.Result
 	}
-	// get second variable to choose whether single extraction
-	// or multiple extraction
-	r.sChoice(config)
-	r.selectionCheck()
-	// get third variable that will be the
-	// new variable to replace the expression
-	r.varName = config.Args[0].(string)
-	r.singleExtract()
+
+	r.doExtract()
 	r.FormatFileInEditor()
 	r.UpdateLog(config, false)
 	return &r.Result
 }
 
-// sChoice gets input for second variable
-func (r *ExtractLocal) sChoice(config *Config) *Result {
-	r.varName = config.Args[0].(string)
-	if r.varName == "" {
-		r.Log.Error("You must enter a name for the new variable.")
-		return &r.Result
-	}
-	return &r.Result
-}
-
-// selectionCheck checks if the selection is empty or not
-func (r *ExtractLocal) selectionCheck() *Result {
-	if r.SelectedNode == nil {
-		r.Log.Error("Please select an identifier to extract.")
-		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
-		return &r.Result
-	}
-	return &r.Result
-}
-
-// singleExtract locates the position of the selection and will
+// doExtract locates the position of the selection and will
 // replace it with a new variable of the user's chosing
-func (r *ExtractLocal) singleExtract() {
+func (r *ExtractLocal) doExtract() {
 	var switchList, typeSwitchFound []ast.Stmt
 	var plists, rlists, recLists []*ast.Field
 	var lhs, rhs []ast.Expr
-	var parentNode, switchNode, fini, fcond, fpost, ifInitAssign, ifElse, condition, assign ast.Node
+	var fini, fcond, fpost, parentNode, switchNode, ifInitAssign, ifElse, condition, assign ast.Node
 	found, isBranchStmt, isLabelStmt := false, false, false
 	errorType := ""
 	ast.Inspect(r.File, func(n ast.Node) bool {
@@ -712,3 +692,19 @@ func (r *ExtractLocal) errorCheck(errorType string) {
 		}
 	}
 }
+
+const extractLocalDoc = `
+  <h4>Purpose</h4>
+  <p>The Extract Local Variable refactoring creates a new variable FIXME,
+  then replaces the original expression with that variable.</p>
+
+  <h4>Usage</h4>
+  <ol class="enum">
+    <li>Select an expression in an existing statement.</li>
+    <li>Activate the Extract Local Variable refactoring.</li>
+    <li>Enter a name for the new variable that will be created.</li>
+  </ol>
+
+  <p>An error or warning will be reported if the selected expression cannot be
+  extracted into a new variable.  Usually, this occurs because FIXME.</p>
+`
