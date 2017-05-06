@@ -7,6 +7,7 @@ package dataflow
 //something something
 
 import (
+	"bytes"
 	"fmt"
 	"go/ast"
 	"go/token"
@@ -344,6 +345,7 @@ func TestExprStuff(t *testing.T) {
 	c.expectReaching(t, 7, 7, 6, 5)
 	c.expectReaching(t, 8, 7, 6, 5)
 	c.expectReaching(t, 9, 8, 7, 5)
+	c.expectUdDuSymmetry(t)
 
 	c.expectLive(t, START, "c", "nums")
 	c.expectLive(t, 1, "a", "c", "nums")
@@ -714,9 +716,8 @@ func (c *CFGWrapper) expectReaching(t *testing.T, s int, exp ...int) {
 	// get reaching for stmt s as slice, put in map
 	actualReach := make(map[ast.Stmt]struct{})
 	// TODO(reed): test outs
-	in, _ := ReachingDefs(c.cfg, c.prog.Created[0])
-	ins := in[c.exp[s]]
-	for i, _ := range ins {
+	ud, _ := ReachingDefs(c.cfg, c.prog.Created[0])
+	for i, _ := range ud[c.exp[s]] {
 		actualReach[i] = struct{}{}
 	}
 
@@ -730,6 +731,42 @@ func (c *CFGWrapper) expectReaching(t *testing.T, s int, exp ...int) {
 	for stmt, _ := range dnf {
 		t.Error("found", c.stmts[stmt], "as a reaching for", s)
 	}
+}
+
+func (c *CFGWrapper) expectUdDuSymmetry(t *testing.T) {
+	ud, du := ReachingDefs(c.cfg, c.prog.Created[0])
+	for stmt, defs := range ud {
+		for def, _ := range defs {
+			if _, found := du[def][stmt]; !found {
+				stmtN := c.stmts[stmt]
+				defN := c.stmts[def]
+				t.Errorf("ud[%d] contains %d, but du[%d] does not contain %d",
+					stmtN, defN, defN, stmtN)
+				t.Errorf("  ud[%d]: %s", stmtN, c.describe(ud[stmt]))
+				t.Errorf("  du[%d]: %s", defN, c.describe(du[def]))
+			}
+		}
+	}
+	for stmt, uses := range du {
+		for use, _ := range uses {
+			if _, found := ud[use][stmt]; !found {
+				stmtN := c.stmts[stmt]
+				useN := c.stmts[use]
+				t.Errorf("du[%d] contains %d, but ud[%d] does not contain %d",
+					stmtN, useN, useN, stmtN)
+				t.Errorf("  du[%d]: %s", stmtN, c.describe(du[stmt]))
+				t.Errorf("  ud[%d]: %s", useN, c.describe(ud[use]))
+			}
+		}
+	}
+}
+
+func (c *CFGWrapper) describe(stmts map[ast.Stmt]struct{}) string {
+	var b bytes.Buffer
+	for stmt, _ := range stmts {
+		fmt.Fprintf(&b, "%d ", c.stmts[stmt])
+	}
+	return b.String()
 }
 
 func (c *CFGWrapper) expectUses(t *testing.T, start int, end int, exp ...string) {

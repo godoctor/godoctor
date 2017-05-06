@@ -27,14 +27,14 @@ import (
 //      OUT[B] = gen[b] Union (IN[B] - kill[b]);
 //    }
 
-// ReachingDefs builds reaching definitions for a given control flow graph, returning the
-// in and out sets in a map of stmts for each block (statement).
+// ReachingDefs builds reaching definitions for a given control flow graph, returning
+// use-def and def-use information for each statement in a map.
 //
 // No nodes from the cfg.Defers list will be returned in the output of
 // this function as they are disjoint from a cfg's blocks.
 // For analyzing the statements in the cfg.Defers list, each defer
 // should be treated as though it has the same in and out sets as the cfg.Exit node.
-func ReachingDefs(cfg *cfg.CFG, info *loader.PackageInfo) (in, out map[ast.Stmt]map[ast.Stmt]struct{}) {
+func ReachingDefs(cfg *cfg.CFG, info *loader.PackageInfo) (ud, du map[ast.Stmt]map[ast.Stmt]struct{}) {
 	blocks, gen, kill := genKillBitsets(cfg, info)
 	ins, outs := reachingDefBitsets(cfg, gen, kill)
 	return reachingDefResultSets(blocks, ins, outs)
@@ -120,29 +120,27 @@ func reachingDefBitsets(cfg *cfg.CFG, gen, kill map[ast.Stmt]*bitset.BitSet) (in
 	return in, out
 }
 
-// reachingDefResultSets maps reaching definitions in and out bitsets back to their corresponding statements.
+// reachingDefResultSets maps reaching definitions in bitsets back to their corresponding statements, using
+// this information to determine use-def and def-use information.
 // blocks should be the blocks used to generate the analyses, as their indices are what will be used to map
 // bits in each bitset back to the corresponding statement.
-func reachingDefResultSets(blocks []ast.Stmt, ins, outs map[ast.Stmt]*bitset.BitSet) (in, out map[ast.Stmt]map[ast.Stmt]struct{}) {
-	in = make(map[ast.Stmt]map[ast.Stmt]struct{})
-	out = make(map[ast.Stmt]map[ast.Stmt]struct{})
+func reachingDefResultSets(blocks []ast.Stmt, ins, outs map[ast.Stmt]*bitset.BitSet) (ud, du map[ast.Stmt]map[ast.Stmt]struct{}) {
+	ud = make(map[ast.Stmt]map[ast.Stmt]struct{})
+	du = make(map[ast.Stmt]map[ast.Stmt]struct{})
 
 	// map bits from in and out sets back to corresponding blocks (with cfg.Entry)
 	for _, block := range blocks {
-		in[block] = make(map[ast.Stmt]struct{})
-		out[block] = make(map[ast.Stmt]struct{})
+		ud[block] = make(map[ast.Stmt]struct{})
+		du[block] = make(map[ast.Stmt]struct{})
+	}
 
+	for _, block := range blocks {
 		for i, ok := uint(0), true; ok; i++ {
 			if i, ok = ins[block].NextSet(i); ok {
-				in[block][blocks[i]] = struct{}{}
-			}
-		}
-
-		for i, ok := uint(0), true; ok; i++ {
-			if i, ok = outs[block].NextSet(i); ok {
-				out[block][blocks[i]] = struct{}{}
+				ud[block][blocks[i]] = struct{}{}
+				du[blocks[i]][block] = struct{}{}
 			}
 		}
 	}
-	return in, out
+	return ud, du
 }
