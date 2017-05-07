@@ -7,7 +7,8 @@ import (
 
 func main() {
 	slicer := make([]int, 10)
-	for x := 2; x < len(slicer); x++ { // <<<<< var,10,22,10,28,newVar,fail
+	newVar := slicer
+	for x := 2; x < len(newVar); x++ { // <<<<< var,10,22,10,27,newVar,pass
 		x++
 	}
 	if math.Mod(10, 5) == 0 {

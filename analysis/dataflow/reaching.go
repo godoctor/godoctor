@@ -5,11 +5,16 @@
 package dataflow
 
 import (
+	"bytes"
+	"fmt"
 	"go/ast"
+	"go/token"
 	"go/types"
+	"io"
 
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"github.com/willf/bitset"
+	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/go/loader"
 )
 
@@ -143,4 +148,50 @@ func reachingDefResultSets(blocks []ast.Stmt, ins, outs map[ast.Stmt]*bitset.Bit
 		}
 	}
 	return ud, du
+}
+
+func PrintReachingDefs(f io.Writer, fset *token.FileSet, info *loader.PackageInfo, ud map[ast.Stmt]map[ast.Stmt]struct{}) {
+	for source, reached := range ud {
+		if len(reached) > 0 {
+			fmt.Fprintf(f, "%s ->\n", printStmt(source, fset))
+			for stmt, _ := range reached {
+				varList := reachingVars(source, stmt, info)
+				if len(varList) > 0 {
+					fmt.Fprintf(f, "\t%s%s\n",
+						printStmt(stmt, fset),
+						varList)
+				}
+			}
+
+		}
+	}
+}
+
+func printStmt(stmt ast.Stmt, fset *token.FileSet) string {
+	return fmt.Sprintf("%s (line %d)",
+		astutil.NodeDescription(stmt),
+		fset.Position(stmt.Pos()).Line)
+}
+
+func reachingVars(from, to ast.Stmt, info *loader.PackageInfo) string {
+	asgt, updt, decl, _ := ReferencedVars([]ast.Stmt{from}, info)
+	_, _, _, use := ReferencedVars([]ast.Stmt{to}, info)
+
+	var b bytes.Buffer
+	for variable, _ := range asgt {
+		if _, used := use[variable]; used {
+			b.WriteString(fmt.Sprintf(" %s", variable.Name()))
+		}
+	}
+	for variable, _ := range updt {
+		if _, used := use[variable]; used {
+			b.WriteString(fmt.Sprintf(" %s", variable.Name()))
+		}
+	}
+	for variable, _ := range decl {
+		if _, used := use[variable]; used {
+			b.WriteString(fmt.Sprintf(" %s", variable.Name()))
+		}
+	}
+	return b.String()
 }

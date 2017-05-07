@@ -1,16 +1,19 @@
-// Copyright 2014-2017 The Go Authors. All rights reserved.
+// Copyright 2015-2017 Auburn University and others. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
 package refactoring
 
 import (
+	"bytes"
 	"go/ast"
 	"go/token"
 	"go/types"
 	"reflect"
 	"strconv"
 
+	"github.com/godoctor/godoctor/analysis/cfg"
+	"github.com/godoctor/godoctor/analysis/dataflow"
 	"github.com/godoctor/godoctor/text"
 )
 
@@ -69,7 +72,8 @@ func (r *ExtractLocal) Run(config *Config) *Result {
 		r.checkExprHasEnclosingStmt() &&
 		r.checkEnclosingStmtIsAllowed() &&
 		r.checkExprIsNotAssignStmtLhs() &&
-		r.checkExprIsNotInIfStmtWithInit() &&
+		r.checkEnclosingIfStmt() &&
+		r.checkEnclosingForStmt() &&
 		r.checkExprIsNotRangeStmtLhs() &&
 		r.checkExprIsNotInCaseClauseOfTypeSwitchStmt() {
 		// Now, check preconditions that are only for semantic
@@ -268,7 +272,8 @@ func (r *ExtractLocal) checkEnclosingStmtIsAllowed() bool {
 	//case *ast.EmptyStmt: impossible
 	case *ast.ExprStmt:
 		return true
-	//case *ast.ForStmt: not allowed (control flow) unless in init expr
+	case *ast.ForStmt:
+		return true
 	//case *ast.GoStmt:
 	case *ast.IfStmt:
 		return true
@@ -314,11 +319,12 @@ func (r *ExtractLocal) checkExprIsNotAssignStmtLhs() bool {
 	return true
 }
 
-// checkExprIsNotInIfStmtWithInit determines if the selected expression is in
-// the condition of an if statement (or nested else-if) with an initialization,
-// logging an error and returning false if so.
+// checkEnclosingIfStmt determines if the selected expression is in the header
+// of an if-statement (or nested else-if), and then performs a reaching
+// definitions analysis to determine if it is safe to extract the selected
+// expression, logging an error if it is not.
 //
-// There are several problems with such if statements:
+// There are several problems with if-statements:
 // (1) if x := 3; x < 5
 //     Here, the definition (and declaration) of x in the init statement
 //     reaches the condition, so an expression involving x cannot be
@@ -328,24 +334,330 @@ func (r *ExtractLocal) checkExprIsNotAssignStmtLhs() bool {
 //     ok in this context.
 // (3) if value, found := myMap[entry]
 //     Similar.
+// (4) if x := 3; x < 0 {} else if x < 5 {}
+//     The "x < 5" depends on the initialization of the parent if-statement.
 //
 // Precondition: r.enclosingStmtIndex() >= 0
-func (r *ExtractLocal) checkExprIsNotInIfStmtWithInit() bool {
-	if _, isIfStmt := r.enclosingStmt().(*ast.IfStmt); !isIfStmt {
+func (r *ExtractLocal) checkEnclosingIfStmt() bool {
+	var isInInit, isInCond bool
+	var ifStmt *ast.IfStmt
+	ifStmt, isInInit = r.isIfStmtInit()
+	if !isInInit {
+		ifStmt, isInCond = r.enclosingStmt().(*ast.IfStmt)
+		if !isInCond {
+			// Not in the header of an if-statement; OK to extract
+			return true
+		}
+	}
+
+	du := r.defUse()
+
+	if isInCond && !r.checkForReachingDefsFromIfStmtInit(ifStmt, du) {
+		return false
+	}
+
+	ifStmtIdx := r.enclosingStmtIndex()
+	if isInInit {
+		ifStmtIdx++
+	}
+	return r.checkForReachingDefsFromElseIfChain(ifStmtIdx, du)
+}
+
+// isIfStmtInit determines if the selected expression is part of an
+// if-statement's initialization, returning true or false; if it returns true,
+// the second return value is the enclosing if-statement.
+func (r *ExtractLocal) isIfStmtInit() (*ast.IfStmt, bool) {
+	index := r.enclosingStmtIndex()
+	if ifStmt, found := r.PathEnclosingSelection[index+1].(*ast.IfStmt); found {
+		return ifStmt, r.enclosingStmt() == ifStmt.Init
+	}
+	return nil, false
+}
+
+// defUse performs a reaching definitions analysis on the function enclosing
+// the selected expression, returning the result of the analysis.
+// See varsInSelectionWithReachingDefsFrom.
+func (r *ExtractLocal) defUse() map[ast.Stmt]map[ast.Stmt]struct{} {
+	cfg := cfg.FromFunc(r.enclosingFuncDecl()) // We must be in a function
+	_, defUse := dataflow.ReachingDefs(cfg, r.SelectedNodePkg)
+	// dataflow.PrintReachingDefs(os.Stderr, r.Program.Fset, r.SelectedNodePkg, du)
+	return defUse
+}
+
+// enclosingFuncDecl returns the smallest ast.FuncDecl enclosing the selection,
+// or nil if the selection is not in a function.
+func (r *ExtractLocal) enclosingFuncDecl() *ast.FuncDecl {
+	for _, node := range r.PathEnclosingSelection {
+		if funcDecl, ok := node.(*ast.FuncDecl); ok {
+			return funcDecl
+		}
+	}
+	return nil
+}
+
+// checkForReachingDefsFromIfStmtInit returns true iff a variable assignment
+// in the given if-statement's initialization statement reaches a use in its
+// condition.
+//
+// For example:
+//     if variable := 1; variable < 5 {}  // Variable cannot be extracted
+func (r *ExtractLocal) checkForReachingDefsFromIfStmtInit(ifStmt *ast.IfStmt, du map[ast.Stmt]map[ast.Stmt]struct{}) bool {
+	if ifStmt.Init == nil {
 		return true
 	}
 
-	first := r.enclosingStmtIndex()
-	last := r.findBeginningOfElseIfChain(first)
-	for i := first; i <= last; i++ {
-		if ifStmt := r.PathEnclosingSelection[i].(*ast.IfStmt); ifStmt.Init != nil {
-			r.Log.Error("Expressions cannot be extracted from an " +
-				"if statement with an initialization.")
+	vars := r.varsInSelectionWithReachingDefsFrom(ifStmt.Init, du)
+	if len(vars) > 0 {
+		r.Log.Errorf("This expression cannot be extracted "+
+			"because it uses %s assigned in the "+
+			"enclosing if-statement's initialization "+
+			"statement.", describeVars(vars))
+		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+		return false
+	}
+
+	return true
+}
+
+// reachingVarsFrom returns the set of variables assigned in "from" that are
+// used in the selected expression
+func (r *ExtractLocal) varsInSelectionWithReachingDefsFrom(from ast.Stmt, defUse map[ast.Stmt]map[ast.Stmt]struct{}) map[*types.Var]struct{} {
+	result := map[*types.Var]struct{}{}
+
+	if _, found := defUse[from][r.enclosingStmt()]; !found {
+		return result
+	}
+
+	asgt, updt, decl, _ := dataflow.ReferencedVars([]ast.Stmt{from},
+		r.SelectedNodePkg)
+	use := dataflow.Vars(r.SelectedNode.(ast.Expr), r.SelectedNodePkg)
+
+	for variable, _ := range asgt {
+		if _, used := use[variable]; used {
+			result[variable] = struct{}{}
+		}
+	}
+	for variable, _ := range updt {
+		if _, used := use[variable]; used {
+			result[variable] = struct{}{}
+		}
+	}
+	for variable, _ := range decl {
+		if _, used := use[variable]; used {
+			result[variable] = struct{}{}
+		}
+	}
+	return result
+}
+
+// describeVars receives a set of variables (e.g., x, y, and z) and returns
+// the string "the variables x, y, and z" (for use in an error message)
+func describeVars(vars map[*types.Var]struct{}) string {
+	names := []string{}
+	for variable, _ := range vars {
+		names = append(names, variable.Name())
+	}
+
+	var b bytes.Buffer
+	b.WriteString("the variable")
+	if len(vars) > 1 {
+		b.WriteString("s")
+	}
+
+	for i := 0; i < len(names); i++ {
+		if i == 0 {
+			b.WriteString(" ")
+		} else if i < len(names)-1 {
+			b.WriteString(", ")
+		} else {
+			b.WriteString(", and ")
+		}
+		b.WriteString(names[i])
+	}
+	return b.String()
+}
+
+// checkForReachingDefsFromElseIfChain determines if the selected expression
+// occurs in an if-statement that is the "else if" clause of another
+// if-statement.  If it is, it follows the chain of else-if's upward to the
+// initial if-statement.  If any of those if-statements define a variable that
+// is used in the extracted expression, it raises an error.
+//
+// The extracted variable will be inserted above the first statement in the
+// else-if chain, so it must not depend on any variables assigned in those
+// statements.
+//
+// For example:
+//     if a := 1; false {
+//     } else if b := 2; false {
+//     } else if c := 3; a + b == c {  // a + b cannot be extracted because
+//                                     // the extracted variable assignment
+//                                     // will be inserted before the outermost
+//                                     // if-statement
+//     }
+//
+// Precondition: The selected expression occurs in either the initialization
+// statement or the condition of an if-statement.
+//
+// The ifStmtIdx argument is the index in r.PathEnclosingSelection of the
+// nearest IfStmt node enclosing the selected expression.
+func (r *ExtractLocal) checkForReachingDefsFromElseIfChain(ifStmtIdx int, du map[ast.Stmt]map[ast.Stmt]struct{}) bool {
+	// Find the index of the beginning of the else-if chain
+	last := r.findBeginningOfElseIfChain(ifStmtIdx)
+
+	// Skip the nearest enclosing if-statement; we have already checked for
+	// definitions reaching its condition from its initialization.
+
+	// Start from the next if-statement: we are its else-if statement.
+	// Work upward to successive enclosing if-statements, checking for
+	// definitions that reach the selected expression.
+	for i := ifStmtIdx + 1; i <= last; i++ {
+		ifStmt := r.PathEnclosingSelection[i].(*ast.IfStmt)
+		vars := r.varsInSelectionWithReachingDefsFrom(ifStmt.Init, du)
+		if len(vars) > 0 {
+			line := r.Program.Fset.Position(ifStmt.Pos()).Line
+			r.Log.Errorf("This expression cannot be extracted "+
+				"because it uses %s assigned in the enclosing "+
+				"if-statement on line %d.",
+				describeVars(vars), line)
 			r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
 			return false
 		}
 	}
 	return true
+}
+
+// checkEnclosingForStmt determines if the selected expression is in the header
+// of a for-statement, and then performs a reaching definitions analysis to
+// determine if it is safe to extract the selected expression, logging an error
+// if it is not.
+//
+// There are several problems with if-statements:
+// (1) for i = 0; i < x; i++ {}
+//     The variable i cannot be extracted from the condition because it depends
+//     on the definition (assignment) in the initialization.  However, the
+//     variable x can be extracted.
+// (2) for i = 0; i < x; i++ { x-- }
+//     Here, the variable x cannot be extracted from the condition because it
+//     is assigned in the body of the loop.
+//
+// Precondition: r.enclosingStmtIndex() >= 0
+func (r *ExtractLocal) checkEnclosingForStmt() bool {
+	var isInInit, isInCond, isInPost bool
+	var enclosingForStmt *ast.ForStmt
+	enclosingForStmt, isInInit = r.isForStmtInit()
+	if !isInInit {
+		enclosingForStmt, isInCond = r.enclosingStmt().(*ast.ForStmt)
+		if !isInCond {
+			enclosingForStmt, isInPost = r.isForStmtPost()
+			if !isInPost {
+				return true
+			}
+		}
+	}
+
+	if isInInit {
+		return true
+	}
+
+	if isInPost {
+		r.Log.Error("Expressions cannot be extracted from a " +
+			"for-statement's post-iteration statement.")
+		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+		return false
+	}
+
+	return r.checkForStmtReachingDefs(enclosingForStmt)
+}
+
+// isForStmtInit determines if the selected expression is part of a
+// for-statement's initialization statement, returning true or false; if it
+// returns true, the second return value is the enclosing for-statement.
+func (r *ExtractLocal) isForStmtInit() (*ast.ForStmt, bool) {
+	index := r.enclosingStmtIndex()
+	if forStmt, found := r.PathEnclosingSelection[index+1].(*ast.ForStmt); found {
+		return forStmt, r.enclosingStmt() == forStmt.Init
+	}
+	return nil, false
+}
+
+// isForStmtPost determines if the selected expression is part of a
+// for-statement's post-iteration statement, returning true or false; if it
+// returns true, the second return value is the enclosing for-statement.
+func (r *ExtractLocal) isForStmtPost() (*ast.ForStmt, bool) {
+	index := r.enclosingStmtIndex()
+	if forStmt, found := r.PathEnclosingSelection[index+1].(*ast.ForStmt); found {
+		return forStmt, r.enclosingStmt() == forStmt.Post
+	}
+	return nil, false
+}
+
+// checkForStmtReachingDefs finishes the precondition checking from
+// checkEnclosingForStmt, performing a reaching definitions analysis to
+// identify variable assignments in the given for-loop that may make it
+// illegal to extract the selected expression.
+//
+// Precondition: The selected expression is a subexpression of the given
+// for-loop's condition expression.
+func (r *ExtractLocal) checkForStmtReachingDefs(enclosingForStmt *ast.ForStmt) bool {
+	defUse := r.defUse()
+
+	if enclosingForStmt.Init != nil {
+		vars := r.varsInSelectionWithReachingDefsFrom(
+			enclosingForStmt.Init, defUse)
+		if len(vars) > 0 {
+			r.Log.Errorf("This expression cannot be extracted "+
+				"because it uses %s assigned in the "+
+				"enclosing for-statement's initialization "+
+				"statement.", describeVars(vars))
+			r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+			return false
+		}
+	}
+
+	if enclosingForStmt.Post != nil {
+		vars := r.varsInSelectionWithReachingDefsFrom(
+			enclosingForStmt.Post, defUse)
+		if len(vars) > 0 {
+			r.Log.Errorf("This expression cannot be extracted "+
+				"because it uses %s assigned in the "+
+				"for-statement's post-iteration statement.",
+				describeVars(vars))
+			r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+			return false
+		}
+	}
+
+	errorVars := r.findDefsInBodyReachingSelection(enclosingForStmt, defUse)
+	if len(errorVars) > 0 {
+		r.Log.Errorf("This expression cannot be extracted because "+
+			"it uses %s assigned in the body of the for-loop.",
+			describeVars(errorVars))
+		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
+		return false
+	}
+
+	return true
+}
+
+// findDefsInBodyReachingSelection returns a list of variables that are
+// assigned in the body of the given for-loop, where those assignments reach
+// uses in the selected expression,
+//
+// Precondition: The selected expression is a subexpression of the given
+// for-loop's condition expression.
+func (r *ExtractLocal) findDefsInBodyReachingSelection(enclosingForStmt *ast.ForStmt, defUse map[ast.Stmt]map[ast.Stmt]struct{}) map[*types.Var]struct{} {
+	result := map[*types.Var]struct{}{}
+	ast.Inspect(enclosingForStmt.Body, func(n ast.Node) bool {
+		if stmt, ok := n.(ast.Stmt); ok {
+			vars := r.varsInSelectionWithReachingDefsFrom(stmt, defUse)
+			for variable, _ := range vars {
+				result[variable] = struct{}{}
+			}
+		}
+		return true
+	})
+	return result
 }
 
 // checkExprIsNotRangeStmtLhs determines if the selected node is either the key
@@ -402,14 +714,16 @@ func (r *ExtractLocal) checkForNameConflict() bool {
 
 	existingObj := scope.Lookup(r.varName)
 	if existingObj != nil {
-		r.Log.Errorf("If a variable named %s is introduced, it will conflict with an existing declaration.", r.varName)
+		r.Log.Errorf("If a variable named %s is introduced, it will "+
+			"conflict with an existing declaration.", r.varName)
 		r.Log.AssociatePos(existingObj.Pos(), existingObj.Pos())
 		return false
 	}
 
 	_, existingObj = scope.LookupParent(r.varName, r.SelectedNode.Pos())
 	if existingObj != nil {
-		r.Log.Errorf("If a variable named %s is introduced, it will shadow an existing declaration.", r.varName)
+		r.Log.Errorf("If a variable named %s is introduced, it will "+
+			"shadow an existing declaration.", r.varName)
 		r.Log.AssociatePos(existingObj.Pos(), existingObj.Pos())
 		return false
 	}
@@ -433,7 +747,7 @@ func (r *ExtractLocal) scopeEnclosingSelection() *types.Scope {
 //
 // Often, this is just the statement enclosing the selected node.  However,
 // when the enclosing statement is a case clause of a switch statment, or when
-// it is an if statement that serves as the else-if of another if statement,
+// it is an if-statement that serves as the else-if of another if-statement,
 // the assignment must be inserted earlier.
 //
 // Precondition: r.enclosingStmtIndex() >= 0
@@ -449,6 +763,19 @@ func (r *ExtractLocal) findStmtToInsertBefore() ast.Stmt {
 		return r.PathEnclosingSelection[idx].(ast.Stmt)
 
 	default:
+		if _, isInit := r.isIfStmtInit(); isInit {
+			idx := r.findBeginningOfElseIfChain(
+				r.enclosingStmtIndex() + 1)
+			return r.PathEnclosingSelection[idx].(ast.Stmt)
+		}
+
+		if enclosingFor, isInit := r.isForStmtInit(); isInit {
+			return enclosingFor
+		}
+		if enclosingFor, isPost := r.isForStmtPost(); isPost {
+			return enclosingFor
+		}
+
 		return r.enclosingStmt().(ast.Stmt)
 	}
 }
@@ -458,12 +785,12 @@ func (r *ExtractLocal) findStmtToInsertBefore() ast.Stmt {
 // *ast.IfStmt entries to find the outermost enclosing *ast.IfStmt for which
 // all the previous entries were else-if statements.
 //
-// When an if statement appears as an "else if", possibly deeply nested, this
-// finds the outermost if statement.  The assignment to the extracted variable
-// should be placed before the outermost if statement.
+// When an if-statement appears as an "else if", possibly deeply nested, this
+// finds the outermost if-statement.  The assignment to the extracted variable
+// should be placed before the outermost if-statement.
 //
 // As the following example shows, this traces else-if chains upward.
-// This is not the same as finding the outermost enclosing if statement.
+// This is not the same as finding the outermost enclosing if-statement.
 //
 //     if (v) {                 // The beginning of the else-if chain is NOT v;
 //         if (w) {             // it is w...
