@@ -1,4 +1,4 @@
-// Copyright 2015 Auburn University. All rights reserved.
+// Copyright 2015-2017 Auburn University. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -111,7 +111,7 @@ package as the scope.
 ==============================================================================
 4. License                                                  *godoctor-license*
 
-Copyright 2015, Auburn University.  All rights reserved.
+Copyright Auburn University and others.  All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:

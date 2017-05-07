@@ -846,10 +846,50 @@ const extractLocalDoc = `
   <h4>Usage</h4>
   <ol class="enum">
     <li>Select an expression in an existing statement.</li>
-    <li>Activate the Introduce Local Variable refactoring.</li>
+    <li>Activate the Extract Local Variable refactoring.</li>
     <li>Enter a name for the new variable that will be created.</li>
   </ol>
 
   <p>An error or warning will be reported if the selected expression cannot be
-  extracted into a variable assignment.</p>
+  extracted into a variable assignment.  For example, this could occur if the
+  extracted expression is in a loop condition but its value may change on each
+  iteration of the loop, or if the extracted variable's name is the same as the
+  name of an existing variable.</p>
+
+  <h4>Example</h4>
+  <p>The example below demonstrates the effect of extracting the highlighted
+  expression into a new local variable <tt>sum</tt>.</p>
+  <table cellspacing="5" cellpadding="15" style="border: 0;">
+    <tr>
+      <th>Before</th><th>&nbsp;</th><th>After</th>
+    </tr>
+    <tr>
+      <td class="dotted">
+        <pre>package main
+import "fmt"
+
+func main() {
+    y := 2
+    z := 3
+    if x := 5; x == <span class="highlight">y + z</span> {
+        fmt.Println(x)
+    }
+}</pre>
+      </td>
+      <td>&nbsp;&nbsp;&nbsp;&nbsp;&rArr;&nbsp&nbsp;&nbsp;&nbsp;</td>
+      <td class="dotted">
+        <pre>package main
+import "fmt"
+
+func main() {
+    y := 2
+    z := 3
+    <span class="highlight">sum := y + z</span>
+    if x := 5; x == <span class="highlight">sum</span> {
+        fmt.Println(x)
+    }
+}</pre>
+      </td>
+    </tr>
+  </table>
 `

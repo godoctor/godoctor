@@ -1,4 +1,4 @@
-// Copyright 2015 Auburn University. All rights reserved.
+// Copyright 2015-2017 Auburn University. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -263,7 +263,6 @@ const userGuide = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "htt
                     <h2>Getting Started</h2>
                     <ul class="toc2">
                       <li><a onClick="show('starting');" href="#starting">Getting Started</a></li>
-                      <li><a onClick="show('mailing-list');" href="#mailing-list">Joining the Mailing List</a></li>
                       <li><a onClick="show('documentation');" href="#documentation">Online Documentation</a></li>
                       <li><a onClick="show('offline');" href="#offline">Installing Local Documentation</a></li>
                     </ul>
@@ -315,17 +314,6 @@ const userGuide = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "htt
   illustrating typical invocations.</p>
   <p>Later parts of this user manual contain detailed information on each of
   the refactorings supported by the Go Doctor.</p>
-</div>
-<a name="mailing-list"></a>
-<h3>Joining the Mailing List</h3>
-<div id="mailing-list-click" class="clicktoshow">
-  <a href="#mailing-list" onClick="show('mailing-list');">Show&nbsp;&raquo;</a>
-</div>
-<div id="mailing-list" class="showable">
-  <p>If you get stuck, please join the <a target="_blank"
-  href="http://mailman.eng.auburn.edu/cgi-bin/mailman/listinfo/go-refactoring">go-refactoring
-  mailing list</a>.  Other users on the list might be able to help you.
-  Updates to the Go Doctor will also be announced on the mailing list.</li>
 </div>
 <a name="documentation"></a>
 <h3>Online Documentation</h3>
@@ -423,7 +411,7 @@ const userGuide = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "htt
   <a href="#license" onClick="show('license');">Show&nbsp;&raquo;</a>
 </div>
 <div id="license" class="showable">
-  <p>Copyright &copy; 2015, Auburn University.  All rights reserved.</p>
+  <p>Copyright &copy; Auburn University and others.  All rights reserved.</p>
   <p>Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:</p>
   <p>1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.</p>
   <p>2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.</p>
