@@ -1,13 +1,13 @@
-Tue Sep 27 20:42:22 EDT 2016
+Sun May  7 17:22:22 EDT 2017
 
 ./golang.org/x/tools
 origin	https://github.com/golang/tools.git (fetch)
-fc2b74b64ef08c618146ebc92062f6499db5314c  (HEAD, origin/master, origin/HEAD, master) refactor/rename: don't stop because of "soft" errors
+9862c35773a14ca029b7da49c410111ba13830a0  (HEAD, origin/master, origin/HEAD, master) go/gcexportdata: fix unnecessary plural type definitions of arg
 
 ./github.com/cheggaaa/pb
 origin	https://github.com/cheggaaa/pb.git (fetch)
-ad4efe000aa550bb54918c06ebbadc0ff17687b9  (HEAD, origin/master, origin/HEAD, master) Merge pull request #84 from jun06t/time
+b65a1501e5c5bc2d1c1a062cbf7bcbfac2510177  (HEAD, tag: v1.0.14, origin/master, origin/HEAD, master) 1.0.14
 
 ./github.com/willf/bitset
 origin	https://github.com/willf/bitset.git (fetch)
-24b253213c7bdcdd6cde7d6c73760eb16d98551c  (HEAD, origin/master, origin/HEAD, master) Merge pull request #45 from lemire/master
+988f4f24992fc745de53c42df0da6581e42a6686  (HEAD, tag: v1.1.2, origin/master, origin/HEAD, master) revise README to give correct example
