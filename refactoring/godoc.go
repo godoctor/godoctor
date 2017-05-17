@@ -9,6 +9,7 @@ package refactoring
 
 import (
 	"go/ast"
+	"go/token"
 
 	"github.com/godoctor/godoctor/text"
 )
@@ -93,17 +94,72 @@ func (r *AddGoDoc) addComments() {
 			if ast.IsExported(decl.Name.Name) && decl.Doc == nil {
 				r.addComment(decl, decl.Name.Name) //, 1)
 			}
-		case *ast.GenDecl: // types (including structs/interfaces)
-			for _, spec := range decl.Specs {
-				if spec, ok := spec.(*ast.TypeSpec); ok {
-					if ast.IsExported(spec.Name.Name) && spec.Doc == nil {
-						if decl.Lparen.IsValid() {
-							r.addComment(spec, spec.Name.Name) //, 2)
-						} else {
-							r.addComment(decl, spec.Name.Name) //, 1)
+		case *ast.GenDecl: // type and value declarations
+			// we want to try and be consistent with user commenting style,
+			// so we want to detect if they're commenting individual specs for groups or not.
+			switch decl.Tok {
+			case token.CONST:
+				fallthrough
+			case token.VAR:
+				if decl.Lparen.IsValid() && decl.Doc == nil {
+					s := make(map[string]*ast.ValueSpec)
+					addDeclComment := true
+					for _, spec := range decl.Specs {
+						spec := spec.(*ast.ValueSpec)
+						name := spec.Names[0].Name
+						if ast.IsExported(name) {
+							if spec.Doc == nil {
+								s[name] = spec
+							} else {
+								// they're commenting individual specs, we should too
+								addDeclComment = false
+							}
 						}
 					}
+					if addDeclComment && len(s) > 0 {
+						r.addComment(decl, "")
+					} else {
+						for name, spec := range s {
+							r.addComment(spec, name)
+						}
+					}
+				} else {
+					spec := decl.Specs[0].(*ast.ValueSpec)
+					if ast.IsExported(spec.Names[0].Name) && decl.Doc == nil {
+						r.addComment(decl, spec.Names[0].Name)
+					}
 				}
+			case token.TYPE:
+				if decl.Lparen.IsValid() && decl.Doc == nil {
+					s := make(map[string]*ast.TypeSpec)
+					addDeclComment := true
+					for _, spec := range decl.Specs {
+						spec := spec.(*ast.TypeSpec)
+						name := spec.Name.Name
+						if ast.IsExported(name) {
+							if spec.Doc == nil {
+								s[name] = spec
+							} else {
+								// they're commenting individual specs, we should too
+								addDeclComment = false
+							}
+						}
+					}
+					if addDeclComment && len(s) > 0 {
+						r.addComment(decl, "")
+					} else {
+						for name, spec := range s {
+							r.addComment(spec, name)
+						}
+					}
+				} else {
+					spec := decl.Specs[0].(*ast.TypeSpec)
+					if ast.IsExported(spec.Name.Name) && decl.Doc == nil {
+						r.addComment(decl, spec.Name.Name)
+					}
+				}
+			default:
+				continue
 			}
 		}
 	}

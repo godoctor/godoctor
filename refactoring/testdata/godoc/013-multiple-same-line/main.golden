@@ -1,13 +1,11 @@
 package main // <<<<< godoc,1,1,1,1,pass
 
+//  TODO: NEEDS COMMENT INFO
 type (
 	a int
-	// B TODO: NEEDS COMMENT INFO
 	B int
 	c int
-	// D TODO: NEEDS COMMENT INFO
 	D int
-	// E TODO: NEEDS COMMENT INFO
 	E struct{}
 )
 
