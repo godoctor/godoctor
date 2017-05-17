@@ -2,8 +2,6 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build go1.6
-
 // Binary package export.
 // This file was derived from $GOROOT/src/cmd/compile/internal/gc/bexport.go;
 // see that file for specification of the format.
@@ -41,7 +39,12 @@ const debugFormat = false // default: false
 const trace = false // default: false
 
 // Current export format version. Increase with each format change.
-const exportVersion = 1
+// 4: type name objects support type aliases, uses aliasTag
+// 3: Go1.8 encoding (same as version 2, aliasTag defined but never used)
+// 2: removed unused bool in ODCL export (compiler only)
+// 1: header format change (more regular), export package for _ struct fields
+// 0: Go1.7 encoding
+const exportVersion = 4
 
 // trackAllTypes enables cycle tracking for all types, not just named
 // types. The existing compiler invariants assume that unnamed types
@@ -182,7 +185,13 @@ func (p *exporter) obj(obj types.Object) {
 		p.value(obj.Val())
 
 	case *types.TypeName:
-		p.tag(typeTag)
+		if isAlias(obj) {
+			p.tag(aliasTag)
+			p.pos(obj)
+			p.qualifiedName(obj)
+		} else {
+			p.tag(typeTag)
+		}
 		p.typ(obj.Type())
 
 	case *types.Var:
@@ -457,25 +466,42 @@ func (p *exporter) method(m *types.Func) {
 	p.paramList(sig.Results(), false)
 }
 
-// fieldName is like qualifiedName but it doesn't record the package for exported names.
 func (p *exporter) fieldName(f *types.Var) {
 	name := f.Name()
 
-	// anonymous field with unexported base type name: use "?" as field name
-	// (bname != "" per spec, but we are conservative in case of errors)
 	if f.Anonymous() {
-		base := f.Type()
-		if ptr, ok := base.(*types.Pointer); ok {
-			base = ptr.Elem()
-		}
-		if named, ok := base.(*types.Named); ok && !named.Obj().Exported() {
-			// anonymous field with unexported base type name
-			name = "?" // unexported name to force export of package
+		// anonymous field - we distinguish between 3 cases:
+		// 1) field name matches base type name and is exported
+		// 2) field name matches base type name and is not exported
+		// 3) field name doesn't match base type name (alias name)
+		bname := basetypeName(f.Type())
+		if name == bname {
+			if ast.IsExported(name) {
+				name = "" // 1) we don't need to know the field name or package
+			} else {
+				name = "?" // 2) use unexported name "?" to force package export
+			}
+		} else {
+			// 3) indicate alias and export name as is
+			// (this requires an extra "@" but this is a rare case)
+			p.string("@")
 		}
 	}
+
 	p.string(name)
-	if !f.Exported() {
+	if name != "" && !ast.IsExported(name) {
 		p.pkg(f.Pkg(), false)
+	}
+}
+
+func basetypeName(typ types.Type) string {
+	switch typ := deref(typ).(type) {
+	case *types.Basic:
+		return typ.Name()
+	case *types.Named:
+		return typ.Obj().Name()
+	default:
+		return "" // unnamed type
 	}
 }
 
@@ -744,7 +770,7 @@ func (p *exporter) rawByte(b byte) {
 // tracef is like fmt.Printf but it rewrites the format string
 // to take care of indentation.
 func (p *exporter) tracef(format string, args ...interface{}) {
-	if strings.IndexAny(format, "<>\n") >= 0 {
+	if strings.ContainsAny(format, "<>\n") {
 		var buf bytes.Buffer
 		for i := 0; i < len(format); i++ {
 			// no need to deal with runes
@@ -772,10 +798,10 @@ func (p *exporter) tracef(format string, args ...interface{}) {
 // Debugging support.
 // (tagString is only used when tracing is enabled)
 var tagString = [...]string{
-	// Packages:
+	// Packages
 	-packageTag: "package",
 
-	// Types:
+	// Types
 	-namedTag:     "named type",
 	-arrayTag:     "array",
 	-sliceTag:     "slice",
@@ -787,7 +813,7 @@ var tagString = [...]string{
 	-mapTag:       "map",
 	-chanTag:      "chan",
 
-	// Values:
+	// Values
 	-falseTag:    "false",
 	-trueTag:     "true",
 	-int64Tag:    "int64",
@@ -796,4 +822,7 @@ var tagString = [...]string{
 	-complexTag:  "complex",
 	-stringTag:   "string",
 	-unknownTag:  "unknown",
+
+	// Type aliases
+	-aliasTag: "alias",
 }

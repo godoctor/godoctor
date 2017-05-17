@@ -269,3 +269,12 @@ func union(one, two map[*ast.Ident]struct{}) map[*ast.Ident]struct{} {
 	}
 	return two
 }
+
+// Vars returns the set of variables appearing in node
+func Vars(node ast.Node, info *loader.PackageInfo) map[*types.Var]struct{} {
+	result := map[*types.Var]struct{}{}
+	for _, variable := range collectVars(idents(node), info) {
+		result[variable] = struct{}{}
+	}
+	return result
+}

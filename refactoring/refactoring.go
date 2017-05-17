@@ -184,7 +184,7 @@ type RefactoringBase struct {
 	SelectionStart token.Pos
 	// The position immediately following the user's selection
 	SelectionEnd token.Pos
-	// AST nodes from the root to SelectedNode (from PathEnclosingInterval)
+	// AST nodes from SelectedNode to the root (from PathEnclosingInterval)
 	PathEnclosingSelection []ast.Node
 	// Whether the user's selection exactly encloses the SelectedNode (from
 	// PathEnclosingInterval)
