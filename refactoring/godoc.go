@@ -98,68 +98,10 @@ func (r *AddGoDoc) addComments() {
 			// we want to try and be consistent with user commenting style,
 			// so we want to detect if they're commenting individual specs for groups or not.
 			switch decl.Tok {
-			case token.CONST:
-				fallthrough
-			case token.VAR:
-				if decl.Lparen.IsValid() && decl.Doc == nil {
-					s := make(map[string]*ast.ValueSpec)
-					addDeclComment := true
-					for _, spec := range decl.Specs {
-						spec := spec.(*ast.ValueSpec)
-						name := spec.Names[0].Name
-						if ast.IsExported(name) {
-							if spec.Doc == nil {
-								s[name] = spec
-							} else {
-								// they're commenting individual specs, we should too
-								addDeclComment = false
-							}
-						}
-					}
-					if addDeclComment && len(s) > 0 {
-						r.addComment(decl, "")
-					} else {
-						for name, spec := range s {
-							r.addComment(spec, name)
-						}
-					}
-				} else {
-					spec := decl.Specs[0].(*ast.ValueSpec)
-					if ast.IsExported(spec.Names[0].Name) && decl.Doc == nil {
-						r.addComment(decl, spec.Names[0].Name)
-					}
-				}
-			case token.TYPE:
-				if decl.Lparen.IsValid() && decl.Doc == nil {
-					s := make(map[string]*ast.TypeSpec)
-					addDeclComment := true
-					for _, spec := range decl.Specs {
-						spec := spec.(*ast.TypeSpec)
-						name := spec.Name.Name
-						if ast.IsExported(name) {
-							if spec.Doc == nil {
-								s[name] = spec
-							} else {
-								// they're commenting individual specs, we should too
-								addDeclComment = false
-							}
-						}
-					}
-					if addDeclComment && len(s) > 0 {
-						r.addComment(decl, "")
-					} else {
-						for name, spec := range s {
-							r.addComment(spec, name)
-						}
-					}
-				} else {
-					spec := decl.Specs[0].(*ast.TypeSpec)
-					if ast.IsExported(spec.Name.Name) && decl.Doc == nil {
-						r.addComment(decl, spec.Name.Name)
-					}
-				}
-			default:
+			case token.IMPORT:
 				continue
+			default: // CONST, TYPE, or VAR
+				r.addCommentToGenDecl(decl)
 			}
 		}
 	}
@@ -167,14 +109,81 @@ func (r *AddGoDoc) addComments() {
 
 // addComment inserts the given comment string immediately before the given
 // declaration
-func (r *AddGoDoc) addComment(decl ast.Node, comment string) { //, count int) {
-	//if count == 1 {
+func (r *AddGoDoc) addComment(decl ast.Node, comment string) {
 	comment = "// " + comment + " TODO: NEEDS COMMENT INFO\n"
-	//} else if count == 2 {
-	//	comment = "\n// " + comment + " TODO: NEEDS COMMENT INFO\n"
-	//}
 	insertOffset := r.base.Program.Fset.Position(decl.Pos()).Offset
 	r.base.Edits[r.base.Filename].Add(&text.Extent{insertOffset, 0}, comment)
+}
+
+// addCommentToGenDecl adds doc comments to a GenDecl (var, type, or const).
+// A GenDecl can have a doc comment of its own, or if it contains several
+// declarations, each one can have its own doc comment.  If the user has
+// already commented at least one individual declaration, we comment the rest;
+// if not, we add a comment for the GenDecl as a whole.
+func (r *AddGoDoc) addCommentToGenDecl(decl *ast.GenDecl) {
+	if decl.Doc != nil {
+		return
+	}
+
+	if decl.Lparen.IsValid() {
+		// Multiple declarations
+		commentIndividualSpecs, s := r.collectSpecsWithoutDoc(decl)
+		if commentIndividualSpecs {
+			for name, spec := range s {
+				r.addComment(spec, name)
+			}
+		} else {
+			r.addComment(decl, "")
+		}
+	} else {
+		// Only one declaration
+		name := getName(decl.Specs[0])
+		if ast.IsExported(name) && decl.Doc == nil {
+			r.addComment(decl, name)
+		}
+	}
+}
+
+// collectSpecsWithoutDoc returns (1) a Boolean value indicating whether at
+// least one spec has a doc comment, and (2) a map from names to ast.Spec nodes
+// indicating those specs that do not have doc comments
+func (r *AddGoDoc) collectSpecsWithoutDoc(decl *ast.GenDecl) (bool, map[string]ast.Spec) {
+	commentIndividualSpecs := false
+	specs := make(map[string]ast.Spec)
+	for _, spec := range decl.Specs {
+		name := getName(spec)
+		if ast.IsExported(name) {
+			if !hasDoc(spec) {
+				specs[name] = spec
+			} else {
+				// They're commenting individual specs; we should too
+				commentIndividualSpecs = true
+			}
+		}
+	}
+	return commentIndividualSpecs, specs
+}
+
+func getName(spec ast.Spec) string {
+	switch s := spec.(type) {
+	case *ast.ValueSpec:
+		return s.Names[0].Name
+	case *ast.TypeSpec:
+		return s.Name.Name
+	default:
+		panic("Unexpected spec type")
+	}
+}
+
+func hasDoc(spec ast.Spec) bool {
+	switch s := spec.(type) {
+	case *ast.ValueSpec:
+		return s.Doc != nil
+	case *ast.TypeSpec:
+		return s.Doc != nil
+	default:
+		panic("Unexpected spec type")
+	}
 }
 
 const godocDoc = `
