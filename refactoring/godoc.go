@@ -95,8 +95,6 @@ func (r *AddGoDoc) addComments() {
 				r.addComment(decl, decl.Name.Name) //, 1)
 			}
 		case *ast.GenDecl: // type and value declarations
-			// we want to try and be consistent with user commenting style,
-			// so we want to detect if they're commenting individual specs for groups or not.
 			switch decl.Tok {
 			case token.IMPORT:
 				continue
@@ -116,10 +114,12 @@ func (r *AddGoDoc) addComment(decl ast.Node, comment string) {
 }
 
 // addCommentToGenDecl adds doc comments to a GenDecl (var, type, or const).
+//
 // A GenDecl can have a doc comment of its own, or if it contains several
 // declarations, each one can have its own doc comment.  If the user has
-// already commented at least one individual declaration, we comment the rest;
-// if not, we add a comment for the GenDecl as a whole.
+// already commented at least one individual declaration, we comment the rest
+// to be consistent with their style; if not, we add a comment for the GenDecl
+// as a whole, to avoid being too obtrusive.
 func (r *AddGoDoc) addCommentToGenDecl(decl *ast.GenDecl) {
 	if decl.Doc != nil {
 		return
