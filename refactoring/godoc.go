@@ -249,4 +249,12 @@ type Rectangle struct {
       </td>
     </tr>
   </table>
+
+  <h4>Limitations</h4>
+  <ul>
+    <li>When a single declaration contains non-exported declarations
+        followed by exported declarations (e.g.,
+        <tt>var x, Y int</tt>), a documentation comment will not be
+        added.</li>
+  </ul>
 `
