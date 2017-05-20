@@ -9,6 +9,7 @@ package refactoring
 
 import (
 	"go/ast"
+	"go/token"
 
 	"github.com/godoctor/godoctor/text"
 )
@@ -93,17 +94,12 @@ func (r *AddGoDoc) addComments() {
 			if ast.IsExported(decl.Name.Name) && decl.Doc == nil {
 				r.addComment(decl, decl.Name.Name) //, 1)
 			}
-		case *ast.GenDecl: // types (including structs/interfaces)
-			for _, spec := range decl.Specs {
-				if spec, ok := spec.(*ast.TypeSpec); ok {
-					if ast.IsExported(spec.Name.Name) && spec.Doc == nil {
-						if decl.Lparen.IsValid() {
-							r.addComment(spec, spec.Name.Name) //, 2)
-						} else {
-							r.addComment(decl, spec.Name.Name) //, 1)
-						}
-					}
-				}
+		case *ast.GenDecl: // type and value declarations
+			switch decl.Tok {
+			case token.IMPORT:
+				continue
+			default: // CONST, TYPE, or VAR
+				r.addCommentToGenDecl(decl)
 			}
 		}
 	}
@@ -111,14 +107,83 @@ func (r *AddGoDoc) addComments() {
 
 // addComment inserts the given comment string immediately before the given
 // declaration
-func (r *AddGoDoc) addComment(decl ast.Node, comment string) { //, count int) {
-	//if count == 1 {
+func (r *AddGoDoc) addComment(decl ast.Node, comment string) {
 	comment = "// " + comment + " TODO: NEEDS COMMENT INFO\n"
-	//} else if count == 2 {
-	//	comment = "\n// " + comment + " TODO: NEEDS COMMENT INFO\n"
-	//}
 	insertOffset := r.base.Program.Fset.Position(decl.Pos()).Offset
 	r.base.Edits[r.base.Filename].Add(&text.Extent{insertOffset, 0}, comment)
+}
+
+// addCommentToGenDecl adds doc comments to a GenDecl (var, type, or const).
+//
+// A GenDecl can have a doc comment of its own, or if it contains several
+// declarations, each one can have its own doc comment.  If the user has
+// already commented at least one individual declaration, we comment the rest
+// to be consistent with their style; if not, we add a comment for the GenDecl
+// as a whole, to avoid being too obtrusive.
+func (r *AddGoDoc) addCommentToGenDecl(decl *ast.GenDecl) {
+	if decl.Doc != nil {
+		return
+	}
+
+	if decl.Lparen.IsValid() {
+		// Multiple declarations
+		commentIndividualSpecs, s := r.collectSpecsWithoutDoc(decl)
+		if commentIndividualSpecs {
+			for name, spec := range s {
+				r.addComment(spec, name)
+			}
+		} else {
+			r.addComment(decl, "")
+		}
+	} else {
+		// Only one declaration
+		name := getName(decl.Specs[0])
+		if ast.IsExported(name) && decl.Doc == nil {
+			r.addComment(decl, name)
+		}
+	}
+}
+
+// collectSpecsWithoutDoc returns (1) a Boolean value indicating whether at
+// least one spec has a doc comment, and (2) a map from names to ast.Spec nodes
+// indicating those specs that do not have doc comments
+func (r *AddGoDoc) collectSpecsWithoutDoc(decl *ast.GenDecl) (bool, map[string]ast.Spec) {
+	commentIndividualSpecs := false
+	specs := make(map[string]ast.Spec)
+	for _, spec := range decl.Specs {
+		name := getName(spec)
+		if ast.IsExported(name) {
+			if !hasDoc(spec) {
+				specs[name] = spec
+			} else {
+				// They're commenting individual specs; we should too
+				commentIndividualSpecs = true
+			}
+		}
+	}
+	return commentIndividualSpecs, specs
+}
+
+func getName(spec ast.Spec) string {
+	switch s := spec.(type) {
+	case *ast.ValueSpec:
+		return s.Names[0].Name
+	case *ast.TypeSpec:
+		return s.Name.Name
+	default:
+		panic("Unexpected spec type")
+	}
+}
+
+func hasDoc(spec ast.Spec) bool {
+	switch s := spec.(type) {
+	case *ast.ValueSpec:
+		return s.Doc != nil
+	case *ast.TypeSpec:
+		return s.Doc != nil
+	default:
+		panic("Unexpected spec type")
+	}
 }
 
 const godocDoc = `
@@ -184,4 +249,12 @@ type Rectangle struct {
       </td>
     </tr>
   </table>
+
+  <h4>Limitations</h4>
+  <ul>
+    <li>When a single declaration contains non-exported declarations
+        followed by exported declarations (e.g.,
+        <tt>var x, Y int</tt>), a documentation comment will not be
+        added.</li>
+  </ul>
 `
