@@ -27,6 +27,7 @@ func init() {
 	AddRefactoring("var", new(refactoring.ExtractLocal))
 	AddRefactoring("toggle", new(refactoring.ToggleVar))
 	AddRefactoring("godoc", new(refactoring.AddGoDoc))
+	AddRefactoring("stubInterface", new(refactoring.ImplementIface))
 	AddRefactoring("debug", new(refactoring.Debug))
 	AddRefactoring("null", new(refactoring.Null))
 }
