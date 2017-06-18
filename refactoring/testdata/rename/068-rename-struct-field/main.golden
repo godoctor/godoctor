@@ -1,0 +1,13 @@
+package main
+
+import "fmt"
+
+// Test for renaming a struct field
+type myStruct struct {
+	renamed string // <<<<< rename,7,5,7,5,renamed,pass
+}
+
+func main() {
+	m := myStruct{renamed: "Foo"}
+	fmt.Println(m.renamed)
+}
