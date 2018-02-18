@@ -539,10 +539,10 @@ func BenchmarkReaching(b *testing.B) {
 		b.FailNow()
 	}
 
-	// create CFG and compute ReachingDefs
+	// create CFG and perform analyses
 	for n := 0; n < b.N; n++ {
 		cfg := cfg.FromFunc(f.Decls[0].(*ast.FuncDecl))
-		ReachingDefs(cfg, prog.Created[0])
+		DefUse(cfg, prog.Created[0])
 		LiveVars(cfg, prog.Created[0])
 	}
 }
@@ -559,10 +559,10 @@ func BenchmarkMain(b *testing.B) {
 		b.FailNow()
 	}
 
-	// create CFG and compute ReachingDefs
+	// create CFG and perform analyses
 	for n := 0; n < b.N; n++ {
 		cfg := cfg.FromFunc(prog.Created[0].Files[0].Decls[7].(*ast.FuncDecl))
-		ReachingDefs(cfg, prog.Created[0])
+		DefUse(cfg, prog.Created[0])
 		LiveVars(cfg, prog.Created[0])
 	}
 }
@@ -715,9 +715,8 @@ func (c *CFGWrapper) expectReaching(t *testing.T, s int, exp ...int) {
 
 	// get reaching for stmt s as slice, put in map
 	actualReach := make(map[ast.Stmt]struct{})
-	// TODO(reed): test outs
-	ud, _ := ReachingDefs(c.cfg, c.prog.Created[0])
-	for i, _ := range ud[c.exp[s]] {
+	defs := DefsReaching(c.exp[s], c.cfg, c.prog.Created[0])
+	for i, _ := range defs {
 		actualReach[i] = struct{}{}
 	}
 
@@ -734,19 +733,20 @@ func (c *CFGWrapper) expectReaching(t *testing.T, s int, exp ...int) {
 }
 
 func (c *CFGWrapper) expectUdDuSymmetry(t *testing.T) {
-	ud, du := ReachingDefs(c.cfg, c.prog.Created[0])
-	for stmt, defs := range ud {
-		for def, _ := range defs {
-			if _, found := du[def][stmt]; !found {
-				stmtN := c.stmts[stmt]
-				defN := c.stmts[def]
-				t.Errorf("ud[%d] contains %d, but du[%d] does not contain %d",
-					stmtN, defN, defN, stmtN)
-				t.Errorf("  ud[%d]: %s", stmtN, c.describe(ud[stmt]))
-				t.Errorf("  du[%d]: %s", defN, c.describe(du[def]))
-			}
+	// Compute def-use information
+	du := DefUse(c.cfg, c.prog.Created[0])
+
+	// Compute use-def information
+	// Note: This is extremely expensive, since DefsReaching re-does the
+	// data flow analysis on each iteration of the loop
+	ud := make(map[ast.Stmt]map[ast.Stmt]struct{})
+	for _, stmt := range c.cfg.Blocks() {
+		ud[stmt] = make(map[ast.Stmt]struct{})
+		for def, _ := range DefsReaching(stmt, c.cfg, c.prog.Created[0]) {
+			ud[stmt][def] = struct{}{}
 		}
 	}
+
 	for stmt, uses := range du {
 		for use, _ := range uses {
 			if _, found := ud[use][stmt]; !found {
@@ -756,6 +756,19 @@ func (c *CFGWrapper) expectUdDuSymmetry(t *testing.T) {
 					stmtN, useN, useN, stmtN)
 				t.Errorf("  du[%d]: %s", stmtN, c.describe(du[stmt]))
 				t.Errorf("  ud[%d]: %s", useN, c.describe(ud[use]))
+			}
+		}
+	}
+
+	for stmt, defs := range ud {
+		for def, _ := range defs {
+			if _, found := du[def][stmt]; !found {
+				stmtN := c.stmts[stmt]
+				defN := c.stmts[def]
+				t.Errorf("ud[%d] contains %d, but du[%d] does not contain %d",
+					stmtN, defN, defN, stmtN)
+				t.Errorf("  ud[%d]: %s", stmtN, c.describe(ud[stmt]))
+				t.Errorf("  du[%d]: %s", defN, c.describe(du[def]))
 			}
 		}
 	}

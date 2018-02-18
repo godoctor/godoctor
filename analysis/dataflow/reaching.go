@@ -1,4 +1,4 @@
-// Copyright 2015 Auburn University. All rights reserved.
+// Copyright 2015-2018 Auburn University. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -51,8 +51,17 @@ import (
 // should be treated as though it has the same in and out sets as the cfg.Exit node.
 func DefUse(cfg *cfg.CFG, info *loader.PackageInfo) map[ast.Stmt]map[ast.Stmt]struct{} {
 	blocks, gen, kill := genKillBitsets(cfg, info)
-	ins, outs := reachingDefBitsets(cfg, gen, kill)
-	return defUseResultSet(blocks, ins, outs)
+	ins, _ := reachingDefBitsets(cfg, gen, kill)
+	return defUseResultSet(blocks, ins)
+}
+
+// DefsReaching builds reaching definitions for a given control flow graph,
+// returning the set of statements that define a variable (i.e., declare or
+// assign it) where that definition reaches the given statement.
+func DefsReaching(stmt ast.Stmt, cfg *cfg.CFG, info *loader.PackageInfo) map[ast.Stmt]struct{} {
+	blocks, gen, kill := genKillBitsets(cfg, info)
+	ins, _ := reachingDefBitsets(cfg, gen, kill)
+	return defsReachingResultSet(stmt, blocks, ins)
 }
 
 // genKillBitsets builds the gen and kill bitsets for each block in a cfg,
@@ -139,7 +148,7 @@ func reachingDefBitsets(cfg *cfg.CFG, gen, kill map[ast.Stmt]*bitset.BitSet) (in
 // this information to determine use-def and def-use information.
 // blocks should be the blocks used to generate the analyses, as their indices are what will be used to map
 // bits in each bitset back to the corresponding statement.
-func defUseResultSet(blocks []ast.Stmt, ins, outs map[ast.Stmt]*bitset.BitSet) map[ast.Stmt]map[ast.Stmt]struct{} {
+func defUseResultSet(blocks []ast.Stmt, ins map[ast.Stmt]*bitset.BitSet) map[ast.Stmt]map[ast.Stmt]struct{} {
 	du := make(map[ast.Stmt]map[ast.Stmt]struct{})
 
 	// map bits from in and out sets back to corresponding blocks (with cfg.Entry)
@@ -155,6 +164,23 @@ func defUseResultSet(blocks []ast.Stmt, ins, outs map[ast.Stmt]*bitset.BitSet) m
 		}
 	}
 	return du
+}
+
+// defUseResultSet maps reaching definitions in bitsets back to their
+// corresponding statements, returning the set of definition statements that
+// reach the given stmt.
+func defsReachingResultSet(stmt ast.Stmt, blocks []ast.Stmt, ins map[ast.Stmt]*bitset.BitSet) map[ast.Stmt]struct{} {
+	result := make(map[ast.Stmt]struct{})
+	insStmt, found := ins[stmt]
+	if !found {
+		panic("stmt not in CFG")
+	}
+	for i, ok := uint(0), true; ok; i++ {
+		if i, ok = insStmt.NextSet(i); ok {
+			result[blocks[i]] = struct{}{}
+		}
+	}
+	return result
 }
 
 func PrintDot(f io.Writer, fset *token.FileSet, info *loader.PackageInfo, cfg *cfg.CFG) {

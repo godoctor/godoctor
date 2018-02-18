@@ -17,11 +17,12 @@ func (s SliceOfints) sum() int {
 func (people AgesByNames) older() string {
 	a := 0
 	n := ""
-	n = people.foo(a, n)
+	n = people.foo(a)
 	return n
 }
 
-func (people AgesByNames) foo(a int, n string) string {
+func (people AgesByNames) foo(a int) string {
+	var n string
 	for key, value := range people {
 		if value > a {
 			a = value
