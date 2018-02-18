@@ -166,6 +166,10 @@ type Result struct {
 	// Maps filenames to the text edits that should be applied to those
 	// files.
 	Edits map[string]*text.EditSet
+	// DebugOutput is used by the debug refactoring to output additional
+	// information (e.g., the description of the AST or control flow graph)
+	// that doesn't belong in the log or the output file
+	DebugOutput bytes.Buffer
 }
 
 const cgoError1 = "could not import C ("
@@ -204,6 +208,7 @@ type RefactoringBase struct {
 func (r *RefactoringBase) Run(config *Config) *Result {
 	r.Log = NewLog()
 	r.Edits = map[string]*text.EditSet{}
+	r.DebugOutput.Reset()
 
 	if config.FileSystem == nil {
 		r.Log.Error("INTERNAL ERROR: null Config.FileSystem")

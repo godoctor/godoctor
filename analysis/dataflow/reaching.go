@@ -11,6 +11,8 @@ import (
 	"go/token"
 	"go/types"
 	"io"
+	"sort"
+	"strings"
 
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"github.com/willf/bitset"
@@ -32,17 +34,25 @@ import (
 //      OUT[B] = gen[b] Union (IN[B] - kill[b]);
 //    }
 
-// ReachingDefs builds reaching definitions for a given control flow graph, returning
-// use-def and def-use information for each statement in a map.
+// DefUse builds reaching definitions for a given control flow graph, returning
+// a map that maps each statement that defines a variable (i.e., declares or
+// assigns it) to the set of statements that use that variable.
+//
+// Note: An assignment to a struct field or array element is treated as both a
+// use and a definition of that variable, since only part of its value is
+// assigned.  For analysis purposes, it's treated as though the entire value
+// is read, then part of it is modified, then the entire value is assigned back
+// to the variable.  (This is necessary for the analysis to produce correct
+// results.)
 //
 // No nodes from the cfg.Defers list will be returned in the output of
 // this function as they are disjoint from a cfg's blocks.
 // For analyzing the statements in the cfg.Defers list, each defer
 // should be treated as though it has the same in and out sets as the cfg.Exit node.
-func ReachingDefs(cfg *cfg.CFG, info *loader.PackageInfo) (ud, du map[ast.Stmt]map[ast.Stmt]struct{}) {
+func DefUse(cfg *cfg.CFG, info *loader.PackageInfo) map[ast.Stmt]map[ast.Stmt]struct{} {
 	blocks, gen, kill := genKillBitsets(cfg, info)
 	ins, outs := reachingDefBitsets(cfg, gen, kill)
-	return reachingDefResultSets(blocks, ins, outs)
+	return defUseResultSet(blocks, ins, outs)
 }
 
 // genKillBitsets builds the gen and kill bitsets for each block in a cfg,
@@ -125,73 +135,125 @@ func reachingDefBitsets(cfg *cfg.CFG, gen, kill map[ast.Stmt]*bitset.BitSet) (in
 	return in, out
 }
 
-// reachingDefResultSets maps reaching definitions in bitsets back to their corresponding statements, using
+// defUseResultSet maps reaching definitions in bitsets back to their corresponding statements, using
 // this information to determine use-def and def-use information.
 // blocks should be the blocks used to generate the analyses, as their indices are what will be used to map
 // bits in each bitset back to the corresponding statement.
-func reachingDefResultSets(blocks []ast.Stmt, ins, outs map[ast.Stmt]*bitset.BitSet) (ud, du map[ast.Stmt]map[ast.Stmt]struct{}) {
-	ud = make(map[ast.Stmt]map[ast.Stmt]struct{})
-	du = make(map[ast.Stmt]map[ast.Stmt]struct{})
+func defUseResultSet(blocks []ast.Stmt, ins, outs map[ast.Stmt]*bitset.BitSet) map[ast.Stmt]map[ast.Stmt]struct{} {
+	du := make(map[ast.Stmt]map[ast.Stmt]struct{})
 
 	// map bits from in and out sets back to corresponding blocks (with cfg.Entry)
 	for _, block := range blocks {
-		ud[block] = make(map[ast.Stmt]struct{})
 		du[block] = make(map[ast.Stmt]struct{})
 	}
 
 	for _, block := range blocks {
 		for i, ok := uint(0), true; ok; i++ {
 			if i, ok = ins[block].NextSet(i); ok {
-				ud[block][blocks[i]] = struct{}{}
 				du[blocks[i]][block] = struct{}{}
 			}
 		}
 	}
-	return ud, du
+	return du
 }
 
-func PrintReachingDefs(f io.Writer, fset *token.FileSet, info *loader.PackageInfo, ud map[ast.Stmt]map[ast.Stmt]struct{}) {
-	for source, reached := range ud {
-		if len(reached) > 0 {
-			fmt.Fprintf(f, "%s ->\n", printStmt(source, fset))
-			for stmt, _ := range reached {
-				varList := reachingVars(source, stmt, info)
-				if len(varList) > 0 {
-					fmt.Fprintf(f, "\t%s%s\n",
-						printStmt(stmt, fset),
-						varList)
-				}
-			}
+func PrintDot(f io.Writer, fset *token.FileSet, info *loader.PackageInfo, cfg *cfg.CFG) {
+	du := DefUse(cfg, info)
 
-		}
+	fmt.Fprintf(f, `digraph mgraph {
+mode="heir";
+splines="ortho";
+
+`)
+
+	blocks := cfg.Blocks()
+	cfg.Sort(blocks)
+
+	// Assign a number to each CFG node/statement
+	// List all vertices before listing edges connecting them
+	stmtNum := map[ast.Stmt]uint{}
+	lastNum := uint(0)
+	for _, stmt := range blocks {
+		lastNum++
+		stmtNum[stmt] = lastNum
+		fmt.Fprintf(f, "\ts%d [label=\"%s\"];\n",
+			lastNum, printStmt(stmt, cfg, fset))
 	}
+
+	for _, from := range blocks {
+		// Show control flow edges in black
+		succs := cfg.Succs(from)
+		cfg.Sort(succs)
+		for _, to := range succs {
+			fmt.Fprintf(f, "\ts%d -> s%d\n", stmtNum[from], stmtNum[to])
+		}
+
+		// Show def-use edges in red, dotted
+		usedIn := []ast.Stmt{}
+		for stmt, _ := range du[from] {
+			usedIn = append(usedIn, stmt)
+		}
+		cfg.Sort(usedIn)
+		for _, stmt := range usedIn {
+			varList := reachingVars(from, stmt, info)
+			if len(varList) > 0 {
+				fmt.Fprintf(f, "\ts%d -> s%d [xlabel=\"%s\",style=dotted,fontcolor=red,color=red]\n",
+					stmtNum[from],
+					stmtNum[stmt],
+					strings.TrimSpace(varList))
+			}
+		}
+
+	}
+
+	fmt.Fprintf(f, "}\n")
 }
 
-func printStmt(stmt ast.Stmt, fset *token.FileSet) string {
-	return fmt.Sprintf("%s (line %d)",
-		astutil.NodeDescription(stmt),
-		fset.Position(stmt.Pos()).Line)
+func printStmt(stmt ast.Stmt, cfg *cfg.CFG, fset *token.FileSet) string {
+	switch stmt {
+	case cfg.Entry:
+		return "ENTRY"
+	case cfg.Exit:
+		return "EXIT"
+	case nil:
+		return ""
+	default:
+		return fmt.Sprintf("%s (line %d)",
+			astutil.NodeDescription(stmt),
+			fset.Position(stmt.Pos()).Line)
+	}
 }
 
 func reachingVars(from, to ast.Stmt, info *loader.PackageInfo) string {
 	asgt, updt, decl, _ := ReferencedVars([]ast.Stmt{from}, info)
 	_, _, _, use := ReferencedVars([]ast.Stmt{to}, info)
 
-	var b bytes.Buffer
+	vars := map[string]struct{}{}
 	for variable, _ := range asgt {
 		if _, used := use[variable]; used {
-			b.WriteString(fmt.Sprintf(" %s", variable.Name()))
+			vars[variable.Name()] = struct{}{}
 		}
 	}
 	for variable, _ := range updt {
 		if _, used := use[variable]; used {
-			b.WriteString(fmt.Sprintf(" %s", variable.Name()))
+			vars[variable.Name()] = struct{}{}
 		}
 	}
 	for variable, _ := range decl {
 		if _, used := use[variable]; used {
-			b.WriteString(fmt.Sprintf(" %s", variable.Name()))
+			vars[variable.Name()] = struct{}{}
 		}
+	}
+
+	varList := []string{}
+	for name, _ := range vars {
+		varList = append(varList, name)
+	}
+	sort.Sort(sort.StringSlice(varList))
+
+	var b bytes.Buffer
+	for _, name := range varList {
+		b.WriteString(fmt.Sprintf(" %s", name))
 	}
 	return b.String()
 }

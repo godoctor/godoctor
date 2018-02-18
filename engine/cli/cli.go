@@ -289,6 +289,11 @@ func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, 
 		}
 	}
 
+	debugOutput := result.DebugOutput.String()
+	if len(debugOutput) > 0 {
+		fmt.Fprintln(os.Stdout, debugOutput)
+	}
+
 	if *flags.writeFlag {
 		err = writeToDisk(result, fileSystem)
 	} else if *flags.completeFlag {

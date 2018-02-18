@@ -18,7 +18,10 @@ import (
 	"go/printer"
 	"go/types"
 	"io"
+	"log"
 	"os"
+	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -27,18 +30,30 @@ import (
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"github.com/godoctor/godoctor/analysis/dataflow"
 	"github.com/godoctor/godoctor/analysis/names"
-	"github.com/godoctor/godoctor/text"
 )
 
 const usage = `Usage: debug <options>
-where <options> can be any or all of:
-    fmt               Format the node enclosing the selection using go/printer
-    showaffected      Show names affected if the selected identifier is renamed
+where <options> can be any or all of the following:
+
+Information about the entire file:
     showast           Show the abstract syntax tree for the selected file
-    showflow          Show GraphViz DOT flow graphs for the selected file
     showidentifiers   Show name references (ast.Object) in initial packages
     showpackages      List all packages loaded (due to --scope)
-    showreferences    Show all direct references to the selected identifier`
+
+If anything is selected:
+    fmt               Format the node enclosing the selection using go/printer
+
+If an identifier is selected:
+    showaffected      Show names affected if the selected identifier is renamed
+    showreferences    Show all direct references to the selected identifier
+
+If a function is selected...
+    showcfg           Output the control flow graph (CFG) in GraphViz DOT format
+    showdefuse        Output CFG with def-use information GraphViz DOT format
+
+Use GraphViz's "dotty" tool to view DOT files.  For example:
+    $ godoctor -file main.go -pos 5,1:5,1 debug showdefuse > output.dot
+    $ dotty output.dot`
 
 type Debug struct {
 	base RefactoringBase
@@ -78,31 +93,35 @@ func (r *Debug) Run(config *Config) *Result {
 	}
 	command := strings.ToLower(strings.TrimSpace(config.Args[0].(string)))
 
-	var b bytes.Buffer
 	switch command {
 	case "fmt":
 		r.fmt()
+		return &r.base.Result
 	case "showaffected":
-		r.showAffected(&b)
+		r.showAffected(&r.base.DebugOutput)
+		return &r.base.Result
 	case "showast":
-		r.showAST(&b)
-	case "showflow":
-		r.showCFG(&b)
+		r.showAST(&r.base.DebugOutput)
+		return &r.base.Result
+	case "showcfg":
+		r.showCFG(&r.base.DebugOutput)
+		return &r.base.Result
+	case "showdefuse":
+		r.showDefUse(&r.base.DebugOutput)
+		return &r.base.Result
 	case "showidentifiers":
-		r.showIdentifiers(&b)
+		r.showIdentifiers(&r.base.DebugOutput)
+		return &r.base.Result
 	case "showpackages":
-		r.showLoadedPackagesAndFiles(&b)
+		r.showLoadedPackagesAndFiles(&r.base.DebugOutput)
+		return &r.base.Result
 	case "showreferences":
-		r.showReferences(&b)
+		r.showReferences(&r.base.DebugOutput)
+		return &r.base.Result
 	default:
 		r.base.Log.Errorf("Unknown option %s", command)
 		return &r.base.Result
 	}
-	if !r.base.Log.ContainsErrors() && command != "fmt" {
-		insert := &text.Extent{0, 0}
-		r.base.Edits[r.base.Filename].Add(insert, b.String())
-	}
-	return &r.base.Result
 }
 
 func (r *Debug) fmt() {
@@ -183,32 +202,35 @@ func (r *Debug) showAST(out io.Writer) {
 }
 
 func (r *Debug) showCFG(out io.Writer) {
-	ast.Inspect(r.base.File, func(n ast.Node) bool {
-		switch x := n.(type) {
-		case *ast.FuncDecl:
-			if x.Name != nil {
-				fmt.Fprintf(out, "// %s\n", x.Name.Name)
-			} else {
-				fmt.Fprintf(out, "// (anonymous)\n")
-			}
-			cfg := cfg.FromFunc(x)
-			cfg.PrintDot(out, r.base.Program.Fset, r.describeDefsUses)
+	switch funcDecl := r.base.SelectedNode.(type) {
+	case *ast.FuncDecl:
+		if funcDecl.Name != nil {
+			fmt.Fprintf(out, "// Control flow graph for %s\n", funcDecl.Name.Name)
+		} else {
+			fmt.Fprintf(out, "// Control flow graph for anonymous function\n")
 		}
-		return true
-	})
+		cfg := cfg.FromFunc(funcDecl)
+		cfg.PrintDot(out, r.base.Program.Fset, r.describeVariables)
+
+	default:
+		r.base.Log.Error("Please select a function.")
+		r.base.Log.AssociatePos(r.base.SelectionStart, r.base.SelectionEnd)
+		r.base.Log.Errorf("(Selected node: %s)", reflect.TypeOf(r.base.SelectedNode))
+		r.base.Log.AssociatePos(r.base.SelectedNode.Pos(), r.base.SelectedNode.Pos())
+	}
 }
 
-func (r *Debug) describeDefsUses(stmt ast.Stmt) string {
+func (r *Debug) describeVariables(stmt ast.Stmt) string {
 	var buf bytes.Buffer
 	asgts, updts, decls, uses := dataflow.ReferencedVars([]ast.Stmt{stmt}, r.base.SelectedNodePkg)
 	if len(asgts) > 0 {
-		fmt.Fprintf(&buf, "Asgts: %s\n", listNames(asgts))
+		fmt.Fprintf(&buf, "Assigns: %s\n", listNames(asgts))
 	}
 	if len(updts) > 0 {
-		fmt.Fprintf(&buf, "Updts: %s\n", listNames(updts))
+		fmt.Fprintf(&buf, "Updates: %s\n", listNames(updts))
 	}
 	if len(decls) > 0 {
-		fmt.Fprintf(&buf, "Decls: %s\n", listNames(decls))
+		fmt.Fprintf(&buf, "Declares: %s\n", listNames(decls))
 	}
 	if len(uses) > 0 {
 		fmt.Fprintf(&buf, "Uses: %s\n", listNames(uses))
@@ -230,6 +252,25 @@ func listNames(vars map[*types.Var]struct{}) string {
 	return strings.TrimPrefix(buf.String(), ", ")
 }
 
+func (r *Debug) showDefUse(out io.Writer) {
+	switch funcDecl := r.base.SelectedNode.(type) {
+	case *ast.FuncDecl:
+		if funcDecl.Name != nil {
+			fmt.Fprintf(out, "// %s\n", funcDecl.Name.Name)
+		} else {
+			fmt.Fprintf(out, "// (anonymous)\n")
+		}
+		cfg := cfg.FromFunc(funcDecl)
+		dataflow.PrintDot(out, r.base.Program.Fset, r.base.SelectedNodePkg, cfg)
+
+	default:
+		r.base.Log.Error("Please select a function.")
+		r.base.Log.AssociatePos(r.base.SelectionStart, r.base.SelectionEnd)
+		r.base.Log.Errorf("(Selected node: %s)", reflect.TypeOf(r.base.SelectedNode))
+		r.base.Log.AssociatePos(r.base.SelectedNode.Pos(), r.base.SelectedNode.Pos())
+	}
+}
+
 func (r *Debug) showIdentifiers(out io.Writer) {
 	for _, pkgInfo := range r.base.Program.InitialPackages() {
 		for _, file := range pkgInfo.Files {
@@ -239,8 +280,14 @@ func (r *Debug) showIdentifiers(out io.Writer) {
 }
 
 func (r *Debug) showIdentifiersInFile(pkgInfo *loader.PackageInfo, file *ast.File, out io.Writer) {
+	filename, err := r.getRelativeFilename(file)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
 	fmt.Fprintf(out, "=====%s=====\n",
-		r.base.Program.Fset.Position(file.Pos()).Filename)
+		filename)
 	ast.Inspect(file, func(n ast.Node) bool {
 		id, ok := n.(*ast.Ident)
 		if !ok {
@@ -259,10 +306,17 @@ func (r *Debug) showIdentifiersInFile(pkgInfo *loader.PackageInfo, file *ast.Fil
 	})
 }
 
-func (r *Debug) showLoadedPackagesAndFiles(out io.Writer) {
-	fmt.Fprintf(out, "GOPATH is %s\n", os.Getenv("GOPATH"))
-	cwd, _ := os.Getwd()
+func (r *Debug) getRelativeFilename(file *ast.File) (string, error) {
+	filename := r.base.Program.Fset.Position(file.Pos()).Filename
+	cwd, err := os.Getwd()
+	if err == nil {
+		filename, err = filepath.Rel(cwd, filename)
+	}
+	return filename, err
+}
 
+func (r *Debug) showLoadedPackagesAndFiles(out io.Writer) {
+	cwd, _ := os.Getwd()
 	fmt.Fprintf(out, "Working directory is %s\n", cwd)
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "Packages/files loaded:")

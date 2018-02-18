@@ -21,21 +21,18 @@ import (
 	"golang.org/x/tools/go/loader"
 )
 
-/* -=-=- Types for Sorting -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
+/* -=-=- Sorting -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 
 // type for sorting []*types.Var variables alphabetically by name
-type typeVar []*types.Var
+type varSlice []*types.Var
 
-func (t typeVar) Len() int           { return len(t) }
-func (t typeVar) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
-func (t typeVar) Less(i, j int) bool { return t[i].Name() < t[j].Name() }
+func (t varSlice) Len() int           { return len(t) }
+func (t varSlice) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
+func (t varSlice) Less(i, j int) bool { return t[i].Name() < t[j].Name() }
 
-// type for sorting statements by their statring positions in the source code
-type nodeStmt []ast.Stmt
-
-func (n nodeStmt) Len() int           { return len(n) }
-func (n nodeStmt) Swap(i, j int)      { n[i], n[j] = n[j], n[i] }
-func (n nodeStmt) Less(i, j int) bool { return n[i].Pos() < n[j].Pos() }
+func SortVars(vars []*types.Var) {
+	sort.Sort(varSlice(vars))
+}
 
 /* -=-=- stmtRange -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 
@@ -335,7 +332,7 @@ func (r *stmtRange) EntryPoints() []ast.Stmt {
 		entryPoints = append(entryPoints, b)
 	}
 
-	sort.Sort(nodeStmt(entryPoints))
+	r.cfg.Sort(entryPoints)
 	return entryPoints
 }
 
@@ -357,7 +354,7 @@ func (r *stmtRange) ExitDestinations() []ast.Stmt {
 		exitTo = append(exitTo, b)
 	}
 
-	sort.Sort(nodeStmt(exitTo))
+	r.cfg.Sort(exitTo)
 	return exitTo
 }
 
@@ -372,7 +369,7 @@ func (r *stmtRange) LocalsLiveAtEntry() []*types.Var {
 			liveEntry = append(liveEntry, variable)
 		}
 	}
-	sort.Sort(typeVar(liveEntry))
+	SortVars(liveEntry)
 	return liveEntry
 }
 
@@ -388,7 +385,7 @@ func (r *stmtRange) LocalsLiveAfterExit() []*types.Var {
 			liveExit = append(liveExit, variable)
 		}
 	}
-	sort.Sort(typeVar(liveExit))
+	SortVars(liveExit)
 	return liveExit
 }
 
@@ -413,9 +410,9 @@ func (r *stmtRange) LocalsReferenced() (asgt, updt, decl, use []*types.Var) {
 	for v, _ := range useSet {
 		use = append(use, v)
 	}
-	sort.Sort(typeVar(asgt))
-	sort.Sort(typeVar(decl))
-	sort.Sort(typeVar(use))
+	SortVars(asgt)
+	SortVars(decl)
+	SortVars(use)
 	return
 }
 
@@ -787,7 +784,7 @@ func union(v1, v2 []*types.Var) []*types.Var {
 	for _, b := range insec {
 		v1 = append(v1, b) // adding back the variables to the array only once
 	}
-	sort.Sort(typeVar(v1))
+	SortVars(v1)
 	return v1
 }
 

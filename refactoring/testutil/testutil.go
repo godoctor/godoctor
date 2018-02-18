@@ -44,12 +44,11 @@
 //                         package-file.go
 //                         package-file.golden
 //
-// To additional options are available and are currently used only to test the
-// Debug refactoring.  When it does not make sense to compare against a .golden
-// file, include an empty file named filename.ignoreOutput instead.  If the
-// output will contain absolute paths to files in the test folder, include a
-// file named filename.go.stripPaths, and the refactoring's output will be
-// stripped of all occurrences of the absolute path to the .go file.
+// To test the Debug refactoring, include a file named filename.go.debugOutput
+// containing the output that is expected to be written to Result.DebugOutput.
+// The actual debug output usually includes absolute paths; to be testable,
+// all occurrences of the current working directory are replaced with "." when
+// comparing against this file.
 
 package testutil
 
@@ -217,6 +216,23 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 		t.Fatalf("Refactoring should have produced errors but didn't")
 	}
 
+	debugOutput := result.DebugOutput.String()
+	if len(debugOutput) > 0 {
+		debugOutputFilename := filename + ".debugOutput"
+		bytes, err := ioutil.ReadFile(debugOutputFilename)
+		if err != nil {
+			t.Fatal(err)
+		}
+		expectedOutput := sanitize(string(bytes))
+		actualOutput := sanitize(debugOutput)
+		if expectedOutput != actualOutput {
+			fmt.Printf(">>>>> Debug output does not match contents of %s\n", debugOutputFilename)
+			fmt.Printf(">>>>> NOTE: All occurrences of the working directory name are replaced by \".\"\n")
+			showExpectedAndActual(expectedOutput, actualOutput)
+			t.Fatalf("Refactoring test failed - %s", filename)
+		}
+	}
+
 	err = filepath.Walk(directory,
 		func(path string, info os.FileInfo, err error) error {
 			if err != nil {
@@ -259,50 +275,53 @@ func exists(filename string, t *testing.T) bool {
 	}
 }
 
+func sanitize(debugOutput string) string {
+	cwd, _ := os.Getwd()
+	debugOutput = strings.Replace(debugOutput, "\r\n", "\n", -1)
+	debugOutput = strings.Replace(debugOutput, cwd, ".", -1)
+	return debugOutput
+}
+
 func checkResult(filename string, actualOutput string, t *testing.T) {
-	if _, err := os.Stat(filename + ".ignoreOutput"); err == nil {
-		return
-	}
-	if _, err := os.Stat(filename + ".stripPaths"); err == nil {
-		dir := filepath.Dir(filename) + string(filepath.Separator)
-		actualOutput = strings.Replace(actualOutput, dir, "", -1)
-	}
 	bytes, err := ioutil.ReadFile(filename + "lden")
 	if err != nil {
 		t.Fatal(err)
 	}
 	expectedOutput := strings.Replace(string(bytes), "\r\n", "\n", -1)
 	actualOutput = strings.Replace(actualOutput, "\r\n", "\n", -1)
-
-	if actualOutput != expectedOutput {
+	if expectedOutput != actualOutput {
 		fmt.Printf(">>>>> Output does not match %slden\n", filename)
-		fmt.Println("EXPECTED OUTPUT")
-		fmt.Println("vvvvvvvvvvvvvvv")
-		fmt.Println(expectedOutput)
-		fmt.Println("^^^^^^^^^^^^^^^")
-		fmt.Println("ACTUAL OUTPUT")
-		fmt.Println("vvvvvvvvvvvvv")
-		fmt.Println(actualOutput)
-		fmt.Println("^^^^^^^^^^^^^")
-		lenExpected, lenActual := len(expectedOutput), len(actualOutput)
-		if lenExpected != lenActual {
-			fmt.Printf("Length of expected output is %d; length of actual output is %d\n",
-				lenExpected, lenActual)
-			minLen := lenExpected
-			if lenActual < minLen {
-				minLen = lenActual
-			}
-			for i := 0; i < minLen; i++ {
-				if expectedOutput[i] != actualOutput[i] {
-					fmt.Printf("Strings differ at index %d\n", i)
-					fmt.Printf("Substrings starting at that index are:\n")
-					fmt.Printf("Expected: [%s]\n", describe(expectedOutput[i:]))
-					fmt.Printf("Actual: [%s]\n", describe(actualOutput[i:]))
-					break
-				}
+		showExpectedAndActual(expectedOutput, actualOutput)
+		t.Fatalf("Refactoring test failed - %s", filename)
+	}
+}
+
+func showExpectedAndActual(expectedOutput, actualOutput string) {
+	fmt.Println("EXPECTED OUTPUT")
+	fmt.Println("vvvvvvvvvvvvvvv")
+	fmt.Print(expectedOutput)
+	fmt.Println("^^^^^^^^^^^^^^^")
+	fmt.Println("ACTUAL OUTPUT")
+	fmt.Println("vvvvvvvvvvvvv")
+	fmt.Print(actualOutput)
+	fmt.Println("^^^^^^^^^^^^^")
+	lenExpected, lenActual := len(expectedOutput), len(actualOutput)
+	if lenExpected != lenActual {
+		fmt.Printf("Length of expected output is %d; length of actual output is %d\n",
+			lenExpected, lenActual)
+		minLen := lenExpected
+		if lenActual < minLen {
+			minLen = lenActual
+		}
+		for i := 0; i < minLen; i++ {
+			if expectedOutput[i] != actualOutput[i] {
+				fmt.Printf("Strings differ at index %d\n", i)
+				fmt.Printf("Substrings starting at that index are:\n")
+				fmt.Printf("Expected: [%s]\n", describe(expectedOutput[i:]))
+				fmt.Printf("Actual: [%s]\n", describe(actualOutput[i:]))
+				break
 			}
 		}
-		t.Fatalf("Refactoring test failed - %s", filename)
 	}
 }
 

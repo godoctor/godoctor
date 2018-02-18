@@ -12,6 +12,7 @@ import (
 	"go/ast"
 	"go/token"
 	"io"
+	"sort"
 	"strings"
 
 	"golang.org/x/tools/go/ast/astutil"
@@ -70,7 +71,7 @@ func (c *CFG) Succs(s ast.Stmt) []ast.Stmt {
 }
 
 // Blocks returns a slice of all blocks in a CFG, including the Entry and Exit nodes.
-// The blocks are in no particular order.
+// The blocks are roughly in the order they appear in the source code.
 func (c *CFG) Blocks() []ast.Stmt {
 	blocks := make([]ast.Stmt, 0, len(c.blocks))
 	for s, _ := range c.blocks {
@@ -79,24 +80,41 @@ func (c *CFG) Blocks() []ast.Stmt {
 	return blocks
 }
 
+// type for sorting statements by their starting positions in the source code
+type stmtSlice []ast.Stmt
+
+func (n stmtSlice) Len() int      { return len(n) }
+func (n stmtSlice) Swap(i, j int) { n[i], n[j] = n[j], n[i] }
+func (n stmtSlice) Less(i, j int) bool {
+	return n[i].Pos() < n[j].Pos()
+}
+
+func (c *CFG) Sort(stmts []ast.Stmt) {
+	sort.Sort(stmtSlice(stmts))
+}
+
 func (c *CFG) PrintDot(f io.Writer, fset *token.FileSet, addl func(n ast.Stmt) string) {
 	fmt.Fprintf(f, `digraph mgraph {
 mode="heir";
 splines="ortho";
 
 `)
-	for _, v := range c.blocks {
-		for _, a := range v.succs {
+	blocks := c.Blocks()
+	c.Sort(blocks)
+	for _, from := range blocks {
+		succs := c.Succs(from)
+		c.Sort(succs)
+		for _, to := range succs {
 			fmt.Fprintf(f, "\t\"%s\" -> \"%s\"\n",
-				c.printVertex(v, fset, addl(v.stmt)),
-				c.printVertex(c.blocks[a], fset, addl(c.blocks[a].stmt)))
+				c.printVertex(from, fset, addl(from)),
+				c.printVertex(to, fset, addl(to)))
 		}
 	}
 	fmt.Fprintf(f, "}\n")
 }
 
-func (c *CFG) printVertex(v *block, fset *token.FileSet, addl string) string {
-	switch v.stmt {
+func (c *CFG) printVertex(stmt ast.Stmt, fset *token.FileSet, addl string) string {
+	switch stmt {
 	case c.Entry:
 		return "ENTRY"
 	case c.Exit:
@@ -109,8 +127,8 @@ func (c *CFG) printVertex(v *block, fset *token.FileSet, addl string) string {
 		addl = "\\n" + addl
 	}
 	return fmt.Sprintf("%s - line %d%s",
-		astutil.NodeDescription(v.stmt),
-		fset.Position(v.stmt.Pos()).Line,
+		astutil.NodeDescription(stmt),
+		fset.Position(stmt.Pos()).Line,
 		addl)
 }
 
@@ -123,10 +141,13 @@ type builder struct {
 }
 
 func newBuilder() *builder {
+	// The ENTRY and EXIT nodes are given positions -2 and -1 so cfg.Sort
+	// will work correct: ENTRY will always be first, followed by EXIT,
+	// followed by the other CFG nodes.
 	return &builder{
-		blocks: make(map[ast.Stmt]*block),
-		entry:  new(ast.BadStmt),
-		exit:   new(ast.BadStmt),
+		blocks: map[ast.Stmt]*block{},
+		entry:  &ast.BadStmt{-2, -2},
+		exit:   &ast.BadStmt{-1, -1},
 	}
 }
 

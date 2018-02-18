@@ -379,8 +379,8 @@ func (r *ExtractLocal) isIfStmtInit() (*ast.IfStmt, bool) {
 // See varsInSelectionWithReachingDefsFrom.
 func (r *ExtractLocal) defUse() map[ast.Stmt]map[ast.Stmt]struct{} {
 	cfg := cfg.FromFunc(r.enclosingFuncDecl()) // We must be in a function
-	_, defUse := dataflow.ReachingDefs(cfg, r.SelectedNodePkg)
-	// dataflow.PrintReachingDefs(os.Stderr, r.Program.Fset, r.SelectedNodePkg, du)
+	defUse := dataflow.DefUse(cfg, r.SelectedNodePkg)
+	// dataflow.PrintDefUse(os.Stderr, r.Program.Fset, r.SelectedNodePkg, du)
 	return defUse
 }
 
