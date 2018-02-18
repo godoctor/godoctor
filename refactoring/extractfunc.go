@@ -747,7 +747,7 @@ func (r *ExtractFunc) analyzeVars() (recv *types.Var, params, returns, locals []
 		recv = r.SelectedNodePkg.ObjectOf(recvNode.List[0].Names[0]).(*types.Var)
 		params = difference(params, []*types.Var{recv})
 		returns = difference(returns, []*types.Var{recv})
-		locals = difference(returns, []*types.Var{recv})
+		locals = difference(locals, []*types.Var{recv})
 	}
 
 	return recv, params, returns, locals, declareResult
