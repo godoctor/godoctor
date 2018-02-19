@@ -15,7 +15,9 @@ import (
 	"bytes"
 	"fmt"
 	"go/ast"
+	"go/parser"
 	"go/printer"
+	"go/token"
 	"go/types"
 	"io"
 	"log"
@@ -137,7 +139,14 @@ func (r *Debug) fmt() {
 				return
 			}
 
-			r.base.Edits[r.base.Filename].Add(r.base.Extent(node), b.String())
+			extent := r.base.Extent(node)
+			if r.goPrinterIncludesTrailingComments() && len(nodes) == 1 {
+				// We are formatting the entire file, but the
+				// extent stops before end-of-file comments.
+				// Extend it so comments are not duplicated.
+				extent.Length = len(r.base.FileContents)
+			}
+			r.base.Edits[r.base.Filename].Add(extent, b.String())
 			return
 		}
 	}
@@ -159,6 +168,38 @@ func canFormat(node interface{}) bool {
 		return false
 	}
 
+}
+
+// The behavior of go/printer changed between Go 1.8 and Go 1.10: In Go 1.10,
+// comments at the end of the file are included.  In Go 1.8, they were not.
+// This detects whether trailing comments are included, so the refactoring can
+// decide whether or not to include them in the region that is replaced.
+func (r *Debug) goPrinterIncludesTrailingComments() bool {
+	// Parse a simple file with a comment at the end
+	str := "package main\n\n// END\n"
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "", str, parser.ParseComments)
+	if err != nil {
+		// r.base.Log.Error(err)
+		return false
+	}
+
+	// Print it using go/printer
+	cnode := &printer.CommentedNode{
+		Node:     f,
+		Comments: f.Comments}
+	printConfig := &printer.Config{
+		Mode:     printer.UseSpaces | printer.TabIndent,
+		Tabwidth: 8}
+	var b bytes.Buffer
+	err = printConfig.Fprint(&b, fset, cnode)
+	if err != nil {
+		// r.base.Log.Error(err)
+		return false
+	}
+
+	// Check if the trailing comment was included
+	return strings.HasSuffix(b.String(), "END\n")
 }
 
 func (r *Debug) showAffected(out io.Writer) {

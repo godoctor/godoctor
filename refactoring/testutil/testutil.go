@@ -44,6 +44,11 @@
 //                         package-file.go
 //                         package-file.golden
 //
+// If filename.go.fixWhitespace exists, all leading and trailing whitespace will
+// be removed from the .golden file and the actual output, and \n\n\n will be
+// replaced by \n\n.  This is used by the formatter tests, since go/printer's
+// behavior changed between versions.
+//
 // To test the Debug refactoring, include a file named filename.go.debugOutput
 // containing the output that is expected to be written to Result.DebugOutput.
 // The actual debug output usually includes absolute paths; to be testable,
@@ -289,6 +294,12 @@ func checkResult(filename string, actualOutput string, t *testing.T) {
 	}
 	expectedOutput := strings.Replace(string(bytes), "\r\n", "\n", -1)
 	actualOutput = strings.Replace(actualOutput, "\r\n", "\n", -1)
+	if exists(filename+".fixWhitespace", t) {
+		expectedOutput = strings.TrimSpace(expectedOutput)
+		actualOutput = strings.TrimSpace(actualOutput)
+		expectedOutput = strings.Replace(expectedOutput, "\n\n\n", "\n\n", -1)
+		actualOutput = strings.Replace(actualOutput, "\n\n\n", "\n\n", -1)
+	}
 	if expectedOutput != actualOutput {
 		fmt.Printf(">>>>> Output does not match %slden\n", filename)
 		showExpectedAndActual(expectedOutput, actualOutput)
