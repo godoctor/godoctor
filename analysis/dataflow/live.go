@@ -5,8 +5,13 @@
 package dataflow
 
 import (
+	"bytes"
+	"fmt"
 	"go/ast"
+	"go/token"
 	"go/types"
+	"io"
+	"sort"
 
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"github.com/willf/bitset"
@@ -164,4 +169,62 @@ func liveVarsResultSets(cfg *cfg.CFG, vars []*types.Var, ins, outs map[ast.Stmt]
 		}
 	}
 	return in, out
+}
+
+func PrintLiveVarsDot(f io.Writer, fset *token.FileSet, info *loader.PackageInfo, cfg *cfg.CFG) {
+	liveIn, liveOut := LiveVars(cfg, info)
+
+	fmt.Fprintf(f, `digraph mgraph {
+mode="heir";
+splines="ortho";
+
+`)
+
+	blocks := cfg.Blocks()
+	cfg.Sort(blocks)
+
+	// Assign a number to each CFG node/statement
+	// List all vertices before listing edges connecting them
+	stmtNum := map[ast.Stmt]uint{}
+	lastNum := uint(0)
+	for _, stmt := range blocks {
+		liveInStr := toString(liveIn[stmt])
+		liveOutStr := toString(liveOut[stmt])
+
+		lastNum++
+		stmtNum[stmt] = lastNum
+		fmt.Fprintf(f, "\ts%d [label=\"%s\\nLiveIn: %s\\nLiveOut: %s\"];\n",
+			lastNum, printStmt(stmt, cfg, fset), liveInStr, liveOutStr)
+	}
+
+	for _, from := range blocks {
+		succs := cfg.Succs(from)
+		cfg.Sort(succs)
+		for _, to := range succs {
+			fmt.Fprintf(f, "\ts%d -> s%d\n", stmtNum[from], stmtNum[to])
+		}
+	}
+
+	fmt.Fprintf(f, "}\n")
+}
+
+func toString(set map[*types.Var]struct{}) string {
+	list := []string{}
+	for variable, _ := range set {
+		list = append(list, variable.Name())
+	}
+	sort.Sort(sort.StringSlice(list))
+
+	var b bytes.Buffer
+	first := true
+	b.WriteString("{")
+	for _, name := range list {
+		if !first {
+			b.WriteString(", ")
+		}
+		first = false
+		b.WriteString(name)
+	}
+	b.WriteString("}")
+	return b.String()
 }

@@ -5,9 +5,11 @@
 package dataflow
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"go/ast"
+	"go/printer"
 	"go/token"
 	"go/types"
 	"io"
@@ -183,7 +185,7 @@ func defsReachingResultSet(stmt ast.Stmt, blocks []ast.Stmt, ins map[ast.Stmt]*b
 	return result
 }
 
-func PrintDot(f io.Writer, fset *token.FileSet, info *loader.PackageInfo, cfg *cfg.CFG) {
+func PrintDefUseDot(f io.Writer, fset *token.FileSet, info *loader.PackageInfo, cfg *cfg.CFG) {
 	du := DefUse(cfg, info)
 
 	fmt.Fprintf(f, `digraph mgraph {
@@ -244,10 +246,44 @@ func printStmt(stmt ast.Stmt, cfg *cfg.CFG, fset *token.FileSet) string {
 	case nil:
 		return ""
 	default:
-		return fmt.Sprintf("%s (line %d)",
+		return fmt.Sprintf("%s (line %d)\\n%s",
 			astutil.NodeDescription(stmt),
-			fset.Position(stmt.Pos()).Line)
+			fset.Position(stmt.Pos()).Line,
+			summarize(stmt, fset))
 	}
+}
+
+func summarize(stmt ast.Stmt, fset *token.FileSet) string {
+	var b bytes.Buffer
+	writer := bufio.NewWriter(&b)
+	switch x := stmt.(type) {
+	case *ast.ForStmt:
+		writer.WriteString("for ")
+		printer.Fprint(writer, fset, x.Cond)
+	case *ast.IfStmt:
+		writer.WriteString("if ")
+		printer.Fprint(writer, fset, x.Cond)
+	case *ast.SelectStmt:
+		writer.WriteString("select")
+	case *ast.SwitchStmt:
+		writer.WriteString("switch ")
+		printer.Fprint(writer, fset, x.Tag)
+	default:
+		printer.Fprint(writer, fset, stmt)
+	}
+	writer.Flush()
+
+	sourceCode := b.String()
+	sourceCode = strings.Replace(sourceCode, "\r", " ", -1)
+	sourceCode = strings.Replace(sourceCode, "\n", " ", -1)
+	sourceCode = strings.Replace(sourceCode, "\t", "    ", -1)
+	sourceCode = strings.Replace(sourceCode, "\"", "\\\"", -1)
+
+	if len(sourceCode) > 30 {
+		sourceCode = sourceCode[:27] + "..."
+	}
+
+	return sourceCode
 }
 
 func reachingVars(from, to ast.Stmt, info *loader.PackageInfo) string {

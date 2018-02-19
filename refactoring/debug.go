@@ -50,6 +50,7 @@ If an identifier is selected:
 If a function is selected...
     showcfg           Output the control flow graph (CFG) in GraphViz DOT format
     showdefuse        Output CFG with def-use information GraphViz DOT format
+    showlive          Output CFG with liveness information GraphViz DOT format
 
 Use GraphViz's "dotty" tool to view DOT files.  For example:
     $ godoctor -file main.go -pos 5,1:5,1 debug showdefuse > output.dot
@@ -96,32 +97,26 @@ func (r *Debug) Run(config *Config) *Result {
 	switch command {
 	case "fmt":
 		r.fmt()
-		return &r.base.Result
 	case "showaffected":
 		r.showAffected(&r.base.DebugOutput)
-		return &r.base.Result
 	case "showast":
 		r.showAST(&r.base.DebugOutput)
-		return &r.base.Result
 	case "showcfg":
 		r.showCFG(&r.base.DebugOutput)
-		return &r.base.Result
 	case "showdefuse":
 		r.showDefUse(&r.base.DebugOutput)
-		return &r.base.Result
+	case "showlive":
+		r.showLiveVars(&r.base.DebugOutput)
 	case "showidentifiers":
 		r.showIdentifiers(&r.base.DebugOutput)
-		return &r.base.Result
 	case "showpackages":
 		r.showLoadedPackagesAndFiles(&r.base.DebugOutput)
-		return &r.base.Result
 	case "showreferences":
 		r.showReferences(&r.base.DebugOutput)
-		return &r.base.Result
 	default:
 		r.base.Log.Errorf("Unknown option %s", command)
-		return &r.base.Result
 	}
+	return &r.base.Result
 }
 
 func (r *Debug) fmt() {
@@ -256,12 +251,31 @@ func (r *Debug) showDefUse(out io.Writer) {
 	switch funcDecl := r.base.SelectedNode.(type) {
 	case *ast.FuncDecl:
 		if funcDecl.Name != nil {
-			fmt.Fprintf(out, "// %s\n", funcDecl.Name.Name)
+			fmt.Fprintf(out, "// Def-use information for %s\n", funcDecl.Name.Name)
 		} else {
-			fmt.Fprintf(out, "// (anonymous)\n")
+			fmt.Fprintf(out, "// Def-use information for anonymous function\n")
 		}
 		cfg := cfg.FromFunc(funcDecl)
-		dataflow.PrintDot(out, r.base.Program.Fset, r.base.SelectedNodePkg, cfg)
+		dataflow.PrintDefUseDot(out, r.base.Program.Fset, r.base.SelectedNodePkg, cfg)
+
+	default:
+		r.base.Log.Error("Please select a function.")
+		r.base.Log.AssociatePos(r.base.SelectionStart, r.base.SelectionEnd)
+		r.base.Log.Errorf("(Selected node: %s)", reflect.TypeOf(r.base.SelectedNode))
+		r.base.Log.AssociatePos(r.base.SelectedNode.Pos(), r.base.SelectedNode.Pos())
+	}
+}
+
+func (r *Debug) showLiveVars(out io.Writer) {
+	switch funcDecl := r.base.SelectedNode.(type) {
+	case *ast.FuncDecl:
+		if funcDecl.Name != nil {
+			fmt.Fprintf(out, "// Live variables in %s\n", funcDecl.Name.Name)
+		} else {
+			fmt.Fprintf(out, "// Live variables in anonymous function\n")
+		}
+		cfg := cfg.FromFunc(funcDecl)
+		dataflow.PrintLiveVarsDot(out, r.base.Program.Fset, r.base.SelectedNodePkg, cfg)
 
 	default:
 		r.base.Log.Error("Please select a function.")

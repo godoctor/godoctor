@@ -11,7 +11,7 @@ func main() {
 	two = 2
 	frac := Fraction{one, two}
 	frac.Denominator = 4
-	if 1 < 5 {
+	if two = 222; 1 < 5 {
 		frac.Numerator = 3
 	}
 	fmt.Println(frac)
