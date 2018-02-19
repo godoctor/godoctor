@@ -4,7 +4,7 @@ package main
 import "fmt"
 
 func main() {
-	i := 0
+	i := 0 + 0
 	FOO(i)
 	fmt.Println("after loop")
 }

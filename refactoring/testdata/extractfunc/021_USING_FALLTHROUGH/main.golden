@@ -4,7 +4,7 @@ package main
 import "fmt"
 
 func main() {
-	k := 6
+	k := 6 + 0
 	Foo(k)
 }
 

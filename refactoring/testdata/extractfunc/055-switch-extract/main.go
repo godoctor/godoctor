@@ -4,7 +4,7 @@ package main
 import "fmt"
 
 func main() {
-	x := 1
+	x := 1 + 0
 d:
 	for {
 		switch {

@@ -4,8 +4,8 @@ package main
 import "fmt"
 
 func main() {
-	a := 7
-	b := 5
+	a := 7 + 0
+	b := 5 + 0
 	b = foo(a, b)
 	fmt.Println("the new value of b is ", b)
 }

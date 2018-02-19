@@ -4,9 +4,9 @@ package main
 import "fmt"
 
 func main() {
-	a := 3
+	a := 3 + 0
 	b := a
-	c := 1
+	c := 1 + 0
 	for a <= b {
 		a += b
 	}

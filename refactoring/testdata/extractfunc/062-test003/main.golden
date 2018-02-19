@@ -7,7 +7,7 @@ func main() {
 	messages := make(chan string)
 	signals := make(chan bool)
 
-	msg := "hi"
+	msg := "hi" + ""
 	select {
 	case messages <- msg:
 		newFunc(msg)
