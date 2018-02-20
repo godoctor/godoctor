@@ -1,3 +1,3 @@
 Affected Declarations:
-  String - /Users/joverbey/Documents/Go/src/github.com/godoctor/godoctor/refactoring/testdata/debug/showaffected/main.go, Line 5
-  String - /Users/joverbey/Documents/Go/src/github.com/godoctor/godoctor/refactoring/testdata/debug/showaffected/main.go, Line 7
+  String - ./testdata/debug/showaffected/main.go, Line 5
+  String - ./testdata/debug/showaffected/main.go, Line 7
