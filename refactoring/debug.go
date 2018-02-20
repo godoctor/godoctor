@@ -69,7 +69,7 @@ func (r *Debug) Description() *Description {
 		Usage:     "<command>",
 		HTMLDoc:   "",
 		Multifile: false,
-		Params: []Parameter{Parameter{
+		Params: []Parameter{{
 			Label:        "Command",
 			Prompt:       "Command",
 			DefaultValue: "",
@@ -276,7 +276,7 @@ func (r *Debug) describeVariables(stmt ast.Stmt) string {
 
 func listNames(vars map[*types.Var]struct{}) string {
 	names := []string{}
-	for v, _ := range vars {
+	for v := range vars {
 		names = append(names, v.Name())
 	}
 	sort.Strings(names)
@@ -397,7 +397,7 @@ func (r *Debug) showReferences(out io.Writer) {
 		fmt.Fprintf(out, "References to %s:\n", id.Name)
 		ids := names.FindOccurrences(r.base.SelectedNodePkg.ObjectOf(id), r.base.Program)
 		strs := []string{}
-		for id, _ := range ids {
+		for id := range ids {
 			description := fmt.Sprintf("  %s: %s",
 				r.base.Program.Fset.Position(id.Pos()).Filename,
 				r.base.Extent(id).String())

@@ -39,7 +39,7 @@ func (r *Rename) Description() *Description {
 		Usage:     "<new_name>",
 		HTMLDoc:   renameDoc,
 		Multifile: true,
-		Params: []Parameter{Parameter{
+		Params: []Parameter{{
 			Label:        "New Name:",
 			Prompt:       "What to rename this identifier to.",
 			DefaultValue: "",
@@ -181,7 +181,7 @@ func (r *Rename) selectedTypeSwitchVar() *ast.TypeSwitchStmt {
 
 func (r *Rename) extents(ids map[*ast.Ident]bool, fset *token.FileSet) map[string][]*text.Extent {
 	result := map[string][]*text.Extent{}
-	for id, _ := range ids {
+	for id := range ids {
 		pos := fset.Position(id.Pos())
 		if _, ok := result[pos.Filename]; !ok {
 			result[pos.Filename] = []*text.Extent{}

@@ -189,7 +189,7 @@ loop:
 	// Find those definitions that reach the entry to the selected region.
 	reaching := make(map[ast.Stmt]struct{})
 	for _, entry := range result.EntryPoints() {
-		for def, _ := range dataflow.DefsReaching(entry, cfg, pkgInfo) {
+		for def := range dataflow.DefsReaching(entry, cfg, pkgInfo) {
 			reaching[def] = struct{}{}
 		}
 	}
@@ -340,7 +340,7 @@ func (r *stmtRange) EntryPoints() []ast.Stmt {
 	}
 
 	entryPoints := []ast.Stmt{}
-	for b, _ := range entrySet {
+	for b := range entrySet {
 		entryPoints = append(entryPoints, b)
 	}
 
@@ -362,7 +362,7 @@ func (r *stmtRange) ExitDestinations() []ast.Stmt {
 	}
 
 	exitTo := []ast.Stmt{}
-	for b, _ := range exitSet {
+	for b := range exitSet {
 		exitTo = append(exitTo, b)
 	}
 
@@ -377,7 +377,7 @@ func (r *stmtRange) LocalsLiveAtEntry() []*types.Var {
 
 	liveEntry := []*types.Var{}
 	for _, entry := range entryPoints {
-		for variable, _ := range r.liveIn[entry] {
+		for variable := range r.liveIn[entry] {
 			liveEntry = append(liveEntry, variable)
 		}
 	}
@@ -393,7 +393,7 @@ func (r *stmtRange) LocalsLiveAfterExit() []*types.Var {
 
 	liveExit := []*types.Var{}
 	for _, exit := range exitTo {
-		for variable, _ := range r.liveIn[exit] {
+		for variable := range r.liveIn[exit] {
 			liveExit = append(liveExit, variable)
 		}
 	}
@@ -410,16 +410,16 @@ func (r *stmtRange) LocalsLiveAfterExit() []*types.Var {
 // Variables may appear in multiple sets.
 func (r *stmtRange) LocalsReferenced() (asgt, updt, decl, use []*types.Var) {
 	asgtSet, updtSet, declSet, useSet := dataflow.ReferencedVars(r.blocksInRange, r.pkgInfo)
-	for v, _ := range asgtSet {
+	for v := range asgtSet {
 		asgt = append(asgt, v)
 	}
-	for v, _ := range updtSet {
+	for v := range updtSet {
 		updt = append(updt, v)
 	}
-	for v, _ := range declSet {
+	for v := range declSet {
 		decl = append(decl, v)
 	}
-	for v, _ := range useSet {
+	for v := range useSet {
 		use = append(use, v)
 	}
 	SortVars(asgt)
@@ -599,7 +599,7 @@ func (r *ExtractFunc) Description() *Description {
 		Usage:     "<new_name>",
 		HTMLDoc:   extractFuncDoc,
 		Multifile: false,
-		Params: []Parameter{Parameter{
+		Params: []Parameter{{
 			Label:        "Name:",
 			Prompt:       "Enter a name for the new function.",
 			DefaultValue: "",
@@ -790,7 +790,7 @@ func (r *ExtractFunc) analyzeVars() (recv *types.Var,
 	// pass it as an argument.  Instead, make it a local variable, and
 	// set it equal to its constant value.
 	constants := r.constantValues(params)
-	for param, _ := range constants {
+	for param := range constants {
 		params = difference(params, []*types.Var{param})
 		locals = append(locals, param)
 	}
@@ -863,24 +863,24 @@ func (r *ExtractFunc) defsInitializing(varList []*types.Var) map[*types.Var]map[
 	}
 
 	// Add all definitions to the result map
-	for stmt, _ := range r.stmtRange.defsReachingSelection {
+	for stmt := range r.stmtRange.defsReachingSelection {
 		if excluded[stmt] {
 			continue
 		}
 
 		asgtSet, updtSet, declSet, _ := dataflow.ReferencedVars(
 			[]ast.Stmt{stmt}, r.stmtRange.pkgInfo)
-		for variable, _ := range asgtSet {
+		for variable := range asgtSet {
 			if _, found := result[variable]; found {
 				result[variable][stmt] = struct{}{}
 			}
 		}
-		for variable, _ := range updtSet {
+		for variable := range updtSet {
 			if _, found := result[variable]; found {
 				result[variable][stmt] = struct{}{}
 			}
 		}
-		for variable, _ := range declSet {
+		for variable := range declSet {
 			if _, found := result[variable]; found {
 				result[variable][stmt] = struct{}{}
 			}
@@ -906,7 +906,7 @@ func extractSingleton(set map[ast.Stmt]struct{}) (ast.Stmt, bool) {
 	if len(set) != 1 {
 		return nil, false
 	}
-	for stmt, _ := range set {
+	for stmt := range set {
 		return stmt, true
 	}
 	panic("Unreachable")

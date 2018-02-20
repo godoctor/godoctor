@@ -58,7 +58,7 @@ splines="ortho";
 
 		// Show def-use edges in red, dotted
 		usedIn := []ast.Stmt{}
-		for stmt, _ := range du[from] {
+		for stmt := range du[from] {
 			usedIn = append(usedIn, stmt)
 		}
 		cfg.Sort(usedIn)
@@ -131,24 +131,24 @@ func reachingVars(from, to ast.Stmt, info *loader.PackageInfo) string {
 	_, _, _, use := ReferencedVars([]ast.Stmt{to}, info)
 
 	vars := map[string]struct{}{}
-	for variable, _ := range asgt {
+	for variable := range asgt {
 		if _, used := use[variable]; used {
 			vars[variable.Name()] = struct{}{}
 		}
 	}
-	for variable, _ := range updt {
+	for variable := range updt {
 		if _, used := use[variable]; used {
 			vars[variable.Name()] = struct{}{}
 		}
 	}
-	for variable, _ := range decl {
+	for variable := range decl {
 		if _, used := use[variable]; used {
 			vars[variable.Name()] = struct{}{}
 		}
 	}
 
 	varList := []string{}
-	for name, _ := range vars {
+	for name := range vars {
 		varList = append(varList, name)
 	}
 	sort.Sort(sort.StringSlice(varList))
@@ -203,7 +203,7 @@ splines="ortho";
 
 func toString(set map[*types.Var]struct{}) string {
 	list := []string{}
-	for variable, _ := range set {
+	for variable := range set {
 		list = append(list, variable.Name())
 	}
 	sort.Sort(sort.StringSlice(list))

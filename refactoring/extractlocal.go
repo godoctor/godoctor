@@ -29,7 +29,7 @@ func (r *ExtractLocal) Description() *Description {
 		Usage:     "<new_name>",
 		HTMLDoc:   extractLocalDoc,
 		Multifile: false,
-		Params: []Parameter{Parameter{
+		Params: []Parameter{{
 			Label:        "Name: ",
 			Prompt:       "Enter a name for the new variable.",
 			DefaultValue: "",
@@ -432,17 +432,17 @@ func (r *ExtractLocal) varsInSelectionWithReachingDefsFrom(from ast.Stmt, defUse
 		r.SelectedNodePkg)
 	use := dataflow.Vars(r.SelectedNode.(ast.Expr), r.SelectedNodePkg)
 
-	for variable, _ := range asgt {
+	for variable := range asgt {
 		if _, used := use[variable]; used {
 			result[variable] = struct{}{}
 		}
 	}
-	for variable, _ := range updt {
+	for variable := range updt {
 		if _, used := use[variable]; used {
 			result[variable] = struct{}{}
 		}
 	}
-	for variable, _ := range decl {
+	for variable := range decl {
 		if _, used := use[variable]; used {
 			result[variable] = struct{}{}
 		}
@@ -454,7 +454,7 @@ func (r *ExtractLocal) varsInSelectionWithReachingDefsFrom(from ast.Stmt, defUse
 // the string "the variables x, y, and z" (for use in an error message)
 func describeVars(vars map[*types.Var]struct{}) string {
 	names := []string{}
-	for variable, _ := range vars {
+	for variable := range vars {
 		names = append(names, variable.Name())
 	}
 
@@ -651,7 +651,7 @@ func (r *ExtractLocal) findDefsInBodyReachingSelection(enclosingForStmt *ast.For
 	ast.Inspect(enclosingForStmt.Body, func(n ast.Node) bool {
 		if stmt, ok := n.(ast.Stmt); ok {
 			vars := r.varsInSelectionWithReachingDefsFrom(stmt, defUse)
-			for variable, _ := range vars {
+			for variable := range vars {
 				result[variable] = struct{}{}
 			}
 		}

@@ -20,7 +20,7 @@ func (r *Null) Description() *Description {
 		Usage:     "<allow_errors?>",
 		HTMLDoc:   "",
 		Multifile: false,
-		Params: []Parameter{Parameter{
+		Params: []Parameter{{
 			Label:        "Allow Errors",
 			Prompt:       "Allow Errors",
 			DefaultValue: true,

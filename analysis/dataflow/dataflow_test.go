@@ -662,7 +662,7 @@ func (c *CFGWrapper) expIntsToStmts(args []int) map[ast.Stmt]struct{} {
 
 // give generics
 func expectFromMaps(actual, exp map[ast.Stmt]struct{}) (dnf, found map[ast.Stmt]struct{}) {
-	for stmt, _ := range exp {
+	for stmt := range exp {
 		if _, ok := actual[stmt]; ok {
 			delete(exp, stmt)
 			delete(actual, stmt)
@@ -682,7 +682,7 @@ func (c *CFGWrapper) expectLive(t *testing.T, s int, exp ...string) {
 
 	_, out := LiveVars(c.cfg, c.prog.Created[0])
 	outs := out[c.exp[s]]
-	for o, _ := range outs {
+	for o := range outs {
 		actualLive[o] = struct{}{}
 	}
 
@@ -691,18 +691,18 @@ func (c *CFGWrapper) expectLive(t *testing.T, s int, exp ...string) {
 		expLive[c.objs[e]] = struct{}{}
 	}
 
-	for e, _ := range expLive {
+	for e := range expLive {
 		if _, ok := actualLive[e]; ok {
 			delete(expLive, e)
 			delete(actualLive, e)
 		}
 	}
 
-	for obj, _ := range expLive {
+	for obj := range expLive {
 		t.Error("did not find", c.objNames[obj], "as a live variable for", s)
 	}
 
-	for obj, _ := range actualLive {
+	for obj := range actualLive {
 		t.Error("found", c.objNames[obj], "as a live variable for", s)
 	}
 }
@@ -716,18 +716,18 @@ func (c *CFGWrapper) expectReaching(t *testing.T, s int, exp ...int) {
 	// get reaching for stmt s as slice, put in map
 	actualReach := make(map[ast.Stmt]struct{})
 	defs := DefsReaching(c.exp[s], c.cfg, c.prog.Created[0])
-	for i, _ := range defs {
+	for i := range defs {
 		actualReach[i] = struct{}{}
 	}
 
 	expReach := c.expIntsToStmts(exp)
 	dnf, found := expectFromMaps(actualReach, expReach)
 
-	for stmt, _ := range found {
+	for stmt := range found {
 		t.Error("did not find", c.stmts[stmt], "in reaching for", s)
 	}
 
-	for stmt, _ := range dnf {
+	for stmt := range dnf {
 		t.Error("found", c.stmts[stmt], "as a reaching for", s)
 	}
 }
@@ -742,13 +742,13 @@ func (c *CFGWrapper) expectUdDuSymmetry(t *testing.T) {
 	ud := make(map[ast.Stmt]map[ast.Stmt]struct{})
 	for _, stmt := range c.cfg.Blocks() {
 		ud[stmt] = make(map[ast.Stmt]struct{})
-		for def, _ := range DefsReaching(stmt, c.cfg, c.prog.Created[0]) {
+		for def := range DefsReaching(stmt, c.cfg, c.prog.Created[0]) {
 			ud[stmt][def] = struct{}{}
 		}
 	}
 
 	for stmt, uses := range du {
-		for use, _ := range uses {
+		for use := range uses {
 			if _, found := ud[use][stmt]; !found {
 				stmtN := c.stmts[stmt]
 				useN := c.stmts[use]
@@ -761,7 +761,7 @@ func (c *CFGWrapper) expectUdDuSymmetry(t *testing.T) {
 	}
 
 	for stmt, defs := range ud {
-		for def, _ := range defs {
+		for def := range defs {
 			if _, found := du[def][stmt]; !found {
 				stmtN := c.stmts[stmt]
 				defN := c.stmts[def]
@@ -776,7 +776,7 @@ func (c *CFGWrapper) expectUdDuSymmetry(t *testing.T) {
 
 func (c *CFGWrapper) describe(stmts map[ast.Stmt]struct{}) string {
 	var b bytes.Buffer
-	for stmt, _ := range stmts {
+	for stmt := range stmts {
 		fmt.Fprintf(&b, "%d ", c.stmts[stmt])
 	}
 	return b.String()
@@ -800,7 +800,7 @@ func (c *CFGWrapper) expectUses(t *testing.T, start int, end int, exp ...string)
 	_, _, _, uses := ReferencedVars(stmts, c.prog.Created[0])
 
 	actualUse := make(map[*types.Var]struct{})
-	for u, _ := range uses {
+	for u := range uses {
 		actualUse[u] = struct{}{}
 	}
 
@@ -809,17 +809,17 @@ func (c *CFGWrapper) expectUses(t *testing.T, start int, end int, exp ...string)
 		expUse[c.objs[e]] = struct{}{}
 	}
 
-	for d, _ := range expUse {
+	for d := range expUse {
 		if _, ok := actualUse[d]; ok {
 			delete(expUse, d)
 			delete(actualUse, d)
 		}
 	}
 
-	for u, _ := range expUse {
+	for u := range expUse {
 		t.Error("Did not find", u.Name(), "in definitions")
 	}
-	for u, _ := range actualUse {
+	for u := range actualUse {
 		t.Error("Found", u.Name(), "in definitions")
 	}
 }
@@ -842,13 +842,13 @@ func (c *CFGWrapper) expectDefs(t *testing.T, start int, end int, exp ...string)
 	asgt, updt, decl, _ := ReferencedVars(stmts, c.prog.Created[0])
 
 	actualDef := make(map[*types.Var]struct{})
-	for d, _ := range asgt {
+	for d := range asgt {
 		actualDef[d] = struct{}{}
 	}
-	for d, _ := range updt {
+	for d := range updt {
 		actualDef[d] = struct{}{}
 	}
-	for d, _ := range decl {
+	for d := range decl {
 		actualDef[d] = struct{}{}
 	}
 
@@ -857,17 +857,17 @@ func (c *CFGWrapper) expectDefs(t *testing.T, start int, end int, exp ...string)
 		expDef[c.objs[e]] = struct{}{}
 	}
 
-	for d, _ := range expDef {
+	for d := range expDef {
 		if _, ok := actualDef[d]; ok {
 			delete(expDef, d)
 			delete(actualDef, d)
 		}
 	}
 
-	for d, _ := range expDef {
+	for d := range expDef {
 		t.Error("Did not find", d.Name(), "in definitions")
 	}
-	for f, _ := range actualDef {
+	for f := range actualDef {
 		t.Error("Found", f.Name(), "in definitions")
 	}
 

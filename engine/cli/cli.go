@@ -281,7 +281,7 @@ func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, 
 	// If input was supplied on standard input, ensure that the refactoring
 	// makes changes only to that code (and does not affect any other files)
 	if stdinPath != "" {
-		for f, _ := range result.Edits {
+		for f := range result.Edits {
 			if f != stdinPath {
 				fmt.Fprintf(stderr, "Error: When source code is given on standard input, refactorings are prohibited from changing any other files.  This refactoring would require modifying %s.\n", f)
 				return 1

@@ -74,7 +74,7 @@ func (c *CFG) Succs(s ast.Stmt) []ast.Stmt {
 // The blocks are roughly in the order they appear in the source code.
 func (c *CFG) Blocks() []ast.Stmt {
 	blocks := make([]ast.Stmt, 0, len(c.blocks))
-	for s, _ := range c.blocks {
+	for s := range c.blocks {
 		blocks = append(blocks, s)
 	}
 	return blocks
