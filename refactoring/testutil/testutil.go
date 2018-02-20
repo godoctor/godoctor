@@ -228,8 +228,8 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 		if err != nil {
 			t.Fatal(err)
 		}
-		expectedOutput := sanitize(string(bytes))
-		actualOutput := sanitize(debugOutput)
+		expectedOutput := sanitize(string(bytes), false)
+		actualOutput := sanitize(debugOutput, true)
 		if expectedOutput != actualOutput {
 			fmt.Printf(">>>>> Debug output does not match contents of %s\n", debugOutputFilename)
 			fmt.Printf(">>>>> NOTE: All occurrences of the working directory name are replaced by \".\"\n")
@@ -280,10 +280,12 @@ func exists(filename string, t *testing.T) bool {
 	}
 }
 
-func sanitize(debugOutput string) string {
+func sanitize(debugOutput string, replaceCwd bool) string {
 	cwd, _ := os.Getwd()
 	debugOutput = strings.Replace(debugOutput, "\r\n", "\n", -1)
-	debugOutput = strings.Replace(debugOutput, cwd, ".", -1)
+	if replaceCwd {
+		debugOutput = strings.Replace(debugOutput, cwd, ".", -1)
+	}
 	return debugOutput
 }
 
