@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/godoctor/godoctor/engine"
 	"github.com/godoctor/godoctor/engine/cli"
 )
 
@@ -22,5 +23,6 @@ var version string = "0.6 (Beta)"
 
 func main() {
 	aboutText := fmt.Sprintf("%s %s", name, version)
+	engine.AddDefaultRefactorings()
 	os.Exit(cli.Run(aboutText, os.Stdin, os.Stdout, os.Stderr, os.Args))
 }
