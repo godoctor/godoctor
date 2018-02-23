@@ -96,8 +96,11 @@ type Description struct {
 	// extracting a local variable will only change the File containing the
 	// selection, so Extract Local Variable has Multifile=false.
 	Multifile bool
-	// Additional input required for this refactoring.  See Parameter.
+	// Required inputs for this refactoring (e.g., if a variable is being
+	// renamed, a new name for that variable).  See Parameter.
 	Params []Parameter
+	// Optional inputs following the required inputs.  See Parameter.
+	OptionalParams []Parameter
 	// False if this refactoring is not intended for production use.
 	Hidden bool
 }
@@ -201,17 +204,21 @@ type RefactoringBase struct {
 	Result
 }
 
-// Base implementation of a Run method.  Most refactorings should invoke this
+// Setup code for a Run method.  Most refactorings should invoke this
 // method before performing refactoring-specific work.  This method
 // initializes the refactoring, clears the log, and
 // configures all of the fields in the RefactoringBase struct.
-func (r *RefactoringBase) Run(config *Config) *Result {
+func (r *RefactoringBase) Init(config *Config, desc *Description) *Result {
 	r.Log = NewLog()
 	r.Edits = map[string]*text.EditSet{}
 	r.DebugOutput.Reset()
 
 	if config.FileSystem == nil {
 		r.Log.Error("INTERNAL ERROR: null Config.FileSystem")
+		return &r.Result
+	}
+
+	if !validateArgs(config, desc, r.Log) {
 		return &r.Result
 	}
 
@@ -401,36 +408,79 @@ func (r *RefactoringBase) guessScope(config *Config) ([]string, string) {
 		fmt.Sprintf("Defaulting to package scope %s for refactoring (provide an explicit scope to change this)", pkg)
 }
 
-// ValidateArgs determines whether the arguments supplied in the given Config
+// validateArgs determines whether the arguments supplied in the given Config
 // match the parameters required by the given Description.  If they mismatch in
 // either type or number, a fatal error is logged to the given Log, and the
 // function returns false; otherwise, no error is logged, and the function
 // returns true.
-func ValidateArgs(config *Config, desc *Description, log *Log) bool {
-	numArgsExpected := len(desc.Params)
+func validateArgs(config *Config, desc *Description, log *Log) bool {
+	minArgsExpected := len(desc.Params)
+	maxArgsExpected := len(desc.Params) + len(desc.OptionalParams)
 	numArgsSupplied := len(config.Args)
-	if numArgsSupplied != numArgsExpected {
+	if numArgsSupplied < minArgsExpected {
+		atLeast := ""
+		if maxArgsExpected > minArgsExpected {
+			atLeast = " at least"
+		}
 		expectedPlural := "s"
-		if numArgsExpected == 1 {
+		if minArgsExpected == 1 {
 			expectedPlural = ""
 		}
 		wasWere := "were"
 		if numArgsSupplied == 1 {
 			wasWere = "was"
 		}
-		log.Errorf("This refactoring requires %d argument%s, "+
-			"but %d %s supplied.", numArgsExpected,
-			expectedPlural, numArgsSupplied, wasWere)
+		log.Errorf("This refactoring requires%s %d argument%s, "+
+			"but %d %s supplied.",
+			atLeast,
+			minArgsExpected,
+			expectedPlural,
+			numArgsSupplied,
+			wasWere)
 		return false
 	}
+	if numArgsSupplied > maxArgsExpected {
+		atMost := ""
+		if maxArgsExpected > minArgsExpected {
+			atMost = " at most"
+		}
+		expectedPlural := "s"
+		if maxArgsExpected == 1 {
+			expectedPlural = ""
+		}
+		wasWere := "were"
+		if numArgsSupplied == 1 {
+			wasWere = "was"
+		}
+		log.Errorf("This refactoring requires%s %d argument%s, "+
+			"but %d %s supplied.",
+			atMost,
+			maxArgsExpected,
+			expectedPlural,
+			numArgsSupplied,
+			wasWere)
+		return false
+	}
+
 	for i, arg := range config.Args {
-		expected := reflect.TypeOf(desc.Params[i].DefaultValue)
-		if reflect.TypeOf(arg) != expected {
-			paramName := desc.Params[i].Label
-			log.Errorf("%s must be a %s", paramName, expected)
-			return false
+		if i < minArgsExpected {
+			expected := reflect.TypeOf(desc.Params[i].DefaultValue)
+			if reflect.TypeOf(arg) != expected {
+				paramName := desc.Params[i].Label
+				log.Errorf("%s must be a %s", paramName, expected)
+				return false
+			}
+		} else {
+			index := i - minArgsExpected
+			expected := reflect.TypeOf(desc.OptionalParams[index].DefaultValue)
+			if reflect.TypeOf(arg) != expected {
+				paramName := desc.OptionalParams[index].Label
+				log.Errorf("%s must be a %s", paramName, expected)
+				return false
+			}
 		}
 	}
+
 	return true
 }
 

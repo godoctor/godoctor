@@ -29,22 +29,19 @@ type ToggleVar struct {
 
 func (r *ToggleVar) Description() *Description {
 	return &Description{
-		Name:      "Toggle var ⇔ :=",
-		Synopsis:  "Toggles between a var declaration and := statement",
-		Usage:     "",
-		HTMLDoc:   toggleVarDoc,
-		Multifile: false,
-		Params:    nil,
-		Hidden:    false,
+		Name:           "Toggle var ⇔ :=",
+		Synopsis:       "Toggles between a var declaration and := statement",
+		Usage:          "",
+		HTMLDoc:        toggleVarDoc,
+		Multifile:      false,
+		Params:         nil,
+		OptionalParams: nil,
+		Hidden:         false,
 	}
 }
 
 func (r *ToggleVar) Run(config *Config) *Result {
-	if r.RefactoringBase.Run(config); r.Log.ContainsErrors() {
-		return &r.Result
-	}
-
-	if !ValidateArgs(config, r.Description(), r.Log) {
+	if r.RefactoringBase.Init(config, r.Description()); r.Log.ContainsErrors() {
 		return &r.Result
 	}
 

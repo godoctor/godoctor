@@ -71,9 +71,8 @@ The <refactoring> argument determines the refactoring to perform:
 {{.Refactorings}}
 
 The <args> following the refactoring name vary depending on the refactoring.
-
-To display usage information for a particular refactoring, such as {{.FirstRefactoring}}, use:
-    % {{.CommandName}} {{.FirstRefactoring}}
+If a refactoring requires arguments but none are supplied, a message will be
+displayed with a synopsis of the correct usage.
 
 For complete usage information, see the user manual: http://gorefactor.org/doc.html
 `
@@ -82,11 +81,10 @@ For complete usage information, see the user manual: http://gorefactor.org/doc.h
 
 func printHelp(cmdName, aboutText string, flags *flag.FlagSet, stderr io.Writer) {
 	var usageFields struct {
-		AboutText        string
-		CommandName      string
-		FirstRefactoring string
-		Flags            string
-		Refactorings     string
+		AboutText    string
+		CommandName  string
+		Flags        string
+		Refactorings string
 	}
 
 	usageFields.AboutText = aboutText
@@ -101,10 +99,6 @@ func printHelp(cmdName, aboutText string, flags *flag.FlagSet, stderr io.Writer)
 
 	var refactorings bytes.Buffer
 	for _, key := range engine.AllRefactoringNames() {
-		if usageFields.FirstRefactoring == "" {
-			usageFields.FirstRefactoring = key
-		}
-
 		r := engine.GetRefactoring(key)
 		if !r.Description().Hidden {
 			fmt.Fprintf(&refactorings, "    %-15s %s\n",
@@ -283,8 +277,10 @@ func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, 
 		return 1
 	}
 
-	if flags.NFlag() == 0 && flags.NArg() == 1 && len(engine.AllRefactoringNames()) != 1 {
-		// Invoked as "godoctor refactoring"
+	if flags.NFlag() == 0 && flags.NArg() == 1 &&
+		len(engine.AllRefactoringNames()) != 1 &&
+		len(refac.Description().Params) > 0 {
+		// Invoked as "godoctor refactoring" but arguments are required
 		fmt.Fprintf(stderr, "Usage: %s %s\n",
 			refacName, refac.Description().Usage)
 		return 2

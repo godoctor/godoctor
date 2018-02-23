@@ -12,7 +12,6 @@ import (
 	"go/types"
 	"reflect"
 	"sort"
-	"strconv"
 
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"github.com/godoctor/godoctor/analysis/dataflow"
@@ -604,17 +603,13 @@ func (r *ExtractFunc) Description() *Description {
 			Prompt:       "Enter a name for the new function.",
 			DefaultValue: "",
 		}},
-		Hidden: false,
+		OptionalParams: nil,
+		Hidden:         false,
 	}
 }
 
 func (r *ExtractFunc) Run(config *Config) *Result {
-	if r.RefactoringBase.Run(config); r.Log.ContainsErrors() {
-		return &r.Result
-	}
-	if len(config.Args) != 1 {
-		r.Log.Error(errInvalidArgs("expected one argument, got: " +
-			strconv.Itoa(len(config.Args))))
+	if r.Init(config, r.Description()); r.Log.ContainsErrors() {
 		return &r.Result
 	}
 
