@@ -410,9 +410,17 @@ func ValidateArgs(config *Config, desc *Description, log *Log) bool {
 	numArgsExpected := len(desc.Params)
 	numArgsSupplied := len(config.Args)
 	if numArgsSupplied != numArgsExpected {
-		log.Errorf("This refactoring requires %d arguments, "+
-			"but %d were supplied.", numArgsExpected,
-			numArgsSupplied)
+		expectedPlural := "s"
+		if numArgsExpected == 1 {
+			expectedPlural = ""
+		}
+		wasWere := "were"
+		if numArgsSupplied == 1 {
+			wasWere = "was"
+		}
+		log.Errorf("This refactoring requires %d argument%s, "+
+			"but %d %s supplied.", numArgsExpected,
+			expectedPlural, numArgsSupplied, wasWere)
 		return false
 	}
 	for i, arg := range config.Args {

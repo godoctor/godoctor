@@ -1,4 +1,4 @@
-// Copyright 2016 Auburn University. All rights reserved.
+// Copyright 2016-2018 Auburn University and others. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -6,8 +6,10 @@
 package cli
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
+	"html/template"
 	"io"
 	"io/ioutil"
 	"os"
@@ -24,34 +26,100 @@ import (
 	"github.com/godoctor/godoctor/text"
 )
 
-const useHelp = "Run 'godoctor -help' for more information.\n"
+// Usage is the text template used to produce the output of "godoctor -help"
+var Usage string
 
-func printHelp(aboutText string, flags *flag.FlagSet, stderr io.Writer) {
-	fmt.Fprintf(stderr, `%s - Go source code refactoring tool.
-Usage: godoctor [<flag> ...] <refactoring> [<args> ...]
+// ensureUsageIsSet sets the Usage template if it has not already been set
+// (e.g., in main.go)
+func ensureUsageIsSet() {
+	if Usage != "" {
+		// Usage has already been set by main.go
+		return
+	}
+
+	numRefactorings := len(engine.AllRefactoringNames())
+	if numRefactorings == 1 {
+		refac := engine.GetRefactoring(engine.AllRefactoringNames()[0])
+		if len(refac.Description().Params) == 0 {
+			Usage = `{{.AboutText}}
+
+Usage: {{.CommandName}} [<flag> ...]
 
 Each <flag> must be one of the following:
-`, aboutText)
-	flags.VisitAll(func(flag *flag.Flag) {
-		fmt.Fprintf(stderr, "    -%-8s %s\n", flag.Name, flag.Usage)
-	})
-	fmt.Fprintln(stderr, `
+{{.Flags}}
+`
+		} else {
+			Usage = `{{.AboutText}}
 
-The <refactoring> argument determines the refactoring to perform:`)
+Usage: {{.CommandName}} [<flag> ...] [<args> ...]
+
+Each <flag> must be one of the following:
+{{.Flags}}
+
+The <args> control the refactoring:
+` + refac.Description().Usage
+		}
+	} else {
+		Usage = `{{.AboutText}} - Go source code refactoring tool.
+
+Usage: {{.CommandName}} [<flag> ...] <refactoring> [<args> ...]
+
+Each <flag> must be one of the following:
+{{.Flags}}
+
+The <refactoring> argument determines the refactoring to perform:
+{{.Refactorings}}
+
+The <args> following the refactoring name vary depending on the refactoring.
+
+To display usage information for a particular refactoring, such as {{.FirstRefactoring}}, use:
+    % {{.CommandName}} {{.FirstRefactoring}}
+
+For complete usage information, see the user manual: http://gorefactor.org/doc.html
+`
+	}
+}
+
+func printHelp(cmdName, aboutText string, flags *flag.FlagSet, stderr io.Writer) {
+	var usageFields struct {
+		AboutText        string
+		CommandName      string
+		FirstRefactoring string
+		Flags            string
+		Refactorings     string
+	}
+
+	usageFields.AboutText = aboutText
+
+	usageFields.CommandName = cmdName
+
+	var flagList bytes.Buffer
+	flags.VisitAll(func(flag *flag.Flag) {
+		fmt.Fprintf(&flagList, "    -%-8s %s\n", flag.Name, flag.Usage)
+	})
+	usageFields.Flags = flagList.String()
+
+	var refactorings bytes.Buffer
 	for _, key := range engine.AllRefactoringNames() {
+		if usageFields.FirstRefactoring == "" {
+			usageFields.FirstRefactoring = key
+		}
+
 		r := engine.GetRefactoring(key)
 		if !r.Description().Hidden {
-			fmt.Fprintf(stderr, "    %-15s %s\n",
+			fmt.Fprintf(&refactorings, "    %-15s %s\n",
 				key, r.Description().Synopsis)
 		}
 	}
-	fmt.Fprintln(stderr, `
-The <args> following the refactoring name vary depending on the refactoring.
+	usageFields.Refactorings = refactorings.String()
 
-To display usage information for a particular refactoring, such as rename, use:
-    %% godoctor rename
+	ensureUsageIsSet()
 
-For complete usage information, see the user manual: http://gorefactor.org/doc.html`)
+	t := template.Must(template.New("usage").Parse(Usage))
+	err := t.Execute(os.Stderr, usageFields)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+	}
 }
 
 type CLIFlags struct {
@@ -99,17 +167,19 @@ func Flags() *CLIFlags {
 //     os.Exit(cli.Run(os.Stdin, os.Stdout, os.Stderr, os.Args))
 // All arguments must be non-nil, and args[0] is required.
 func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, args []string) int {
+	cmdName := args[0]
+
 	flags := Flags()
 	// Don't print full help unless -help was requested.
 	// Just gently remind users that it's there.
-	flags.Usage = func() { fmt.Fprint(stderr, useHelp) }
-	flags.Init(args[0], flag.ContinueOnError)
+	flags.Usage = func() { fmt.Fprintf(stderr, "Run '%s -help' for more information.\n", cmdName) }
+	flags.Init(cmdName, flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	if err := flags.Parse(args[1:]); err != nil {
 		// (err has already been printed)
 		if err == flag.ErrHelp {
 			// Invoked as "godoctor [flags] -help"
-			printHelp(aboutText, flags.FlagSet, stderr)
+			printHelp(cmdName, aboutText, flags.FlagSet, stderr)
 			return 2
 		}
 		return 1
@@ -186,13 +256,26 @@ func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, 
 		return 1
 	}
 
-	if len(args) == 0 || args[0] == "" || args[0] == "help" {
-		// Invoked as "godoctor [flags]" or "godoctor [flags] help"
-		printHelp(aboutText, flags.FlagSet, stderr)
+	if len(args) > 0 && args[0] == "help" {
+		// Invoked as "godoctor [flags] help"
+		printHelp(cmdName, aboutText, flags.FlagSet, stderr)
 		return 2
 	}
 
-	refacName := args[0]
+	var refacName string
+	if len(engine.AllRefactoringNames()) == 1 {
+		refacName = engine.AllRefactoringNames()[0]
+	} else {
+		if len(args) == 0 {
+			// Invoked as "godoctor [flags]" with no refactoring
+			printHelp(cmdName, aboutText, flags.FlagSet, stderr)
+			return 2
+		}
+
+		refacName = args[0]
+		args = args[1:]
+	}
+
 	refac := engine.GetRefactoring(refacName)
 	if refac == nil {
 		fmt.Fprintf(stderr, "There is no refactoring named \"%s\"\n",
@@ -200,9 +283,7 @@ func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, 
 		return 1
 	}
 
-	args = args[1:]
-
-	if flags.NFlag() == 0 && flags.NArg() == 1 {
+	if flags.NFlag() == 0 && flags.NArg() == 1 && len(engine.AllRefactoringNames()) != 1 {
 		// Invoked as "godoctor refactoring"
 		fmt.Fprintf(stderr, "Usage: %s %s\n",
 			refacName, refac.Description().Usage)
