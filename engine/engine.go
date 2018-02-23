@@ -19,8 +19,7 @@ var refactorings map[string]refactoring.Refactoring
 var refactoringsInOrder []string
 
 func init() {
-	refactorings = map[string]refactoring.Refactoring{}
-	refactoringsInOrder = []string{}
+	ClearRefactorings()
 }
 
 // AddDefaultRefactorings invokes AddRefactoring on each of the Go Doctor's
@@ -68,4 +67,11 @@ func AddRefactoring(shortName string, newRefac refactoring.Refactoring) error {
 	refactorings[shortName] = newRefac
 	refactoringsInOrder = append(refactoringsInOrder, shortName)
 	return nil
+}
+
+// ClearRefactorings removes all registered refactorings from the engine.
+// This should only be used for testing.
+func ClearRefactorings() {
+	refactorings = map[string]refactoring.Refactoring{}
+	refactoringsInOrder = []string{}
 }

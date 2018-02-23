@@ -66,10 +66,8 @@ Usage: {{.CommandName}} [<flag> ...] <refactoring> [<args> ...]
 
 Each <flag> must be one of the following:
 {{.Flags}}
-
 The <refactoring> argument determines the refactoring to perform:
 {{.Refactorings}}
-
 The <args> following the refactoring name vary depending on the refactoring.
 If a refactoring requires arguments but none are supplied, a message will be
 displayed with a synopsis of the correct usage.
@@ -110,7 +108,7 @@ func printHelp(cmdName, aboutText string, flags *flag.FlagSet, stderr io.Writer)
 	ensureUsageIsSet()
 
 	t := template.Must(template.New("usage").Parse(Usage))
-	err := t.Execute(os.Stderr, usageFields)
+	err := t.Execute(stderr, usageFields)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 	}
@@ -368,7 +366,7 @@ func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, 
 
 	debugOutput := result.DebugOutput.String()
 	if len(debugOutput) > 0 {
-		fmt.Fprintln(os.Stdout, debugOutput)
+		fmt.Fprintln(stdout, debugOutput)
 	}
 
 	if *flags.writeFlag {
