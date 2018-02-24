@@ -1,4 +1,4 @@
-// Copyright 2015 Auburn University. All rights reserved.
+// Copyright 2015-2018 Auburn University and others. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -10,6 +10,7 @@ package refactoring
 import (
 	"go/ast"
 	"go/token"
+	"go/types"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -144,14 +145,19 @@ func (r *Rename) rename(ident *ast.Ident, pkgInfo *loader.PackageInfo) {
 		r.Log.Errorf("Renaming %s to %s may cause conflicts with an existing declaration", ident.Name, r.newName)
 		r.Log.AssociatePos(conflict.Pos(), conflict.Pos())
 	}
+	var scope *types.Scope
 	var idents map[*ast.Ident]bool
 	if ts := r.selectedTypeSwitchVar(); ts != nil {
+		scope = types.NewScope(nil, ts.Pos(), ts.End(), "artificial scope for typeswitch")
 		idents = names.FindTypeSwitchVarOccurrences(ts, r.SelectedNodePkg, r.Program)
 	} else {
+		if obj != nil {
+			scope = obj.Parent()
+		}
 		idents = names.FindOccurrences(obj, r.Program)
 	}
 
-	r.addOccurrences(ident.Name, r.extents(idents, r.Program.Fset))
+	r.addOccurrences(ident.Name, scope, r.extents(idents, r.Program.Fset))
 }
 
 func (r *Rename) selectedTypeSwitchVar() *ast.TypeSwitchStmt {
@@ -195,7 +201,7 @@ func (r *Rename) extents(ids map[*ast.Ident]bool, fset *token.FileSet) map[strin
 	return sorted
 }
 
-func (r *Rename) addOccurrences(name string, allOccurrences map[string][]*text.Extent) {
+func (r *Rename) addOccurrences(name string, scope *types.Scope, allOccurrences map[string][]*text.Extent) {
 	hasOccsInGoRoot := false
 	for filename, occurrences := range allOccurrences {
 		if isInGoRoot(filename) {
@@ -209,7 +215,7 @@ func (r *Rename) addOccurrences(name string, allOccurrences map[string][]*text.E
 			}
 			_, file := r.fileNamed(filename)
 			commentOccurrences := names.FindInComments(
-				name, file, r.Program.Fset)
+				name, file, scope, r.Program.Fset)
 			for _, occurrence := range commentOccurrences {
 				r.Edits[filename].Add(occurrence, r.newName)
 			}

@@ -1,4 +1,4 @@
-// Copyright 2015 Auburn University. All rights reserved.
+// Copyright 2015-2018 Auburn University and others. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -109,7 +109,7 @@ func findInComments(pkgName, identName string, t *testing.T) []string {
 	filename := prog.Fset.Position(file.Pos()).Filename
 
 	result := []string{}
-	for _, extent := range names.FindInComments(identName, file, prog.Fset) {
+	for _, extent := range names.FindInComments(identName, file, nil, prog.Fset) {
 		result = append(result, fmt.Sprintf("%s:%d", filename, extent.Offset))
 	}
 	return result

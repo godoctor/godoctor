@@ -2,15 +2,15 @@ package main
 
 import "fmt"
 
-var hello = ":-(" // This is a different renamed
+var hello = ":-(" // This is a different hello
 
-// Test for renaming the local variable renamed,only renamed variable should be changed to renamed  
 func main() {
-	hello = ":-)"  // Don't change this 
+	hello = ":-)" // Don't change this
 
-	var renamed string = "Hello"	// <<<<< rename,11,6,11,6,renamed,pass
-	var world string = "world"	
+	var renamed string = "Hello" // <<<<< rename,10,6,10,6,renamed,pass
+	var world string = "world"
 	renamed = renamed + ", " + world
 	renamed += "!"
+	// Test for renaming the local variable renamed, only renamed variable should be changed to renamed
 	fmt.Println(renamed)
 }
