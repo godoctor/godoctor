@@ -26,35 +26,35 @@ func TestExtentIntersect(t *testing.T) {
 	}
 
 	tests := []test{
-		test{ol15, ol15, "offset 1, length 5"},
-		test{ol15, ol30, "offset 3, length 0"},
-		test{ol15, ol33, "offset 3, length 3"},
-		test{ol15, ol51, "offset 5, length 1"},
-		test{ol15, ol61, ""},
+		{ol15, ol15, "offset 1, length 5"},
+		{ol15, ol30, "offset 3, length 0"},
+		{ol15, ol33, "offset 3, length 3"},
+		{ol15, ol51, "offset 5, length 1"},
+		{ol15, ol61, ""},
 
-		test{ol30, ol15, "offset 3, length 0"},
-		test{ol30, ol30, ""},
-		test{ol30, ol33, ""},
-		test{ol30, ol51, ""},
-		test{ol30, ol61, ""},
+		{ol30, ol15, "offset 3, length 0"},
+		{ol30, ol30, ""},
+		{ol30, ol33, ""},
+		{ol30, ol51, ""},
+		{ol30, ol61, ""},
 
-		test{ol33, ol15, "offset 3, length 3"},
-		test{ol33, ol30, ""},
-		test{ol33, ol33, "offset 3, length 3"},
-		test{ol33, ol51, "offset 5, length 1"},
-		test{ol33, ol61, ""},
+		{ol33, ol15, "offset 3, length 3"},
+		{ol33, ol30, ""},
+		{ol33, ol33, "offset 3, length 3"},
+		{ol33, ol51, "offset 5, length 1"},
+		{ol33, ol61, ""},
 
-		test{ol51, ol15, "offset 5, length 1"},
-		test{ol51, ol30, ""},
-		test{ol51, ol33, "offset 5, length 1"},
-		test{ol51, ol51, "offset 5, length 1"},
-		test{ol51, ol61, ""},
+		{ol51, ol15, "offset 5, length 1"},
+		{ol51, ol30, ""},
+		{ol51, ol33, "offset 5, length 1"},
+		{ol51, ol51, "offset 5, length 1"},
+		{ol51, ol61, ""},
 
-		test{ol61, ol15, ""},
-		test{ol61, ol30, ""},
-		test{ol61, ol33, ""},
-		test{ol61, ol51, ""},
-		test{ol61, ol61, "offset 6, length 1"},
+		{ol61, ol15, ""},
+		{ol61, ol30, ""},
+		{ol61, ol33, ""},
+		{ol61, ol51, ""},
+		{ol61, ol61, "offset 6, length 1"},
 	}
 
 	for _, tst := range tests {
@@ -147,20 +147,20 @@ func TestOverlap(t *testing.T) {
 	//                                                   123456789
 	// Which intervals should overlap Extent{3,4}?   |--|
 	tests := []test{
-		test{2, 1, false}, // Regions starting to the left of offset 3
-		test{2, 2, true},
-		test{3, 0, false}, // Regions starting inside the interval
-		test{3, 1, true},
-		test{3, 4, true},
-		test{3, 6, true},
-		test{4, 1, true},
-		test{4, 3, true},
-		test{4, 9, true},
-		test{6, 0, true},
-		test{6, 1, true},
-		test{6, 7, true},
-		test{7, 0, false}, // Regions to the right of the interval
-		test{7, 3, false},
+		{2, 1, false}, // Regions starting to the left of offset 3
+		{2, 2, true},
+		{3, 0, false}, // Regions starting inside the interval
+		{3, 1, true},
+		{3, 4, true},
+		{3, 6, true},
+		{4, 1, true},
+		{4, 3, true},
+		{4, 9, true},
+		{6, 0, true},
+		{6, 1, true},
+		{6, 7, true},
+		{7, 0, false}, // Regions to the right of the interval
+		{7, 3, false},
 	}
 
 	for _, tst := range tests {

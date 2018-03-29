@@ -5,7 +5,7 @@ package main
 import "fmt"
 
 func main() {
-	i := 2
+	i := 2 + 0
 	foo(i)
 	fmt.Println("end of main function")
 }

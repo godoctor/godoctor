@@ -5,7 +5,7 @@ import "fmt"
 
 func main() {
 	var x interface{}
-	x = 77.0
+	x = 77.0 + 0
 	switch i := x.(type) {
 	case int:
 		fmt.Println("INT", i)

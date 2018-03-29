@@ -10,7 +10,6 @@ import (
 	"go/token"
 	"go/types"
 	"reflect"
-	"strconv"
 
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"github.com/godoctor/godoctor/analysis/dataflow"
@@ -29,24 +28,20 @@ func (r *ExtractLocal) Description() *Description {
 		Usage:     "<new_name>",
 		HTMLDoc:   extractLocalDoc,
 		Multifile: false,
-		Params: []Parameter{Parameter{
+		Params: []Parameter{{
 			Label:        "Name: ",
 			Prompt:       "Enter a name for the new variable.",
 			DefaultValue: "",
 		}},
-		Hidden: false,
+		OptionalParams: nil,
+		Hidden:         false,
 	}
 }
 
 func (r *ExtractLocal) Run(config *Config) *Result {
-	r.RefactoringBase.Run(config)
+	r.Init(config, r.Description())
 	r.Log.ChangeInitialErrorsToWarnings()
 	if r.Log.ContainsErrors() {
-		return &r.Result
-	}
-	if len(config.Args) != 1 {
-		r.Log.Error(errInvalidArgs("expected one argument, got: " +
-			strconv.Itoa(len(config.Args))))
 		return &r.Result
 	}
 
@@ -379,8 +374,8 @@ func (r *ExtractLocal) isIfStmtInit() (*ast.IfStmt, bool) {
 // See varsInSelectionWithReachingDefsFrom.
 func (r *ExtractLocal) defUse() map[ast.Stmt]map[ast.Stmt]struct{} {
 	cfg := cfg.FromFunc(r.enclosingFuncDecl()) // We must be in a function
-	_, defUse := dataflow.ReachingDefs(cfg, r.SelectedNodePkg)
-	// dataflow.PrintReachingDefs(os.Stderr, r.Program.Fset, r.SelectedNodePkg, du)
+	defUse := dataflow.DefUse(cfg, r.SelectedNodePkg)
+	// dataflow.PrintDefUse(os.Stderr, r.Program.Fset, r.SelectedNodePkg, du)
 	return defUse
 }
 
@@ -432,17 +427,17 @@ func (r *ExtractLocal) varsInSelectionWithReachingDefsFrom(from ast.Stmt, defUse
 		r.SelectedNodePkg)
 	use := dataflow.Vars(r.SelectedNode.(ast.Expr), r.SelectedNodePkg)
 
-	for variable, _ := range asgt {
+	for variable := range asgt {
 		if _, used := use[variable]; used {
 			result[variable] = struct{}{}
 		}
 	}
-	for variable, _ := range updt {
+	for variable := range updt {
 		if _, used := use[variable]; used {
 			result[variable] = struct{}{}
 		}
 	}
-	for variable, _ := range decl {
+	for variable := range decl {
 		if _, used := use[variable]; used {
 			result[variable] = struct{}{}
 		}
@@ -454,7 +449,7 @@ func (r *ExtractLocal) varsInSelectionWithReachingDefsFrom(from ast.Stmt, defUse
 // the string "the variables x, y, and z" (for use in an error message)
 func describeVars(vars map[*types.Var]struct{}) string {
 	names := []string{}
-	for variable, _ := range vars {
+	for variable := range vars {
 		names = append(names, variable.Name())
 	}
 
@@ -651,7 +646,7 @@ func (r *ExtractLocal) findDefsInBodyReachingSelection(enclosingForStmt *ast.For
 	ast.Inspect(enclosingForStmt.Body, func(n ast.Node) bool {
 		if stmt, ok := n.(ast.Stmt); ok {
 			vars := r.varsInSelectionWithReachingDefsFrom(stmt, defUse)
-			for variable, _ := range vars {
+			for variable := range vars {
 				result[variable] = struct{}{}
 			}
 		}

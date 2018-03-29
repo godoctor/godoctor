@@ -544,7 +544,7 @@ func (c *CFGWrapper) expIntsToStmts(args []int) map[ast.Stmt]struct{} {
 
 // give generics
 func expectFromMaps(actual, exp map[ast.Stmt]struct{}) (dnf, found map[ast.Stmt]struct{}) {
-	for stmt, _ := range exp {
+	for stmt := range exp {
 		if _, ok := actual[stmt]; ok {
 			delete(exp, stmt)
 			delete(actual, stmt)
@@ -563,11 +563,11 @@ func (c *CFGWrapper) expectDefers(t *testing.T, exp ...int) {
 	expDefers := c.expIntsToStmts(exp)
 	dnf, found := expectFromMaps(actualDefers, expDefers)
 
-	for stmt, _ := range dnf {
+	for stmt := range dnf {
 		t.Error("did not find", c.stmts[stmt], "in defers")
 	}
 
-	for stmt, _ := range found {
+	for stmt := range found {
 		t.Error("found", c.stmts[stmt], "as a defer")
 	}
 }
@@ -587,11 +587,11 @@ func (c *CFGWrapper) expectSuccs(t *testing.T, s int, exp ...int) {
 	expSuccs := c.expIntsToStmts(exp)
 	dnf, found := expectFromMaps(actualSuccs, expSuccs)
 
-	for stmt, _ := range dnf {
+	for stmt := range dnf {
 		t.Error("did not find", c.stmts[stmt], "in successors for", s)
 	}
 
-	for stmt, _ := range found {
+	for stmt := range found {
 		t.Error("found", c.stmts[stmt], "as a successor for", s)
 	}
 }
@@ -610,11 +610,11 @@ func (c *CFGWrapper) expectPreds(t *testing.T, s int, exp ...int) {
 	expPreds := c.expIntsToStmts(exp)
 	dnf, found := expectFromMaps(actualPreds, expPreds)
 
-	for stmt, _ := range dnf {
+	for stmt := range dnf {
 		t.Error("did not find", c.stmts[stmt], "in predecessors for", s)
 	}
 
-	for stmt, _ := range found {
+	for stmt := range found {
 		t.Error("found", c.stmts[stmt], "as a predecessor for", s)
 	}
 }

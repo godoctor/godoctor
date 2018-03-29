@@ -1,4 +1,4 @@
-// Copyright 2015-2017 Auburn University and others. All rights reserved.
+// Copyright 2015-2018 Auburn University and others. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -12,7 +12,6 @@ import (
 	"go/types"
 	"reflect"
 	"sort"
-	"strconv"
 
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"github.com/godoctor/godoctor/analysis/dataflow"
@@ -21,21 +20,18 @@ import (
 	"golang.org/x/tools/go/loader"
 )
 
-/* -=-=- Types for Sorting -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
+/* -=-=- Sorting -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 
 // type for sorting []*types.Var variables alphabetically by name
-type typeVar []*types.Var
+type varSlice []*types.Var
 
-func (t typeVar) Len() int           { return len(t) }
-func (t typeVar) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
-func (t typeVar) Less(i, j int) bool { return t[i].Name() < t[j].Name() }
+func (t varSlice) Len() int           { return len(t) }
+func (t varSlice) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
+func (t varSlice) Less(i, j int) bool { return t[i].Name() < t[j].Name() }
 
-// type for sorting statements by their statring positions in the source code
-type nodeStmt []ast.Stmt
-
-func (n nodeStmt) Len() int           { return len(n) }
-func (n nodeStmt) Swap(i, j int)      { n[i], n[j] = n[j], n[i] }
-func (n nodeStmt) Less(i, j int) bool { return n[i].Pos() < n[j].Pos() }
+func SortVars(vars []*types.Var) {
+	sort.Sort(varSlice(vars))
+}
 
 /* -=-=- stmtRange -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 
@@ -58,6 +54,8 @@ type stmtRange struct {
 	blocksInRange []ast.Stmt
 	// For each block in the CFG, variables that are live at its entry
 	liveIn map[ast.Stmt]map[*types.Var]struct{}
+	// Definitions reaching the entrypoint to the selection
+	defsReachingSelection map[ast.Stmt]struct{}
 	// PackageInfo used to bind variable names to *types.Var objects
 	pkgInfo *loader.PackageInfo
 	// The package rooted func / method enclosing the selection
@@ -166,14 +164,15 @@ loop:
 	liveIn, _ := dataflow.LiveVars(cfg, pkgInfo)
 
 	result := &stmtRange{
-		pathToRoot:    pathToRoot,
-		firstIdx:      firstIdx,
-		lastIdx:       lastIdx,
-		cfg:           cfg,
-		blocksInRange: nil,
-		liveIn:        liveIn,
-		pkgInfo:       pkgInfo,
-		enclosingFunc: enclosingFunc,
+		pathToRoot:            pathToRoot,
+		firstIdx:              firstIdx,
+		lastIdx:               lastIdx,
+		cfg:                   cfg,
+		blocksInRange:         nil,
+		liveIn:                liveIn,
+		defsReachingSelection: map[ast.Stmt]struct{}{},
+		pkgInfo:               pkgInfo,
+		enclosingFunc:         enclosingFunc,
 	}
 
 	// Determine the subset of blocks in the CFG that correspond to
@@ -185,6 +184,15 @@ loop:
 		}
 	}
 	result.blocksInRange = blocksInRange
+
+	// Find those definitions that reach the entry to the selected region.
+	reaching := make(map[ast.Stmt]struct{})
+	for _, entry := range result.EntryPoints() {
+		for def := range dataflow.DefsReaching(entry, cfg, pkgInfo) {
+			reaching[def] = struct{}{}
+		}
+	}
+	result.defsReachingSelection = reaching
 
 	return result, nil
 }
@@ -331,11 +339,11 @@ func (r *stmtRange) EntryPoints() []ast.Stmt {
 	}
 
 	entryPoints := []ast.Stmt{}
-	for b, _ := range entrySet {
+	for b := range entrySet {
 		entryPoints = append(entryPoints, b)
 	}
 
-	sort.Sort(nodeStmt(entryPoints))
+	r.cfg.Sort(entryPoints)
 	return entryPoints
 }
 
@@ -353,11 +361,11 @@ func (r *stmtRange) ExitDestinations() []ast.Stmt {
 	}
 
 	exitTo := []ast.Stmt{}
-	for b, _ := range exitSet {
+	for b := range exitSet {
 		exitTo = append(exitTo, b)
 	}
 
-	sort.Sort(nodeStmt(exitTo))
+	r.cfg.Sort(exitTo)
 	return exitTo
 }
 
@@ -368,11 +376,11 @@ func (r *stmtRange) LocalsLiveAtEntry() []*types.Var {
 
 	liveEntry := []*types.Var{}
 	for _, entry := range entryPoints {
-		for variable, _ := range r.liveIn[entry] {
+		for variable := range r.liveIn[entry] {
 			liveEntry = append(liveEntry, variable)
 		}
 	}
-	sort.Sort(typeVar(liveEntry))
+	SortVars(liveEntry)
 	return liveEntry
 }
 
@@ -384,11 +392,11 @@ func (r *stmtRange) LocalsLiveAfterExit() []*types.Var {
 
 	liveExit := []*types.Var{}
 	for _, exit := range exitTo {
-		for variable, _ := range r.liveIn[exit] {
+		for variable := range r.liveIn[exit] {
 			liveExit = append(liveExit, variable)
 		}
 	}
-	sort.Sort(typeVar(liveExit))
+	SortVars(liveExit)
 	return liveExit
 }
 
@@ -401,21 +409,21 @@ func (r *stmtRange) LocalsLiveAfterExit() []*types.Var {
 // Variables may appear in multiple sets.
 func (r *stmtRange) LocalsReferenced() (asgt, updt, decl, use []*types.Var) {
 	asgtSet, updtSet, declSet, useSet := dataflow.ReferencedVars(r.blocksInRange, r.pkgInfo)
-	for v, _ := range asgtSet {
+	for v := range asgtSet {
 		asgt = append(asgt, v)
 	}
-	for v, _ := range updtSet {
+	for v := range updtSet {
 		updt = append(updt, v)
 	}
-	for v, _ := range declSet {
+	for v := range declSet {
 		decl = append(decl, v)
 	}
-	for v, _ := range useSet {
+	for v := range useSet {
 		use = append(use, v)
 	}
-	sort.Sort(typeVar(asgt))
-	sort.Sort(typeVar(decl))
-	sort.Sort(typeVar(use))
+	SortVars(asgt)
+	SortVars(decl)
+	SortVars(use)
 	return
 }
 
@@ -435,14 +443,15 @@ func (r *stmtRange) String() string {
 // extractedFunc encapsulates information about the new function that will be
 // created from the extracted code, along with how it should be called.
 type extractedFunc struct {
-	name          string                        // name of the new function
-	recv          *types.Var                    // receiver variable, or nil
-	params        []*types.Var                  // parameters for the new function
-	returns       []*types.Var                  // variables whose values will be returned
-	locals        []*types.Var                  // local variables to declare
-	declareResult bool                          // true for x := f(), false for x = f()
-	code          []byte                        // code to copy into the function body
-	pkgFmt        func(p *types.Package) string // rewrite import uses
+	name       string                        // name of the new function
+	recv       *types.Var                    // receiver variable, or nil
+	params     []*types.Var                  // parameters for the new function
+	returns    []*types.Var                  // variables whose values will be returned
+	locals     []*types.Var                  // local variables to declare
+	localInits map[*types.Var]ast.Expr       // initialization expressions for locals
+	define     bool                          // x := f() instead of x = f()
+	code       []byte                        // code to copy into the function body
+	pkgFmt     func(p *types.Package) string // rewrite import uses
 }
 
 // SourceCode returns source code for (1) the new function declaration that
@@ -463,7 +472,8 @@ func (f *extractedFunc) SourceCode() (funcDecl, funcCall string) {
 		funcCall = fmt.Sprintf("%s(%s)", f.name, funcCallArgs)
 	}
 
-	localVarDecls := createVarDecls(namesAndTypes(f.locals, f.pkgFmt))
+	names, types := namesAndTypes(f.locals, f.pkgFmt)
+	localVarDecls := createVarDecls(names, types, initStrings(f.localInits))
 	if len(f.returns) == 0 {
 		funcDecl = fmt.Sprintf("\n\nfunc %s {\n%s%s\n}\n",
 			funcDecl, localVarDecls, f.code)
@@ -474,7 +484,7 @@ func (f *extractedFunc) SourceCode() (funcDecl, funcCall string) {
 		returnStmt := "return " + returnExprs
 
 		assignSymbol := " = "
-		if f.declareResult {
+		if f.define {
 			assignSymbol = " := "
 		}
 
@@ -509,12 +519,32 @@ func namesAndTypes(vars []*types.Var, fmt types.Qualifier) (names []string, type
 	return
 }
 
+// initStrings receives a map from variables to (constant-valued) expressions
+// and converts the keys and values to strings, returning a map from variable
+// names to expression text.  If an expression is mapped to nil, then it is
+// not included in the returned map.  This works because createVarDecls will
+// declare the variable with a "var" declaration, which is exactly what we
+// want in that situation.
+func initStrings(inits map[*types.Var]ast.Expr) map[string]string {
+	result := make(map[string]string)
+	for variable, expr := range inits {
+		if expr != nil {
+			result[variable.Name()] = types.ExprString(expr)
+		}
+	}
+	return result
+}
+
 // createVarDecls returns source code for a sequence of var statements
-// declaring variables with the given names and types.
-func createVarDecls(names []string, types []string) string {
+// declaring variables with the given names, types, and initial values.
+func createVarDecls(names []string, types []string, localInits map[string]string) string {
 	var buf bytes.Buffer
 	for i := 0; i < len(names); i++ {
-		buf.WriteString("var " + names[i] + " " + types[i])
+		if init, ok := localInits[names[i]]; ok {
+			buf.WriteString(names[i] + " := " + init)
+		} else {
+			buf.WriteString("var " + names[i] + " " + types[i])
+		}
 		if i > 1 || i <= len(names)-1 {
 			buf.WriteString("\n")
 		}
@@ -568,22 +598,18 @@ func (r *ExtractFunc) Description() *Description {
 		Usage:     "<new_name>",
 		HTMLDoc:   extractFuncDoc,
 		Multifile: false,
-		Params: []Parameter{Parameter{
+		Params: []Parameter{{
 			Label:        "Name:",
 			Prompt:       "Enter a name for the new function.",
 			DefaultValue: "",
 		}},
-		Hidden: false,
+		OptionalParams: nil,
+		Hidden:         false,
 	}
 }
 
 func (r *ExtractFunc) Run(config *Config) *Result {
-	if r.RefactoringBase.Run(config); r.Log.ContainsErrors() {
-		return &r.Result
-	}
-	if len(config.Args) != 1 {
-		r.Log.Error(errInvalidArgs("expected one argument, got: " +
-			strconv.Itoa(len(config.Args))))
+	if r.Init(config, r.Description()); r.Log.ContainsErrors() {
 		return &r.Result
 	}
 
@@ -671,21 +697,22 @@ func (r *ExtractFunc) addEdits() {
 // about the extracted function and how it should be called.  Source code can
 // be obtained from the extractedFunc object.
 func (r *ExtractFunc) createExtractedFunc() *extractedFunc {
-	recv, params, returns, locals, declareResult := r.analyzeVars()
+	recv, params, returns, locals, localInits, declareResult := r.analyzeVars()
 
 	startOffset := r.Program.Fset.Position(r.stmtRange.Pos()).Offset
 	endOffset := r.Program.Fset.Position(r.stmtRange.End()).Offset
 	code := r.FileContents[startOffset:endOffset]
 
 	return &extractedFunc{
-		name:          r.funcName,
-		recv:          recv,
-		params:        params,
-		returns:       returns,
-		locals:        locals,
-		declareResult: declareResult,
-		code:          code,
-		pkgFmt:        pkgUseFmt(r.SelectedNodePkg.Pkg),
+		name:       r.funcName,
+		recv:       recv,
+		params:     params,
+		returns:    returns,
+		locals:     locals,
+		localInits: localInits,
+		define:     declareResult,
+		code:       code,
+		pkgFmt:     pkgUseFmt(r.SelectedNodePkg.Pkg),
 	}
 }
 
@@ -714,14 +741,18 @@ func pkgUseFmt(pkg *types.Package) types.Qualifier {
 // (5) when the selected statements are replaced with a function call, whether
 // the call should have the form x := f() or x = f() -- i.e., whether the
 // result variables should be declared or simply assigned.
-func (r *ExtractFunc) analyzeVars() (recv *types.Var, params, returns, locals []*types.Var, declareResult bool) {
+func (r *ExtractFunc) analyzeVars() (recv *types.Var,
+	params, returns, locals []*types.Var,
+	localInits map[*types.Var]ast.Expr,
+	declareResult bool) {
+
 	aliveFirst := r.stmtRange.LocalsLiveAtEntry()
 	aliveLast := r.stmtRange.LocalsLiveAfterExit()
 	assigned, updated, declared, used := r.stmtRange.LocalsReferenced()
 	defined := union(union(assigned, updated), declared)
 
 	// Params = LIVE_IN[Entry(selectionnode)] ⋂ USE[selection]
-	params = intersection(aliveFirst, used)
+	params = intersection(aliveFirst, union(union(used, assigned), updated))
 
 	// returns = LIVE_OUT[exit(sel)] ⋂ DEF[sel]
 	// If someStruct is a pointer and someStruct.field is assigned, but
@@ -747,10 +778,201 @@ func (r *ExtractFunc) analyzeVars() (recv *types.Var, params, returns, locals []
 		recv = r.SelectedNodePkg.ObjectOf(recvNode.List[0].Names[0]).(*types.Var)
 		params = difference(params, []*types.Var{recv})
 		returns = difference(returns, []*types.Var{recv})
-		locals = difference(returns, []*types.Var{recv})
+		locals = difference(locals, []*types.Var{recv})
 	}
 
-	return recv, params, returns, locals, declareResult
+	// If an argument always has a constant value, there is no reason to
+	// pass it as an argument.  Instead, make it a local variable, and
+	// set it equal to its constant value.
+	constants := r.constantValues(params)
+	for param := range constants {
+		params = difference(params, []*types.Var{param})
+		locals = append(locals, param)
+	}
+
+	// Sort each set of variables so we always extract in the same order.
+	SortVars(params)
+	SortVars(returns)
+	SortVars(locals)
+	return recv, params, returns, locals, constants, declareResult
+}
+
+// defs takes a list of variables and determines which are constant-valued; it
+// returns a map from (a subset of those) variables to the expressions defining
+// their constant values.  If the value expression is nil, then the variable
+// is defined by a "var" declaration with no initialization expression.
+//
+// The analysis is not too sophisticated.  We only say the variable is
+// constant-valued if
+// (1) exactly one definition reaches the entry to the selected region, and
+// (2) that definition has one of the following forms:
+//     var name type
+//     var name type = value
+//     name := value
+//     name = value
+func (r *ExtractFunc) constantValues(varList []*types.Var) map[*types.Var]ast.Expr {
+	result := make(map[*types.Var]ast.Expr)
+	for variable, defs := range r.defsInitializing(varList) {
+		// fmt.Println(variable.Name(), " has ", len(defs), " defs")
+		// for s, _ := range defs {
+		// 	fmt.Printf("Line %d: ",
+		// 		r.Program.Fset.Position(s.Pos()).Line,
+		// 		astutil.NodeDescription(s))
+		// }
+		if def, ok := extractSingleton(defs); ok {
+			if expr, isConstant := r.constantAssigned(def); isConstant {
+				result[variable] = expr
+			}
+		}
+	}
+	return result
+}
+
+// defsInitializing takes a list of variables and returns a map from each
+// variable to the set of statements that assign that variable's value at the
+// entry to inside the selection.
+//
+// This is used to determine which variables are constant-valued.
+func (r *ExtractFunc) defsInitializing(varList []*types.Var) map[*types.Var]map[ast.Stmt]struct{} {
+	result := make(map[*types.Var]map[ast.Stmt]struct{})
+
+	// When the first statement in the selection is a for-loop, a definition
+	// inside the loop may reach the beginning of the selection.  However,
+	// these definitions do not affect the initial value of variables, so we
+	// exclude them.
+	excluded := make(map[ast.Stmt]bool)
+	for _, stmt := range r.stmtRange.EntryPoints() {
+		if isForOrRangeStmt(stmt) {
+			ast.Inspect(stmt, func(n ast.Node) bool {
+				if s, ok := n.(ast.Stmt); ok {
+					excluded[s] = true
+				}
+				return true
+			})
+		}
+	}
+
+	// Make sure every variable has an entry in the result map
+	for _, variable := range varList {
+		result[variable] = make(map[ast.Stmt]struct{})
+	}
+
+	// Add all definitions to the result map
+	for stmt := range r.stmtRange.defsReachingSelection {
+		if excluded[stmt] {
+			continue
+		}
+
+		asgtSet, updtSet, declSet, _ := dataflow.ReferencedVars(
+			[]ast.Stmt{stmt}, r.stmtRange.pkgInfo)
+		for variable := range asgtSet {
+			if _, found := result[variable]; found {
+				result[variable][stmt] = struct{}{}
+			}
+		}
+		for variable := range updtSet {
+			if _, found := result[variable]; found {
+				result[variable][stmt] = struct{}{}
+			}
+		}
+		for variable := range declSet {
+			if _, found := result[variable]; found {
+				result[variable][stmt] = struct{}{}
+			}
+		}
+	}
+
+	return result
+}
+
+func isForOrRangeStmt(stmt ast.Stmt) bool {
+	switch stmt.(type) {
+	case *ast.ForStmt, *ast.RangeStmt:
+		return true
+	default:
+		return false
+	}
+}
+
+// extractSingleton returns the only element in the given set, returning that
+// element and true if it is a singleton set; otherwise, it returns nil and
+// false.
+func extractSingleton(set map[ast.Stmt]struct{}) (ast.Stmt, bool) {
+	if len(set) != 1 {
+		return nil, false
+	}
+	for stmt := range set {
+		return stmt, true
+	}
+	panic("Unreachable")
+}
+
+// constantAssigned determines whether the given statement assigns a constant
+// value to an identifier, returning the constant expression and true if so.
+func (r *ExtractFunc) constantAssigned(stmt ast.Stmt) (ast.Expr, bool) {
+	switch s := stmt.(type) {
+	case *ast.AssignStmt:
+		if len(s.Lhs) == 1 && len(s.Rhs) == 1 &&
+			isIdentifier(s.Lhs[0]) && isConstant(s.Rhs[0]) {
+			// identifier = expr
+			return s.Rhs[0], true
+		}
+		return nil, false
+
+	case *ast.DeclStmt:
+		if decl, ok := s.Decl.(*ast.GenDecl); ok && len(decl.Specs) == 1 {
+			if valueSpec, ok := decl.Specs[0].(*ast.ValueSpec); ok {
+				if len(valueSpec.Names) == 1 &&
+					isIdentifier(valueSpec.Names[0]) {
+					if len(valueSpec.Values) == 0 {
+						// var name type
+						return nil, true
+					}
+					if len(valueSpec.Values) == 1 &&
+						isConstant(valueSpec.Values[0]) {
+						// name := value
+						return valueSpec.Values[0], true
+					}
+				}
+			}
+		}
+		return nil, false
+
+	default:
+		return nil, false
+	}
+}
+
+func isIdentifier(expr ast.Expr) bool {
+	_, ok := expr.(*ast.Ident)
+	return ok
+}
+
+// constantIds are identifiers that are considered to be constants.
+// See analyzeVars and constantValues.
+//
+// We omit "nil" to avoid introducing "use of untyped nil" errors.  To work
+// around this, we would need to always introduce a var declaration for nil
+// rather than using the short assignment operator).
+var constantIds map[string]bool = map[string]bool{
+	"false": true,
+	"true":  true,
+}
+
+// isConstant returns true if an expression is considered to be a constant.
+// See analyzeVars and constantValues.
+//
+// For our purposes, constants are BasicLits (integer, float, imaginary,
+// character, and string literals) and certain identifiers (true and false).
+func isConstant(expr ast.Expr) bool {
+	switch x := expr.(type) {
+	case *ast.BasicLit:
+		return true
+	case *ast.Ident:
+		return constantIds[x.String()]
+	default:
+		return false
+	}
 }
 
 // varsWithPointerOrSliceTypes receives a list of variables and returns those
@@ -787,7 +1009,7 @@ func union(v1, v2 []*types.Var) []*types.Var {
 	for _, b := range insec {
 		v1 = append(v1, b) // adding back the variables to the array only once
 	}
-	sort.Sort(typeVar(v1))
+	SortVars(v1)
 	return v1
 }
 

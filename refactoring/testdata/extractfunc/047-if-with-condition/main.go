@@ -4,8 +4,8 @@ package main
 import "fmt"
 
 func main() {
-	a := 7
-	b := 5
+	a := 7 + 0
+	b := 5 + 0
 	b = b + 2
 	if a == b {
 		fmt.Println("a and b are equal")

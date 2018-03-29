@@ -4,8 +4,8 @@ package main
 import "fmt"
 
 func main() {
-	a := 5
-	b := 4
+	a := 5 + 0
+	b := 4 + 0
 	changeB(a, b)
 }
 

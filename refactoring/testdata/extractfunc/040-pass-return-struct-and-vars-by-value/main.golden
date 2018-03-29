@@ -8,8 +8,8 @@ type Pt struct {
 }
 
 func main() {
-	a := 7
-	b := 2
+	a := 7 + 0
+	b := 2 + 0
 	p := Pt{3, 4}
 	fmt.Println("Old Pt", p)
 	p.x = 5

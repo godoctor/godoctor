@@ -30,6 +30,8 @@ func (*customRefactoring) Run(config *refactoring.Config) *refactoring.Result {
 }
 
 func TestEngine(t *testing.T) {
+	engine.AddDefaultRefactorings()
+
 	first := ""
 	for _, shortName := range engine.AllRefactoringNames() {
 		if first == "" {

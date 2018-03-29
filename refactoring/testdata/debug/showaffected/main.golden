@@ -1,6 +1,3 @@
-Affected Declarations:
-  String - main.go, Line 5
-  String - main.go, Line 7
 package main
 
 import "fmt"

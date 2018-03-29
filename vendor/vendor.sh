@@ -17,16 +17,26 @@ FILE=`pwd`/versions.txt
 echo $PWD
 
 echo "Cloning repositories..."
-rm -rf golang.org/x/tools && \
-	git clone https://github.com/golang/tools.git golang.org/x/tools
 rm -rf github.com/cheggaaa/pb && \
 	git clone https://github.com/cheggaaa/pb.git github.com/cheggaaa/pb
+rm -rf github.com/mattn/go-runewidth && \
+	git clone https://github.com/mattn/go-runewidth.git github.com/mattn/go-runewidth
 rm -rf github.com/willf/bitset && \
 	git clone https://github.com/willf/bitset.git github.com/willf/bitset
+rm -rf golang.org/x/sys && \
+	git clone https://github.com/golang/sys.git golang.org/x/sys
+rm -rf golang.org/x/tools && \
+	git clone https://github.com/golang/tools.git golang.org/x/tools
 
 echo "Logging versions to $FILE and removing .git directories..."
 date >$FILE
-for pkg in ./golang.org/x/tools ./github.com/cheggaaa/pb ./github.com/willf/bitset; do
+for pkg in \
+		./github.com/cheggaaa/pb \
+		./github.com/mattn/go-runewidth \
+		./github.com/willf/bitset \
+		./golang.org/x/sys \
+		./golang.org/x/tools
+do
 	pushd . >/dev/null
 	cd $pkg
 	echo "" >>$FILE
@@ -34,7 +44,7 @@ for pkg in ./golang.org/x/tools ./github.com/cheggaaa/pb ./github.com/willf/bits
 	git remote -v | head -1 >>$FILE
 	git log --pretty=format:'%H %d %s' -1 >>$FILE
 	echo "" >>$FILE
-	rm -rf "$pkg/.git"
+	rm -rf ".git"
 	popd >/dev/null
 done
 

@@ -58,7 +58,7 @@ func defs(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 	}
 
 	result := []*types.Var{}
-	for v, _ := range union {
+	for v := range union {
 		result = append(result, v)
 	}
 	return result
@@ -102,7 +102,7 @@ func assigned(node ast.Expr) map[*ast.Ident]struct{} {
 	case *ast.IndexExpr:
 		return assigned(expr.X)
 	case *ast.SelectorExpr:
-		field := map[*ast.Ident]struct{}{expr.Sel: struct{}{}}
+		field := map[*ast.Ident]struct{}{expr.Sel: {}}
 		return union(assigned(expr.X), field)
 	case *ast.StarExpr:
 		return map[*ast.Ident]struct{}{}
@@ -169,7 +169,7 @@ func decls(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 func collectVars(idnts map[*ast.Ident]struct{}, info *loader.PackageInfo) []*types.Var {
 	var vars []*types.Var
 	// should all map to types.Var's, if not we don't want anyway
-	for i, _ := range idnts {
+	for i := range idnts {
 		if v, ok := info.ObjectOf(i).(*types.Var); ok {
 			if v.Pkg() == info.Pkg && !v.IsField() {
 				vars = append(vars, v)
@@ -264,7 +264,7 @@ func idents(node ast.Node) map[*ast.Ident]struct{} {
 }
 
 func union(one, two map[*ast.Ident]struct{}) map[*ast.Ident]struct{} {
-	for o, _ := range one {
+	for o := range one {
 		two[o] = struct{}{}
 	}
 	return two

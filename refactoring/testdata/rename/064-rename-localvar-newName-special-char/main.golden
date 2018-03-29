@@ -2,9 +2,9 @@ package main
 
 import "fmt"
 
-var hello = ":-(" // This is a different Some_New_Var
+var hello = ":-(" // This is a different hello
 
-// Test for renaming the local variable Some_New_Var
+// Test for renaming the local variable hello
 func main() {
 	hello = ":-)"  // Don't change this
 

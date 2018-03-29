@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// Package names provides functions to analyze the usage names (functions,
+// types, variables, etc.) across multiple files.
 package names
 
 import (

@@ -11,7 +11,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/godoctor/godoctor/engine"
 	"github.com/godoctor/godoctor/engine/cli"
+	"github.com/godoctor/godoctor/refactoring"
+	"github.com/godoctor/godoctor/text"
 )
 
 const (
@@ -46,13 +49,16 @@ func main() {
 `
 )
 
-func runCLI(stdin string, args ...string) (exit int, stdout string, stderr string) {
+func addRefactoringsAndRunCLI(addRefactorings func(), stdin string, args ...string) (exit int, stdout string, stderr string) {
 	args = append(args, "godoctor")
 	copy(args[1:], args[0:len(args)-1])
 	args[0] = "godoctor"
 
 	var stdoutBuf, stderrBuf bytes.Buffer
 	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	engine.ClearRefactorings()
+	cli.Usage = ""
+	addRefactorings()
 	exit = cli.Run("Go Doctor TEST", strings.NewReader(stdin),
 		&stdoutBuf, &stderrBuf, args)
 	stdout = stdoutBuf.String()
@@ -60,11 +66,18 @@ func runCLI(stdin string, args ...string) (exit int, stdout string, stderr strin
 	return
 }
 
+func runCLI(stdin string, args ...string) (exit int, stdout string, stderr string) {
+	return addRefactoringsAndRunCLI(engine.AddDefaultRefactorings, stdin, args...)
+}
+
 func TestNoArgsNoInput(t *testing.T) {
 	exit, stdout, stderr := runCLI("")
 	if exit != 2 || stdout != "" ||
 		!strings.Contains(stderr, "Usage: godoctor ") {
 		t.Fatal("No args, no input expected usage string with exit 2")
+	}
+	if !strings.Contains(stderr, "<refactoring>") {
+		t.Fatal("Usage message text does not contain <refactoring>")
 	}
 }
 
@@ -123,27 +136,27 @@ func TestList(t *testing.T) {
 func TestInvalidCombos(t *testing.T) {
 	invalid := [][]string{
 		// complete file json list man pos scope verbose write
-		[]string{"-complete", "-json"},
-		[]string{"-complete", "-list"},
-		[]string{"-complete", "-doc=man"},
-		[]string{"-complete", "-w"},
-		[]string{"-file=-", "-json"},
-		[]string{"-file=-", "-doc=man"},
-		[]string{"-json", "-list"},
-		[]string{"-json", "-doc=man"},
-		[]string{"-json", "-pos=1,1:1,1"},
-		[]string{"-json", "-scope=golang.org/x/tools"},
-		[]string{"-json", "-v"},
-		[]string{"-json", "-w"},
-		[]string{"-list", "-doc=man"},
-		[]string{"-list", "-v"},
-		[]string{"-list", "-w"},
-		[]string{"-list", "somearg"},
-		[]string{"-doc=man", "-pos=1,1:1,1"},
-		[]string{"-doc=man", "-scope=golang.org/x/tools"},
-		[]string{"-doc=man", "-v"},
-		[]string{"-doc=man", "-w"},
-		[]string{"-doc=man", "somearg"},
+		{"-complete", "-json"},
+		{"-complete", "-list"},
+		{"-complete", "-doc=man"},
+		{"-complete", "-w"},
+		{"-file=-", "-json"},
+		{"-file=-", "-doc=man"},
+		{"-json", "-list"},
+		{"-json", "-doc=man"},
+		{"-json", "-pos=1,1:1,1"},
+		{"-json", "-scope=golang.org/x/tools"},
+		{"-json", "-v"},
+		{"-json", "-w"},
+		{"-list", "-doc=man"},
+		{"-list", "-v"},
+		{"-list", "-w"},
+		{"-list", "somearg"},
+		{"-doc=man", "-pos=1,1:1,1"},
+		{"-doc=man", "-scope=golang.org/x/tools"},
+		{"-doc=man", "-v"},
+		{"-doc=man", "-w"},
+		{"-doc=man", "somearg"},
 	}
 	for _, flags := range invalid {
 		exit, stdout, stderr := runCLI("", flags...)
@@ -236,5 +249,95 @@ func TestRenameInvalidScope(t *testing.T) {
 	}
 	if stdout != "" {
 		t.Fatalf("Rename with invalid scope should not have output")
+	}
+}
+
+// Test CLI behavior with a custom set of refactorings (notably, zero or one)
+
+type customNoParams struct{}
+
+func (*customNoParams) Description() *refactoring.Description {
+	return &refactoring.Description{
+		Name:   "Test",
+		Params: nil,
+		Hidden: false,
+	}
+}
+
+func (*customNoParams) Run(config *refactoring.Config) *refactoring.Result {
+	return &refactoring.Result{
+		Log:   refactoring.NewLog(),
+		Edits: map[string]*text.EditSet{},
+	}
+}
+
+type customOneParam struct {
+	refactoring.RefactoringBase
+}
+
+func (*customOneParam) Description() *refactoring.Description {
+	return &refactoring.Description{
+		Name: "Test",
+		Params: []refactoring.Parameter{{
+			Label:        "Param",
+			Prompt:       "Input",
+			DefaultValue: "x"}},
+		Hidden: false,
+	}
+}
+
+func (r *customOneParam) Run(config *refactoring.Config) *refactoring.Result {
+	return r.Init(config, r.Description())
+}
+
+func TestUsageWithNoRefactorings(t *testing.T) {
+	exit, stdout, stderr := addRefactoringsAndRunCLI(func() {}, "")
+	if exit != 2 || stdout != "" ||
+		!strings.Contains(stderr, "Usage: godoctor ") {
+		t.Fatal("No args, no input expected usage string with exit 2")
+	}
+}
+
+func TestUsageWithOneRefactoringNoParams(t *testing.T) {
+	exit, stdout, stderr := addRefactoringsAndRunCLI(func() { engine.AddRefactoring("custom", &customNoParams{}) }, "", "-help")
+	if exit != 2 || stdout != "" ||
+		!strings.Contains(stderr, "Usage: godoctor ") {
+		t.Fatal("No args, no input expected usage string with exit 2")
+	}
+	if strings.Contains(stderr, "<refactoring>") {
+		t.Fatal("No args, no input produced usage message for multiple refactorings")
+	}
+}
+
+func TestUsageWithOneRefactoringOneParam(t *testing.T) {
+	exit, stdout, stderr := addRefactoringsAndRunCLI(func() { engine.AddRefactoring("custom", &customOneParam{}) }, "", "-help")
+	if exit != 2 || stdout != "" ||
+		!strings.Contains(stderr, "Usage: godoctor ") {
+		t.Fatal("No args, no input expected usage string with exit 2")
+	}
+	if strings.Contains(stderr, "<refactoring>") {
+		t.Fatal("No args, no input produced usage message for multiple refactorings")
+	}
+}
+
+func TestOneRefactoringNoParams(t *testing.T) {
+	exit, stdout, stderr := addRefactoringsAndRunCLI(func() { engine.AddRefactoring("custom", &customNoParams{}) }, "")
+	if exit != 0 || stdout != "" || stderr != "" {
+		t.Fatal("One refactoring with no args, no input expected exit 0")
+	}
+}
+
+func TestOneRefactoringOneParamButNoArgs(t *testing.T) {
+	exit, stdout, stderr := addRefactoringsAndRunCLI(func() { engine.AddRefactoring("custom", &customOneParam{}) }, "")
+	if exit != 3 || stdout != "" ||
+		!strings.Contains(stderr, "Error: This refactoring requires 1 argument, but 0 were supplied.") {
+		t.Fatal("One refactoring with one parameter but no args expected error with exit 3")
+	}
+}
+
+func TestOneRefactoringOneParam(t *testing.T) {
+	exit, stdout, _ := addRefactoringsAndRunCLI(func() { engine.AddRefactoring("custom", &customOneParam{}) }, hello, "-scope=-", "x")
+	if exit != 0 || stdout != "" {
+		t.Fatal("One refactoring with one arg, no input expected exit 0")
 	}
 }

@@ -4,7 +4,7 @@ package main
 import "fmt"
 
 func main() {
-	j := 4
+	j := 4 + 0
 	switch j {
 	case 1, 3, 5, 7, 9:
 		fmt.Println(j, "is odd")

@@ -4,7 +4,7 @@ package main
 import "fmt"
 
 func main() {
-	i := 5
+	i := 5 + 0
 	for i < 10 {
 		i++
 		if i == 8 {

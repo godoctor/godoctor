@@ -44,13 +44,12 @@ func ExampleReachingDefs() {
 
 	funcOne := f.Decls[1].(*ast.FuncDecl)
 	c := cfg.FromFunc(funcOne)
-	in, out := dataflow.ReachingDefs(c, prog.Created[0])
+	du := dataflow.DefUse(c, prog.Created[0])
 
 	ast.Inspect(f, func(n ast.Node) bool {
 		switch stmt := n.(type) {
 		case ast.Stmt:
-			ins, _ := in[stmt], out[stmt]
-			fmt.Println(len(ins))
+			fmt.Println(len(du[stmt]))
 			// do as you please
 		}
 		return true

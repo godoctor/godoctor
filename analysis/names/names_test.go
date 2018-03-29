@@ -1,4 +1,4 @@
-// Copyright 2015 Auburn University. All rights reserved.
+// Copyright 2015-2018 Auburn University and others. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -71,7 +71,7 @@ func equals(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	for i, _ := range a {
+	for i := range a {
 		if a[i] != b[i] {
 			return false
 		}
@@ -85,7 +85,7 @@ func findOccurrences(pkgName, identName string, t *testing.T) []string {
 	occs := names.FindOccurrences(pkg.ObjectOf(ident), prog)
 
 	result := []string{}
-	for id, _ := range occs {
+	for id := range occs {
 		pos := prog.Fset.Position(id.Pos())
 		result = append(result, fmt.Sprintf("%s:%d",
 			pos.Filename, pos.Offset))
@@ -96,7 +96,7 @@ func findOccurrences(pkgName, identName string, t *testing.T) []string {
 
 func sortKeys(m map[string][]text.Extent) []string {
 	result := []string{}
-	for k, _ := range m {
+	for k := range m {
 		result = append(result, k)
 	}
 	sort.Strings(result)
@@ -109,7 +109,7 @@ func findInComments(pkgName, identName string, t *testing.T) []string {
 	filename := prog.Fset.Position(file.Pos()).Filename
 
 	result := []string{}
-	for _, extent := range names.FindInComments(identName, file, prog.Fset) {
+	for _, extent := range names.FindInComments(identName, file, nil, prog.Fset) {
 		result = append(result, fmt.Sprintf("%s:%d", filename, extent.Offset))
 	}
 	return result

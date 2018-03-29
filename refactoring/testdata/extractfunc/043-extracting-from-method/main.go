@@ -15,8 +15,8 @@ func (s SliceOfints) sum() int {
 }
 
 func (people AgesByNames) older() string {
-	a := 0
-	n := ""
+	a := 0 + 0
+	n := "" + ""
 	for key, value := range people {
 		if value > a {
 			a = value

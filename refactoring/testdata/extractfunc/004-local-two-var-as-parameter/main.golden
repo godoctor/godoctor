@@ -4,15 +4,15 @@ package main
 import "fmt"
 
 func main() {
-	a := 3
-	b := 4
+	a := 3 + 0
+	b := 4 + 0
 	b = printB(a)
 	fmt.Println("The new value of b is:", b)
 }
 
 func printB(a int) int {
 	var b int
-	b = 5
+	b = 5 + 0
 	fmt.Println("The variable a and b is:", b, a)
 	return b
 }

@@ -1,4 +1,4 @@
-// Copyright 2015 Auburn University. All rights reserved.
+// Copyright 2015-2018 Auburn University and others. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -19,9 +19,20 @@ var refactorings map[string]refactoring.Refactoring
 var refactoringsInOrder []string
 
 func init() {
-	refactorings = map[string]refactoring.Refactoring{}
-	refactoringsInOrder = []string{}
+	ClearRefactorings()
+}
 
+// AddDefaultRefactorings invokes AddRefactoring on each of the Go Doctor's
+// built-in refactorings.
+//
+// Clients implementing a custom Go Doctor may:
+// 1. not invoke this at all,
+// 2. invoke it after adding custom refactorings, or
+// 3. invoke it before adding custom refactorings.
+// The choice between #2 and #3 will determine whether the client's custom
+// refactorings are listed before or after the built-in refactorings when
+// "godoctor -list" is run.
+func AddDefaultRefactorings() {
 	AddRefactoring("rename", new(refactoring.Rename))
 	AddRefactoring("extract", new(refactoring.ExtractFunc))
 	AddRefactoring("var", new(refactoring.ExtractLocal))
@@ -56,4 +67,11 @@ func AddRefactoring(shortName string, newRefac refactoring.Refactoring) error {
 	refactorings[shortName] = newRefac
 	refactoringsInOrder = append(refactoringsInOrder, shortName)
 	return nil
+}
+
+// ClearRefactorings removes all registered refactorings from the engine.
+// This should only be used for testing.
+func ClearRefactorings() {
+	refactorings = map[string]refactoring.Refactoring{}
+	refactoringsInOrder = []string{}
 }
