@@ -322,6 +322,13 @@ func TestUsageWithOneRefactoringOneParam(t *testing.T) {
 
 func TestOneRefactoringNoParams(t *testing.T) {
 	exit, stdout, stderr := addRefactoringsAndRunCLI(func() { engine.AddRefactoring("custom", &customNoParams{}) }, "")
+	if exit != 0 || stdout != "" || stderr != "Reading Go source code from standard input...\n" {
+		t.Fatal("One refactoring with no args, no input expected exit 0")
+	}
+}
+
+func TestOneRefactoringNoParamsStdin(t *testing.T) {
+	exit, stdout, stderr := addRefactoringsAndRunCLI(func() { engine.AddRefactoring("custom", &customNoParams{}) }, "", "-file=-")
 	if exit != 0 || stdout != "" || stderr != "" {
 		t.Fatal("One refactoring with no args, no input expected exit 0")
 	}

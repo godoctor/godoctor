@@ -49,15 +49,20 @@ Each <flag> must be one of the following:
 {{.Flags}}
 `
 		} else {
+			args := refac.Description().Usage
+			idx := strings.Index(args, "<")
+			if idx < 0 {
+				args = ""
+			} else {
+				args = " " + args[idx:]
+			}
 			Usage = `{{.AboutText}}
 
-Usage: {{.CommandName}} [<flag> ...] [<args> ...]
+Usage: {{.CommandName}} [<flag> ...]` + args + `
 
 Each <flag> must be one of the following:
 {{.Flags}}
-
-The <args> control the refactoring:
-` + refac.Description().Usage
+`
 		}
 	} else {
 		Usage = `{{.AboutText}} - Go source code refactoring tool.
@@ -164,7 +169,7 @@ func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, 
 	flags := Flags()
 	// Don't print full help unless -help was requested.
 	// Just gently remind users that it's there.
-	flags.Usage = func() { fmt.Fprintf(stderr, "Run '%s -help' for more information.\n", cmdName) }
+	flags.Usage = func() {}
 	flags.Init(cmdName, flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	if err := flags.Parse(args[1:]); err != nil {
@@ -174,6 +179,7 @@ func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, 
 			printHelp(cmdName, aboutText, flags.FlagSet, stderr)
 			return 2
 		}
+		fmt.Fprintf(stderr, "Run '%s -help' for more information.\n", cmdName)
 		return 1
 	}
 
@@ -300,6 +306,9 @@ func Run(aboutText string, stdin io.Reader, stdout io.Writer, stderr io.Writer, 
 			return 1
 		}
 		fileName = stdinPath
+		if *flags.fileFlag == "" {
+			fmt.Fprintln(stderr, "Reading Go source code from standard input...")
+		}
 		bytes, err := ioutil.ReadAll(stdin)
 		if err != nil {
 			fmt.Fprintln(stderr, err)
