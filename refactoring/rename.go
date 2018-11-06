@@ -77,36 +77,41 @@ func (r *Rename) Run(config *Config) *Result {
 		return &r.Result
 	}
 
-	switch ident := r.SelectedNode.(type) {
+	// If no ident was found, try to get hold of the concrete node type and get it's name
+	var ident *ast.Ident
+	switch node := r.SelectedNode.(type) {
+	case *ast.FuncDecl:
+		ident = node.Name
 	case *ast.Ident:
-
-		// FIXME: Check if main function (not type/var/etc.) -JO
-		if ident.Name == "main" && r.SelectedNodePkg.Pkg.Name() == "main" {
-			r.Log.Error("The \"main\" function in the \"main\" package cannot be renamed: it will eliminate the program entrypoint")
-			r.Log.AssociateNode(ident)
-			return &r.Result
-		}
-
-		if isPredeclaredIdentifier(ident.Name) {
-			r.Log.Errorf("selected predeclared  identifier \"%s\" , it cannot be renamed", ident.Name)
-			r.Log.AssociateNode(ident)
-			return &r.Result
-		}
-
-		if ast.IsExported(ident.Name) && !ast.IsExported(r.newName) {
-			r.Log.Warn("Renaming an exported name to an unexported name will introduce errors outside the package in which it is declared.")
-		}
-
-		r.rename(ident, r.SelectedNodePkg)
-		r.UpdateLog(config, false)
-		return &r.Result
-
+		ident = node
 	default:
 		r.Log.Errorf("Please select an identifier to rename. "+
-			"(Selected node: %s)", reflect.TypeOf(ident))
+			"(Selected node: %s)", reflect.TypeOf(r.SelectedNode))
 		r.Log.AssociatePos(r.SelectionStart, r.SelectionEnd)
 		return &r.Result
 	}
+
+	// FIXME: Check if main function (not type/var/etc.) -JO
+	if ident.Name == "main" && r.SelectedNodePkg.Pkg.Name() == "main" {
+		r.Log.Error("The \"main\" function in the \"main\" package cannot be renamed: it will eliminate the program entrypoint")
+		r.Log.AssociateNode(ident)
+		return &r.Result
+	}
+
+	if isPredeclaredIdentifier(ident.Name) {
+		r.Log.Errorf("selected predeclared  identifier \"%s\" , it cannot be renamed", ident.Name)
+		r.Log.AssociateNode(ident)
+		return &r.Result
+	}
+
+	if ast.IsExported(ident.Name) && !ast.IsExported(r.newName) {
+		r.Log.Warn("Renaming an exported name to an unexported name will introduce errors outside the package in which it is declared.")
+	}
+
+	r.rename(ident, r.SelectedNodePkg)
+	r.UpdateLog(config, false)
+	return &r.Result
+
 }
 
 func isIdentifierValid(newName string) bool {
@@ -127,7 +132,7 @@ func isReservedWord(newName string) bool {
 func (r *Rename) rename(ident *ast.Ident, pkgInfo *loader.PackageInfo) {
 	obj := pkgInfo.ObjectOf(ident)
 
-	if obj == nil && r.selectedTypeSwitchVar() == nil {
+	if obj == nil && r.selectedTypeSwitchVar(ident) == nil {
 		r.Log.Errorf("The selected identifier cannot be " +
 			"renamed.  (Package and cgo renaming are not " +
 			"currently supported.)")
@@ -147,7 +152,7 @@ func (r *Rename) rename(ident *ast.Ident, pkgInfo *loader.PackageInfo) {
 	}
 	var scope *types.Scope
 	var idents map[*ast.Ident]bool
-	if ts := r.selectedTypeSwitchVar(); ts != nil {
+	if ts := r.selectedTypeSwitchVar(ident); ts != nil {
 		scope = types.NewScope(nil, ts.Pos(), ts.End(), "artificial scope for typeswitch")
 		idents = names.FindTypeSwitchVarOccurrences(ts, r.SelectedNodePkg, r.Program)
 	} else {
@@ -160,8 +165,8 @@ func (r *Rename) rename(ident *ast.Ident, pkgInfo *loader.PackageInfo) {
 	r.addOccurrences(ident.Name, scope, r.extents(idents, r.Program.Fset))
 }
 
-func (r *Rename) selectedTypeSwitchVar() *ast.TypeSwitchStmt {
-	obj := r.SelectedNodePkg.ObjectOf(r.SelectedNode.(*ast.Ident))
+func (r *Rename) selectedTypeSwitchVar(ident *ast.Ident) *ast.TypeSwitchStmt {
+	obj := r.SelectedNodePkg.ObjectOf(ident)
 
 	for _, n := range r.PathEnclosingSelection {
 		if typeSwitch, ok := n.(*ast.TypeSwitchStmt); ok {
