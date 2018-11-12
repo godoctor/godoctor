@@ -790,6 +790,27 @@ func (r *ExtractFunc) analyzeVars() (recv *types.Var,
 		locals = append(locals, param)
 	}
 
+	namedReturns := make(map[*types.Var]struct{})
+
+	if r.stmtRange.enclosingFunc.Type.Results != nil {
+		for _, field := range r.stmtRange.enclosingFunc.Type.Results.List {
+			// this won't be necessary for unnamed returns
+			if len(field.Names) == 0 {
+				continue
+			}
+
+			namedReturns[r.stmtRange.pkgInfo.ObjectOf(field.Names[0]).(*types.Var)] = struct{}{}
+		}
+	}
+
+	// figure out which locals are actually just named
+	// returns and add them to the set of return vars
+	for _, v := range locals {
+		if _, exists := namedReturns[v]; exists {
+			returns = append(returns, v)
+		}
+	}
+
 	// Sort each set of variables so we always extract in the same order.
 	SortVars(params)
 	SortVars(returns)
