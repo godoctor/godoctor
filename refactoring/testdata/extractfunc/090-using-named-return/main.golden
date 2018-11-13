@@ -105,7 +105,7 @@ func parseDirEnt(buf []byte) (consumed int, name string, typ os.FileMode) {
 		return
 	}
 
-	nameBuf := (*[unsafe.Sizeof(dirent.Name)]byte)(unsafe.Pointer(&dirent.Name[0]))
+	nameBuf := &[256]byte{}
 	nameLen := bytes.IndexByte(nameBuf[:], 0)
 	if nameLen < 0 {
 		panic("failed to find terminating 0 byte in dirent")
@@ -116,7 +116,7 @@ func parseDirEnt(buf []byte) (consumed int, name string, typ os.FileMode) {
 	return
 }
 
-func test_func(nameBuf *[1024]byte, nameLen int) string {
+func test_func(nameBuf *[256]byte, nameLen int) string {
 	var name string
 	if nameLen == 1 && nameBuf[0] == '.' {
 		name = "."
