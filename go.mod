@@ -1,6 +1,6 @@
 module github.com/godoctor/godoctor
 
-go 1.12
+go 1.14
 
 require (
 	github.com/willf/bitset v1.1.10
