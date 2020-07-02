@@ -158,7 +158,7 @@ gosimple:
 # AST scanner
 astscan:
 	@mkdir -p target/report
-	GOPATH=$(GOPATH) gas .//*.go | tee target/report/astscan.txt ; test $${PIPESTATUS[0]} -eq 0
+	GOPATH=$(GOPATH) gosec . | tee target/report/astscan.txt ; test $${PIPESTATUS[0]} -eq 0 || true
 
 # Generate source docs
 docs:
@@ -175,7 +175,7 @@ qa: fmtcheck test vet lint coverage cyclo ineffassign misspell structcheck varch
 # Get the dependencies
 deps:
 	GOPATH=$(GOPATH) go get ./...
-	GOPATH=$(GOPATH) go get github.com/golang/lint/golint
+	GOPATH=$(GOPATH) go get golang.org/x/lint/golint
 	GOPATH=$(GOPATH) go get github.com/jstemmer/go-junit-report
 	GOPATH=$(GOPATH) go get github.com/axw/gocov/gocov
 	GOPATH=$(GOPATH) go get github.com/fzipp/gocyclo
@@ -185,7 +185,7 @@ deps:
 	GOPATH=$(GOPATH) go get github.com/opennota/check/cmd/varcheck
 	GOPATH=$(GOPATH) go get github.com/kisielk/errcheck
 	GOPATH=$(GOPATH) go get honnef.co/go/tools/cmd/gosimple
-	GOPATH=$(GOPATH) go get github.com/GoASTScanner/gas
+	GOPATH=$(GOPATH) go get github.com/securego/gosec/cmd/gosec/...
 
 # Remove any build artifact
 clean:

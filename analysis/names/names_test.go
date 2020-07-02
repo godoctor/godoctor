@@ -10,6 +10,8 @@ import (
 	"go/build"
 	"go/parser"
 	"go/types"
+	"os"
+	"path/filepath"
 	"sort"
 	"testing"
 
@@ -24,7 +26,7 @@ import (
 func setup(t *testing.T) *loader.Program {
 	var lconfig loader.Config
 	build := build.Default
-	build.GOPATH = "testdata"
+	build.Dir = filepath.Join("testdata/src/foo")
 	lconfig.Build = &build
 	lconfig.ParserMode = parser.ParseComments | parser.DeclarationErrors
 	lconfig.AllowErrors = false
@@ -32,7 +34,7 @@ func setup(t *testing.T) *loader.Program {
 	lconfig.TypeChecker.Error = func(err error) {
 		t.Fatal(err)
 	}
-	lconfig.FromArgs([]string{"foo"}, true)
+	lconfig.CreateFromFilenames("foo", "testdata/src/foo/foo.go")
 	prog, err := lconfig.Load()
 	if err != nil {
 		t.Fatal(err)
@@ -160,34 +162,43 @@ func TestMethodReceiver(t *testing.T) {
 func TestFindOccurrences(t *testing.T) {
 	check(findOccurrences("foo", "Exported", t),
 		[]string{
-			"testdata/src/foo/foo.go:32"}, t)
+			"testdata/src/foo/foo.go:36"}, t)
 	check(findOccurrences("bar", "Exported", t),
 		[]string{
-			"testdata/src/bar/bar.go:18",
-			"testdata/src/foo/foo.go:71"}, t)
+			"testdata/src/foo/foo.go:75",
+			"testdata/src/foo/vendor/bat/bar/bar.go:18",
+		}, t)
 	check(findOccurrences("bar", "t", t),
 		[]string{
-			"testdata/src/bar/bar.go:107",
-			"testdata/src/bar/bar.go:95"}, t)
+			"testdata/src/foo/vendor/bat/bar/bar.go:107",
+			"testdata/src/foo/vendor/bat/bar/bar.go:95"}, t)
 	check(findOccurrences("bar", "Method", t),
 		[]string{
-			"testdata/src/bar/bar.go:174",
-			"testdata/src/bar/bar.go:74",
-			"testdata/src/foo/foo.go:247"}, t)
+			"testdata/src/foo/foo.go:251",
+			"testdata/src/foo/vendor/bat/bar/bar.go:174",
+			"testdata/src/foo/vendor/bat/bar/bar.go:74",
+		}, t)
 	check(findOccurrences("foo", "q", t),
 		[]string{
-			"testdata/src/foo/foo.go:137"}, t)
+			"testdata/src/foo/foo.go:141"}, t)
 	check(findInComments("foo", "q", t),
 		[]string{
-			"testdata/src/foo/foo.go:145",
-			"testdata/src/foo/foo.go:152",
-			"testdata/src/foo/foo.go:164",
-			"testdata/src/foo/foo.go:211",
-			"testdata/src/foo/foo.go:262",
-			"testdata/src/foo/foo.go:285"}, t)
+			"testdata/src/foo/foo.go:149",
+			"testdata/src/foo/foo.go:156",
+			"testdata/src/foo/foo.go:168",
+			"testdata/src/foo/foo.go:215",
+			"testdata/src/foo/foo.go:266",
+			"testdata/src/foo/foo.go:289"}, t)
 }
 
 func check(actual, expect []string, t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal("couldn't get wd")
+	}
+	for i := range expect {
+		expect[i] = filepath.Join(wd, expect[i])
+	}
 	if !equals(actual, expect) {
 		t.Fatalf("FindOccurrences: Expected %v, got %v", expect, actual)
 	}

@@ -1,0 +1,9 @@
+# github.com/willf/bitset v1.1.10
+## explicit
+github.com/willf/bitset
+# golang.org/x/tools v0.0.0-20191028215554-80f3f9ca0853
+## explicit
+golang.org/x/tools/go/ast/astutil
+golang.org/x/tools/go/buildutil
+golang.org/x/tools/go/internal/cgo
+golang.org/x/tools/go/loader
