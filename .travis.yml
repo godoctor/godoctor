@@ -3,5 +3,7 @@ language: go
 go:
     - 1.14
 
+script: travis_wait 20 go test -v -timeout 20m ./...
+
 notifications:
     email: false
