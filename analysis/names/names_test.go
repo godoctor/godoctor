@@ -25,7 +25,7 @@ import (
 func setup(t *testing.T) *loader.Program {
 	var lconfig packages.Config
 	lconfig.Dir = filepath.Join("testdata/src/foo")
-	lconfig.Mode = packages.NeedTypes | packages.NeedSyntax | packages.NeedDeps | packages.NeedImports | packages.NeedCompiledGoFiles | packages.NeedTypesInfo | packages.NeedExportsFile | packages.NeedFiles | packages.NeedName | packages.NeedModule | packages.NeedTypesSizes
+	lconfig.Mode = packages.NeedTypes | packages.NeedSyntax | packages.NeedDeps | packages.NeedImports | packages.NeedCompiledGoFiles | packages.NeedTypesInfo | packages.NeedExportsFile | packages.NeedFiles | packages.NeedName | packages.NeedTypesSizes | packages.NeedModule
 	prog, err := loader.Load(&lconfig)
 	if err != nil {
 		t.Fatal(err)
@@ -79,7 +79,6 @@ func findOccurrences(pkgName, identName string, t *testing.T) []string {
 
 	result := []string{}
 	for id := range occs {
-		fmt.Println(id)
 		pos := prog.Fset.Position(id.Pos())
 		result = append(result, fmt.Sprintf("%s:%d",
 			pos.Filename, pos.Offset))
@@ -154,33 +153,33 @@ func TestMethodReceiver(t *testing.T) {
 func TestFindOccurrences(t *testing.T) {
 	check(findOccurrences("foo", "Exported", t),
 		[]string{
-			"testdata/src/foo/foo.go:36"}, t)
+			"testdata/src/foo/foo.go:32"}, t)
 	check(findOccurrences("bar", "Exported", t),
 		[]string{
-			"testdata/src/foo/foo.go:75",
-			"testdata/src/foo/vendor/bat/bar/bar.go:18",
+			"testdata/src/foo/foo.go:71",
+			"testdata/src/foo/vendor/bar/bar.go:18",
 		}, t)
 	check(findOccurrences("bar", "t", t),
 		[]string{
-			"testdata/src/foo/vendor/bat/bar/bar.go:107",
-			"testdata/src/foo/vendor/bat/bar/bar.go:95"}, t)
+			"testdata/src/foo/vendor/bar/bar.go:107",
+			"testdata/src/foo/vendor/bar/bar.go:95"}, t)
 	check(findOccurrences("bar", "Method", t),
 		[]string{
-			"testdata/src/foo/foo.go:251",
-			"testdata/src/foo/vendor/bat/bar/bar.go:174",
-			"testdata/src/foo/vendor/bat/bar/bar.go:74",
+			"testdata/src/foo/foo.go:247",
+			"testdata/src/foo/vendor/bar/bar.go:174",
+			"testdata/src/foo/vendor/bar/bar.go:74",
 		}, t)
 	check(findOccurrences("foo", "q", t),
 		[]string{
-			"testdata/src/foo/foo.go:141"}, t)
+			"testdata/src/foo/foo.go:137"}, t)
 	check(findInComments("foo", "q", t),
 		[]string{
-			"testdata/src/foo/foo.go:149",
-			"testdata/src/foo/foo.go:156",
-			"testdata/src/foo/foo.go:168",
-			"testdata/src/foo/foo.go:215",
-			"testdata/src/foo/foo.go:266",
-			"testdata/src/foo/foo.go:289"}, t)
+			"testdata/src/foo/foo.go:145",
+			"testdata/src/foo/foo.go:152",
+			"testdata/src/foo/foo.go:164",
+			"testdata/src/foo/foo.go:211",
+			"testdata/src/foo/foo.go:262",
+			"testdata/src/foo/foo.go:285"}, t)
 }
 
 func check(actual, expect []string, t *testing.T) {

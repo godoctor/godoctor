@@ -36,7 +36,7 @@ func Load(conf *packages.Config) (*Program, error) {
 	// files are parsed, but punting as it's hard enough to define the scope
 	// of this package (ie since it's simply for our uses...)
 
-	if conf.Fset != nil {
+	if conf.Fset == nil {
 		// we need this
 		conf.Fset = token.NewFileSet()
 	}
@@ -49,6 +49,12 @@ func Load(conf *packages.Config) (*Program, error) {
 	for _, p := range prog {
 		pkgs[p.Types] = p
 	}
+
+	// add all dependencies to all packages, like we want.
+	visit := func(lpkg *packages.Package) {
+		pkgs[lpkg.Types] = lpkg
+	}
+	packages.Visit(prog, nil, visit)
 
 	return &Program{
 		Fset:        conf.Fset,
