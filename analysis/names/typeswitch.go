@@ -8,19 +8,20 @@ import (
 	"go/ast"
 	"go/types"
 
-	"golang.org/x/tools/go/loader"
+	"github.com/godoctor/godoctor/analysis/loader"
+	"golang.org/x/tools/go/packages"
 )
 
 // FindTypeSwitchVarOccurrences returns the set of all identifiers that refer
 // to the variable defined in the type switch statement.
-func FindTypeSwitchVarOccurrences(typeSwitch *ast.TypeSwitchStmt, pkgInfo *loader.PackageInfo, program *loader.Program) map[*ast.Ident]bool {
+func FindTypeSwitchVarOccurrences(typeSwitch *ast.TypeSwitchStmt, pkgInfo *packages.Package, program *loader.Program) map[*ast.Ident]bool {
 	result := make(map[*ast.Ident]bool)
 
 	// Add v from "switch v := e.(type)"
 	if asgt, ok := typeSwitch.Assign.(*ast.AssignStmt); ok {
 		if id, ok := asgt.Lhs[0].(*ast.Ident); ok {
 			result[id] = true
-			if obj := pkgInfo.ObjectOf(id); obj != nil {
+			if obj := pkgInfo.TypesInfo.ObjectOf(id); obj != nil {
 				result = FindOccurrences(obj, program)
 			}
 		}
@@ -30,7 +31,7 @@ func FindTypeSwitchVarOccurrences(typeSwitch *ast.TypeSwitchStmt, pkgInfo *loade
 	caseVars := caseClauseVars(typeSwitch, pkgInfo)
 	ast.Inspect(typeSwitch.Body, func(n ast.Node) bool {
 		if id, ok := n.(*ast.Ident); ok {
-			if v, ok := pkgInfo.ObjectOf(id).(*types.Var); ok {
+			if v, ok := pkgInfo.TypesInfo.ObjectOf(id).(*types.Var); ok {
 				if caseVars[v] {
 					result[id] = true
 				}
@@ -44,10 +45,10 @@ func FindTypeSwitchVarOccurrences(typeSwitch *ast.TypeSwitchStmt, pkgInfo *loade
 
 // result returns the set of implicit *types.Vars defined by the case clauses
 // of the given TypeSwitchStmt.
-func caseClauseVars(typeSwitch *ast.TypeSwitchStmt, pkgInfo *loader.PackageInfo) map[*types.Var]bool {
+func caseClauseVars(typeSwitch *ast.TypeSwitchStmt, pkgInfo *packages.Package) map[*types.Var]bool {
 	result := map[*types.Var]bool{}
 	for _, stmt := range typeSwitch.Body.List {
-		obj := pkgInfo.Implicits[stmt.(*ast.CaseClause)].(*types.Var)
+		obj := pkgInfo.TypesInfo.Implicits[stmt.(*ast.CaseClause)].(*types.Var)
 		result[obj] = true
 	}
 	return result

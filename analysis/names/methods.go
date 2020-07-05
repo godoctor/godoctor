@@ -8,7 +8,8 @@ import (
 	"go/ast"
 	"go/types"
 
-	"golang.org/x/tools/go/loader"
+	"github.com/godoctor/godoctor/analysis/loader"
+	"golang.org/x/tools/go/packages"
 )
 
 // FindDeclarationsAcrossInterfaces finds all objects that might need to be
@@ -59,7 +60,7 @@ func methodReceiver(obj types.Object) *types.Var {
 // reachableMethods receives an object for a method (i.e., a types.Func with
 // a non-nil receiver) and the PackageInfo in which it was declared and returns
 // a set of objects that must be renamed if that method is renamed.
-func reachableMethods(name string, obj *types.Func, pkgInfo *loader.PackageInfo) map[types.Object]bool {
+func reachableMethods(name string, obj *types.Func, pkgInfo *packages.Package) map[types.Object]bool {
 	// Find methods and interfaces defined in the given package that have
 	// the same signature as the argument method (obj)
 	sig := obj.Type().(*types.Signature)
@@ -114,7 +115,7 @@ func reachableMethods(name string, obj *types.Func, pkgInfo *loader.PackageInfo)
 // methodDeclsMatchingSig walks all of the ASTs in the given package and
 // returns methods with the given signature and interfaces that explicitly
 // define a method with the given signature.
-func methodDeclsMatchingSig(name string, sig *types.Signature, pkgInfo *loader.PackageInfo) (methods map[types.Object]bool, interfaces map[*types.Interface]bool) {
+func methodDeclsMatchingSig(name string, sig *types.Signature, pkgInfo *packages.Package) (methods map[types.Object]bool, interfaces map[*types.Interface]bool) {
 	// XXX(review D7): This looks quite expensive to do in a relatively low-level
 	// function. Consider doing an initial pass over the ASTs to gather this
 	// information if performance becomes an issue.
@@ -130,11 +131,11 @@ func methodDeclsMatchingSig(name string, sig *types.Signature, pkgInfo *loader.P
 
 	methods = map[types.Object]bool{}
 	interfaces = map[*types.Interface]bool{}
-	for _, file := range pkgInfo.Files {
+	for _, file := range pkgInfo.Syntax {
 		ast.Inspect(file, func(node ast.Node) bool {
 			switch n := node.(type) {
 			case *ast.InterfaceType:
-				iface := pkgInfo.TypeOf(n).Underlying().(*types.Interface)
+				iface := pkgInfo.TypesInfo.TypeOf(n).Underlying().(*types.Interface)
 				interfaces[iface] = true
 				for i := 0; i < iface.NumExplicitMethods(); i++ {
 					method := iface.ExplicitMethod(i)
@@ -144,7 +145,7 @@ func methodDeclsMatchingSig(name string, sig *types.Signature, pkgInfo *loader.P
 					}
 				}
 			case *ast.FuncDecl:
-				obj := pkgInfo.ObjectOf(n.Name)
+				obj := pkgInfo.TypesInfo.ObjectOf(n.Name)
 				fnSig := obj.Type().Underlying().(*types.Signature)
 				if fnSig.Recv() != nil && n.Name.Name == name && types.Identical(sig, fnSig) {
 					methods[obj] = true

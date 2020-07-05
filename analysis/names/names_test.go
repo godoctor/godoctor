@@ -7,42 +7,33 @@ package names_test
 import (
 	"fmt"
 	"go/ast"
-	"go/build"
-	"go/parser"
 	"go/types"
 	"os"
 	"path/filepath"
 	"sort"
 	"testing"
 
+	"github.com/godoctor/godoctor/analysis/loader"
 	"github.com/godoctor/godoctor/analysis/names"
 	"github.com/godoctor/godoctor/text"
 
-	"golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/packages"
 )
 
 // -=- Utility Functions -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 func setup(t *testing.T) *loader.Program {
-	var lconfig loader.Config
-	build := build.Default
-	build.Dir = filepath.Join("testdata/src/foo")
-	lconfig.Build = &build
-	lconfig.ParserMode = parser.ParseComments | parser.DeclarationErrors
-	lconfig.AllowErrors = false
-	//lconfig.SourceImports = true
-	lconfig.TypeChecker.Error = func(err error) {
-		t.Fatal(err)
-	}
-	lconfig.CreateFromFilenames("foo", "testdata/src/foo/foo.go")
-	prog, err := lconfig.Load()
+	var lconfig packages.Config
+	lconfig.Dir = filepath.Join("testdata/src/foo")
+	lconfig.Mode = packages.NeedTypes | packages.NeedSyntax | packages.NeedDeps | packages.NeedImports | packages.NeedCompiledGoFiles | packages.NeedTypesInfo | packages.NeedExportsFile | packages.NeedFiles | packages.NeedName | packages.NeedModule | packages.NeedTypesSizes
+	prog, err := loader.Load(&lconfig)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return prog
 }
 
-func findPackage(p *loader.Program, pkgName string, t *testing.T) *loader.PackageInfo {
+func findPackage(p *loader.Program, pkgName string, t *testing.T) *packages.Package {
 	for pkg, info := range p.AllPackages {
 		if pkg.Name() == pkgName {
 			return info
@@ -53,7 +44,7 @@ func findPackage(p *loader.Program, pkgName string, t *testing.T) *loader.Packag
 }
 
 func lookup(p *loader.Program, pkgName, name string, t *testing.T) types.Object {
-	result := findPackage(p, pkgName, t).Pkg.Scope().Lookup(name)
+	result := findPackage(p, pkgName, t).Types.Scope().Lookup(name)
 	if result == nil {
 		t.Fatalf("%s.%s not found", pkgName, name)
 	}
@@ -62,7 +53,7 @@ func lookup(p *loader.Program, pkgName, name string, t *testing.T) types.Object 
 
 func lookupFieldOrMethod(p *loader.Program, pkgName, container, name string, t *testing.T) types.Object {
 	typ := lookup(p, pkgName, container, t).Type()
-	obj, _, _ := types.LookupFieldOrMethod(typ, true, findPackage(p, pkgName, t).Pkg, name)
+	obj, _, _ := types.LookupFieldOrMethod(typ, true, findPackage(p, pkgName, t).Types, name)
 	if obj == nil {
 		t.Fatalf("%s not found for %s.%s", name, pkgName, container)
 	}
@@ -84,10 +75,11 @@ func equals(a, b []string) bool {
 func findOccurrences(pkgName, identName string, t *testing.T) []string {
 	prog := setup(t)
 	ident, pkg := findFirstIdent(prog, pkgName, identName, t)
-	occs := names.FindOccurrences(pkg.ObjectOf(ident), prog)
+	occs := names.FindOccurrences(pkg.TypesInfo.ObjectOf(ident), prog)
 
 	result := []string{}
 	for id := range occs {
+		fmt.Println(id)
 		pos := prog.Fset.Position(id.Pos())
 		result = append(result, fmt.Sprintf("%s:%d",
 			pos.Filename, pos.Offset))
@@ -107,7 +99,7 @@ func sortKeys(m map[string][]text.Extent) []string {
 
 func findInComments(pkgName, identName string, t *testing.T) []string {
 	prog := setup(t)
-	file := findPackage(prog, pkgName, t).Files[0]
+	file := findPackage(prog, pkgName, t).Syntax[0]
 	filename := prog.Fset.Position(file.Pos()).Filename
 
 	result := []string{}
@@ -117,10 +109,10 @@ func findInComments(pkgName, identName string, t *testing.T) []string {
 	return result
 }
 
-func findFirstIdent(p *loader.Program, pkgName, ident string, t *testing.T) (*ast.Ident, *loader.PackageInfo) {
+func findFirstIdent(p *loader.Program, pkgName, ident string, t *testing.T) (*ast.Ident, *packages.Package) {
 	pkgInfo := findPackage(p, pkgName, t)
 	var result *ast.Ident
-	ast.Inspect(pkgInfo.Files[0],
+	ast.Inspect(pkgInfo.Syntax[0],
 		func(n ast.Node) bool {
 			switch id := n.(type) {
 			case *ast.Ident:
