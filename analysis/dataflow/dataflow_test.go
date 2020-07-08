@@ -12,6 +12,8 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -586,8 +588,13 @@ func getWrapper(t mocker, str string) *CFGWrapper {
 
 	// we have to override the testdata file with desired contents. quirky.
 	// this does mean tests are single file.
-	config.Dir = "testdata"
-	config.Overlay = map[string][]byte{"main.go": []byte(str)}
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal("error getting wd", err)
+	}
+	dir = filepath.Join(dir, "/testdata")
+	config.Dir = dir
+	config.Overlay = map[string][]byte{filepath.Join(dir, "/main.go"): []byte(str)}
 
 	prog, err := loader.Load(&config)
 	if err != nil {
