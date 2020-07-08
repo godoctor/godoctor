@@ -33,8 +33,21 @@ type Program struct {
 // Load loads a package, calling packages.Load
 func Load(conf *packages.Config) (*Program, error) {
 	// TODO(reed): we do kinda need to ensure types is set so that
-	// files are parsed, but punting as it's hard enough to define the scope
-	// of this package (ie since it's simply for our uses...)
+	// files are parsed, and syntax is used heavily, and deps are used
+	// in rename refactoring (but not some others, could save some time).
+	// this makes this function 'loader' equivalent, but we could now do better.
+	// TODO(reed): -1 ?
+	conf.Mode = packages.NeedTypes |
+		packages.NeedSyntax |
+		packages.NeedDeps |
+		packages.NeedImports |
+		packages.NeedCompiledGoFiles |
+		packages.NeedTypesInfo |
+		packages.NeedExportsFile |
+		packages.NeedFiles |
+		packages.NeedName |
+		packages.NeedTypesSizes |
+		packages.NeedModule
 
 	if conf.Fset == nil {
 		// we need this

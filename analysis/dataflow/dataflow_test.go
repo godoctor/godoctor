@@ -15,9 +15,10 @@ import (
 	"reflect"
 	"testing"
 
-	"golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/packages"
 
 	"github.com/godoctor/godoctor/analysis/cfg"
+	"github.com/godoctor/godoctor/analysis/loader"
 )
 
 const (
@@ -504,7 +505,7 @@ func TestFuncLit(t *testing.T) {
 }
 
 func BenchmarkReaching(b *testing.B) {
-	src := `package main
+	c := getWrapper(b, `package main
 
   func foo(c int, nums []int) int {
     //START
@@ -522,55 +523,47 @@ func BenchmarkReaching(b *testing.B) {
     return a    //11
     //END
   }
-    `
-	var config loader.Config
-	f, err := config.ParseFile("testing", src)
-	if err != nil {
-		b.Error(err.Error())
-		b.FailNow()
-	}
-
-	config.CreateFromFiles("testing", f)
-
-	prog, err := config.Load()
-
-	if err != nil {
-		b.Error(err.Error())
-		b.FailNow()
-	}
+    `)
 
 	// create CFG and perform analyses
 	for n := 0; n < b.N; n++ {
-		cfg := cfg.FromFunc(f.Decls[0].(*ast.FuncDecl))
-		DefUse(cfg, prog.Created[0])
-		LiveVars(cfg, prog.Created[0])
+		cfg := cfg.FromFunc(c.prog.Syntax[0].Decls[0].(*ast.FuncDecl))
+		DefUse(cfg, c.prog)
+		LiveVars(cfg, c.prog)
 	}
 }
 
 func BenchmarkMain(b *testing.B) {
-	var config loader.Config
+	var config packages.Config
 
-	config.CreateFromFilenames("main", "../../main.go")
+	config.Dir = "../../"
+	// config.CreateFromFilenames("main", "../../main.go")
 
-	prog, err := config.Load()
-
+	prog, err := loader.Load(&config)
 	if err != nil {
 		b.Error(err.Error())
 		b.FailNow()
 	}
 
+	var info *packages.Package
+	for _, info = range prog.AllPackages {
+		if info.Name == "main" {
+			break
+		}
+	}
+
 	// create CFG and perform analyses
 	for n := 0; n < b.N; n++ {
-		cfg := cfg.FromFunc(prog.Created[0].Files[0].Decls[7].(*ast.FuncDecl))
-		DefUse(cfg, prog.Created[0])
-		LiveVars(cfg, prog.Created[0])
+		cfg := cfg.FromFunc(info.Syntax[0].Decls[7].(*ast.FuncDecl))
+		DefUse(cfg, info)
+		LiveVars(cfg, info)
 	}
 }
 
 // lo and behold how it's done -- caution: disgust may ensue
 type CFGWrapper struct {
 	cfg      *cfg.CFG
-	prog     *loader.Program
+	prog     *packages.Package
 	exp      map[int]ast.Stmt
 	stmts    map[ast.Stmt]int
 	objs     map[string]*types.Var
@@ -579,27 +572,43 @@ type CFGWrapper struct {
 	f        *ast.File
 }
 
+// add as needed, convenience to cover testing.B and testing.T
+type mocker interface {
+	Fatal(args ...interface{})
+	Logf(format string, args ...interface{})
+}
+
 // uses first function in given string to produce CFG
 // w/ some other convenient fields for printing in test
 // cases when need be...
-func getWrapper(t *testing.T, str string) *CFGWrapper {
-	var config loader.Config
-	f, err := config.ParseFile("testing", str)
+func getWrapper(t mocker, str string) *CFGWrapper {
+	var config packages.Config
+
+	// we have to override the testdata file with desired contents. quirky.
+	// this does mean tests are single file.
+	config.Dir = "testdata"
+	config.Overlay = map[string][]byte{"main.go": []byte(str)}
+
+	prog, err := loader.Load(&config)
 	if err != nil {
-		t.Error(err.Error())
-		t.FailNow()
+		t.Fatal(err.Error())
 		return nil
 	}
 
-	config.CreateFromFiles("testing", f)
-
-	prog, err := config.Load()
-
-	if err != nil {
-		t.Error(err.Error())
-		t.FailNow()
-		return nil
+	var info *packages.Package
+	for _, info = range prog.AllPackages {
+		if info.Name == "main" {
+			break
+		}
 	}
+
+	if info == nil {
+		// TODO(reed): this is slippery... tests must use this package or it all busts,
+		// hopefully this is informative enough?
+		t.Fatal("must declare package main when defining a test")
+	}
+
+	f := info.Syntax[0]
 
 	firstFunc, ok := f.Decls[0].(*ast.FuncDecl)
 	if !ok { // skip import decl if exists
@@ -614,7 +623,7 @@ func getWrapper(t *testing.T, str string) *CFGWrapper {
 	ast.Inspect(firstFunc, func(n ast.Node) bool {
 		switch x := n.(type) {
 		case *ast.Ident:
-			if obj, ok := prog.Created[0].ObjectOf(x).(*types.Var); ok {
+			if obj, ok := info.TypesInfo.ObjectOf(x).(*types.Var); ok {
 				objs[obj.Name()] = obj
 				objNames[obj] = obj.Name()
 			}
@@ -642,7 +651,7 @@ func getWrapper(t *testing.T, str string) *CFGWrapper {
 
 	return &CFGWrapper{
 		cfg:      cfg,
-		prog:     prog,
+		prog:     info,
 		exp:      v,
 		stmts:    stmts,
 		objs:     objs,
@@ -680,7 +689,7 @@ func (c *CFGWrapper) expectLive(t *testing.T, s int, exp ...string) {
 	// get live for stmt s as slice, put in map
 	actualLive := make(map[*types.Var]struct{})
 
-	_, out := LiveVars(c.cfg, c.prog.Created[0])
+	_, out := LiveVars(c.cfg, c.prog)
 	outs := out[c.exp[s]]
 	for o := range outs {
 		actualLive[o] = struct{}{}
@@ -715,7 +724,7 @@ func (c *CFGWrapper) expectReaching(t *testing.T, s int, exp ...int) {
 
 	// get reaching for stmt s as slice, put in map
 	actualReach := make(map[ast.Stmt]struct{})
-	defs := DefsReaching(c.exp[s], c.cfg, c.prog.Created[0])
+	defs := DefsReaching(c.exp[s], c.cfg, c.prog)
 	for i := range defs {
 		actualReach[i] = struct{}{}
 	}
@@ -734,7 +743,7 @@ func (c *CFGWrapper) expectReaching(t *testing.T, s int, exp ...int) {
 
 func (c *CFGWrapper) expectUdDuSymmetry(t *testing.T) {
 	// Compute def-use information
-	du := DefUse(c.cfg, c.prog.Created[0])
+	du := DefUse(c.cfg, c.prog)
 
 	// Compute use-def information
 	// Note: This is extremely expensive, since DefsReaching re-does the
@@ -742,7 +751,7 @@ func (c *CFGWrapper) expectUdDuSymmetry(t *testing.T) {
 	ud := make(map[ast.Stmt]map[ast.Stmt]struct{})
 	for _, stmt := range c.cfg.Blocks() {
 		ud[stmt] = make(map[ast.Stmt]struct{})
-		for def := range DefsReaching(stmt, c.cfg, c.prog.Created[0]) {
+		for def := range DefsReaching(stmt, c.cfg, c.prog) {
 			ud[stmt][def] = struct{}{}
 		}
 	}
@@ -797,7 +806,7 @@ func (c *CFGWrapper) expectUses(t *testing.T, start int, end int, exp ...string)
 		stmts = append(stmts, c.exp[i])
 	}
 
-	_, _, _, uses := ReferencedVars(stmts, c.prog.Created[0])
+	_, _, _, uses := ReferencedVars(stmts, c.prog)
 
 	actualUse := make(map[*types.Var]struct{})
 	for u := range uses {
@@ -839,7 +848,7 @@ func (c *CFGWrapper) expectDefs(t *testing.T, start int, end int, exp ...string)
 		stmts = append(stmts, c.exp[i])
 	}
 
-	asgt, updt, decl, _ := ReferencedVars(stmts, c.prog.Created[0])
+	asgt, updt, decl, _ := ReferencedVars(stmts, c.prog)
 
 	actualDef := make(map[*types.Var]struct{})
 	for d := range asgt {
