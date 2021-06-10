@@ -16,8 +16,9 @@ import (
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"github.com/godoctor/godoctor/analysis/dataflow"
 	"github.com/godoctor/godoctor/text"
+
 	"golang.org/x/tools/go/ast/astutil"
-	"golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/packages"
 )
 
 /* -=-=- Sorting -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
@@ -57,7 +58,7 @@ type stmtRange struct {
 	// Definitions reaching the entrypoint to the selection
 	defsReachingSelection map[ast.Stmt]struct{}
 	// PackageInfo used to bind variable names to *types.Var objects
-	pkgInfo *loader.PackageInfo
+	pkgInfo *packages.Package
 	// The package rooted func / method enclosing the selection
 	enclosingFunc *ast.FuncDecl
 }
@@ -67,7 +68,7 @@ type stmtRange struct {
 // statements, the stmtRange is adjusted (if possible) to the closest legal
 // selection.  The given pkgInfo is used to determine the types and bindings of
 // variables in the selection.
-func newStmtRange(file *ast.File, start, end token.Pos, pkgInfo *loader.PackageInfo) (*stmtRange, error) {
+func newStmtRange(file *ast.File, start, end token.Pos, pkgInfo *packages.Package) (*stmtRange, error) {
 	startPath, _ := astutil.PathEnclosingInterval(file, start, start)
 	endPath, _ := astutil.PathEnclosingInterval(file, end-1, end-1)
 

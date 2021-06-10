@@ -18,10 +18,10 @@ import (
 	"runtime"
 	"strings"
 
-	"golang.org/x/tools/go/loader"
-
 	"github.com/godoctor/godoctor/analysis/names"
 	"github.com/godoctor/godoctor/text"
+
+	"golang.org/x/tools/go/packages"
 )
 
 // Rename is a refactoring that changes the names of variables, functions,
@@ -129,7 +129,7 @@ func isReservedWord(newName string) bool {
 	return b
 }
 
-func (r *Rename) rename(ident *ast.Ident, pkgInfo *loader.PackageInfo) {
+func (r *Rename) rename(ident *ast.Ident, pkgInfo *packages.Package) {
 	obj := pkgInfo.ObjectOf(ident)
 
 	if obj == nil && r.selectedTypeSwitchVar(ident) == nil {
@@ -243,7 +243,7 @@ func isInGoRoot(absPath string) bool {
 	return strings.HasPrefix(absPath, goRoot)
 }
 
-func (r *Rename) fileNamed(filename string) (*loader.PackageInfo, *ast.File) {
+func (r *Rename) fileNamed(filename string) (*packages.Package, *ast.File) {
 	absFilename, _ := filepath.Abs(filename)
 	for _, pkgInfo := range r.Program.AllPackages {
 		for _, f := range pkgInfo.Files {

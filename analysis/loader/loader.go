@@ -31,7 +31,7 @@ type Program struct {
 }
 
 // Load loads a package, calling packages.Load
-func Load(conf *packages.Config) (*Program, error) {
+func Load(conf *packages.Config, args ...string) (*Program, error) {
 	// TODO(reed): we do kinda need to ensure types is set so that
 	// files are parsed, and syntax is used heavily, and deps are used
 	// in rename refactoring (but not some others, could save some time).
@@ -49,25 +49,26 @@ func Load(conf *packages.Config) (*Program, error) {
 		packages.NeedTypesSizes |
 		packages.NeedModule
 
+	// TODO(reed): again, this is only desirable for rename
+	conf.Tests = true
+
 	if conf.Fset == nil {
 		// we need this
 		conf.Fset = token.NewFileSet()
 	}
-	prog, err := packages.Load(conf)
+	prog, err := packages.Load(conf, args...)
 	if err != nil {
 		return nil, err
 	}
 
+	// add these pkgs + their imports, et voila: AllPackages
 	pkgs := make(map[*types.Package]*packages.Package, len(prog))
 	for _, p := range prog {
 		pkgs[p.Types] = p
+		for _, p := range p.Imports {
+			pkgs[p.Types] = p
+		}
 	}
-
-	// add all dependencies to all packages, like we want.
-	visit := func(lpkg *packages.Package) {
-		pkgs[lpkg.Types] = lpkg
-	}
-	packages.Visit(prog, nil, visit)
 
 	return &Program{
 		Fset:        conf.Fset,
