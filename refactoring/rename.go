@@ -92,7 +92,7 @@ func (r *Rename) Run(config *Config) *Result {
 	}
 
 	// FIXME: Check if main function (not type/var/etc.) -JO
-	if ident.Name == "main" && r.SelectedNodePkg.Pkg.Name() == "main" {
+	if ident.Name == "main" && r.SelectedNodePkg.Types.Name() == "main" {
 		r.Log.Error("The \"main\" function in the \"main\" package cannot be renamed: it will eliminate the program entrypoint")
 		r.Log.AssociateNode(ident)
 		return &r.Result
@@ -130,7 +130,7 @@ func isReservedWord(newName string) bool {
 }
 
 func (r *Rename) rename(ident *ast.Ident, pkgInfo *packages.Package) {
-	obj := pkgInfo.ObjectOf(ident)
+	obj := pkgInfo.TypesInfo.ObjectOf(ident)
 
 	if obj == nil && r.selectedTypeSwitchVar(ident) == nil {
 		r.Log.Errorf("The selected identifier cannot be " +
@@ -166,7 +166,7 @@ func (r *Rename) rename(ident *ast.Ident, pkgInfo *packages.Package) {
 }
 
 func (r *Rename) selectedTypeSwitchVar(ident *ast.Ident) *ast.TypeSwitchStmt {
-	obj := r.SelectedNodePkg.ObjectOf(ident)
+	obj := r.SelectedNodePkg.TypesInfo.ObjectOf(ident)
 
 	for _, n := range r.PathEnclosingSelection {
 		if typeSwitch, ok := n.(*ast.TypeSwitchStmt); ok {
@@ -179,7 +179,7 @@ func (r *Rename) selectedTypeSwitchVar(ident *ast.Ident) *ast.TypeSwitchStmt {
 			}
 			for _, stmt := range typeSwitch.Body.List {
 				cc := stmt.(*ast.CaseClause)
-				if r.SelectedNodePkg.Implicits[cc] == obj {
+				if r.SelectedNodePkg.TypesInfo.Implicits[cc] == obj {
 					return typeSwitch
 				}
 			}
@@ -246,7 +246,7 @@ func isInGoRoot(absPath string) bool {
 func (r *Rename) fileNamed(filename string) (*packages.Package, *ast.File) {
 	absFilename, _ := filepath.Abs(filename)
 	for _, pkgInfo := range r.Program.AllPackages {
-		for _, f := range pkgInfo.Files {
+		for _, f := range pkgInfo.Syntax {
 			thisFile := r.Program.Fset.Position(f.Pos()).Filename
 			if thisFile == filename || thisFile == absFilename {
 				return pkgInfo, f

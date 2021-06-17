@@ -713,7 +713,7 @@ func (r *ExtractFunc) createExtractedFunc() *extractedFunc {
 		localInits: localInits,
 		define:     declareResult,
 		code:       code,
-		pkgFmt:     pkgUseFmt(r.SelectedNodePkg.Pkg),
+		pkgFmt:     pkgUseFmt(r.SelectedNodePkg.Types),
 	}
 }
 
@@ -776,7 +776,7 @@ func (r *ExtractFunc) analyzeVars() (recv *types.Var,
 	declareResult = len(intersection(returns, declared)) > 0
 
 	if recvNode := r.stmtRange.enclosingFunc.Recv; recvNode != nil {
-		recv = r.SelectedNodePkg.ObjectOf(recvNode.List[0].Names[0]).(*types.Var)
+		recv = r.SelectedNodePkg.TypesInfo.ObjectOf(recvNode.List[0].Names[0]).(*types.Var)
 		params = difference(params, []*types.Var{recv})
 		returns = difference(returns, []*types.Var{recv})
 		locals = difference(locals, []*types.Var{recv})
@@ -800,7 +800,7 @@ func (r *ExtractFunc) analyzeVars() (recv *types.Var,
 				continue
 			}
 
-			namedReturns[r.stmtRange.pkgInfo.ObjectOf(field.Names[0]).(*types.Var)] = struct{}{}
+			namedReturns[r.stmtRange.pkgInfo.TypesInfo.ObjectOf(field.Names[0]).(*types.Var)] = struct{}{}
 		}
 	}
 

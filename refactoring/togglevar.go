@@ -100,7 +100,7 @@ func (r *ToggleVar) varDeclString(assign *ast.AssignStmt) string {
 	replacement := make([]string, len(assign.Rhs))
 	path, _ := astutil.PathEnclosingInterval(r.File, assign.Pos(), assign.End())
 	for i, rhs := range assign.Rhs {
-		switch T := r.SelectedNodePkg.TypeOf(rhs).(type) {
+		switch T := r.SelectedNodePkg.TypesInfo.TypeOf(rhs).(type) {
 		case *types.Tuple: // function type
 			if typeOfFunctionType(T) == "" {
 				replacement[i] = fmt.Sprintf("var %s = %s\n",
@@ -175,7 +175,7 @@ func (r *RefactoringBase) lhsNames(assign *ast.AssignStmt) []bytes.Buffer {
 func (r *ToggleVar) var2short(decl *ast.GenDecl) {
 	start, _ := r.OffsetLength(decl)
 	repstrlen := r.Program.Fset.Position(decl.Specs[0].(*ast.ValueSpec).Values[0].Pos()).Offset - r.Program.Fset.Position(decl.Pos()).Offset
-	r.Edits[r.Filename].Add(&text.Extent{start, repstrlen}, r.shortAssignString(decl))
+	r.Edits[r.Filename].Add(&text.Extent{Offset: start, Length: repstrlen}, r.shortAssignString(decl))
 }
 
 func (r *ToggleVar) varDeclLHS(decl *ast.GenDecl) string {
