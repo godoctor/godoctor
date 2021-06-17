@@ -27,11 +27,11 @@ import (
 	"sort"
 	"strings"
 
-	"golang.org/x/tools/go/loader"
-
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"github.com/godoctor/godoctor/analysis/dataflow"
 	"github.com/godoctor/godoctor/analysis/names"
+
+	"golang.org/x/tools/go/packages"
 )
 
 const usage = `Usage: debug <options>
@@ -211,7 +211,7 @@ func (r *Debug) showAffected(out io.Writer) {
 	switch id := r.SelectedNode.(type) {
 	case *ast.Ident:
 		fmt.Fprintf(out, "Affected Declarations:\n")
-		obj := r.SelectedNodePkg.ObjectOf(id)
+		obj := r.SelectedNodePkg.TypesInfo.ObjectOf(id)
 		searchResult := names.FindDeclarationsAcrossInterfaces(obj, r.Program)
 		result := []string{}
 		for obj := range searchResult {
@@ -325,14 +325,15 @@ func (r *Debug) showLiveVars(out io.Writer) {
 }
 
 func (r *Debug) showIdentifiers(out io.Writer) {
-	for _, pkgInfo := range r.Program.InitialPackages() {
-		for _, file := range pkgInfo.Files {
+	// TODO(reed): changed from InitialPackages, TBD
+	for _, pkgInfo := range r.Program.AllPackages {
+		for _, file := range pkgInfo.Syntax {
 			r.showIdentifiersInFile(pkgInfo, file, out)
 		}
 	}
 }
 
-func (r *Debug) showIdentifiersInFile(pkgInfo *loader.PackageInfo, file *ast.File, out io.Writer) {
+func (r *Debug) showIdentifiersInFile(pkgInfo *packages.Package, file *ast.File, out io.Writer) {
 	filename, err := r.getRelativeFilename(file)
 	if err != nil {
 		log.Fatal(err)
@@ -349,7 +350,7 @@ func (r *Debug) showIdentifiersInFile(pkgInfo *loader.PackageInfo, file *ast.Fil
 
 		position := r.Program.Fset.Position(id.Pos())
 		fmt.Fprintf(out, "%s\t(Line %d)", id.Name, position.Line)
-		if obj := pkgInfo.ObjectOf(id); obj == nil {
+		if obj := pkgInfo.TypesInfo.ObjectOf(id); obj == nil {
 			fmt.Fprintf(out, " does not reference an object\n")
 		} else {
 			fmt.Fprintf(out, " is a reference to %s (%s)\n",
@@ -373,9 +374,19 @@ func (r *Debug) showLoadedPackagesAndFiles(out io.Writer) {
 	fmt.Fprintf(out, "Working directory is %s\n", cwd)
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "Packages/files loaded:")
+	// sort, for testing. blech
+	var pkgs []string
+	pm := make(map[string]*types.Package)
 	for _, pkgInfo := range r.Program.AllPackages {
-		fmt.Fprintf(out, "\t%s\n", pkgInfo.Pkg.Name())
-		for _, file := range pkgInfo.Files {
+		pkgs = append(pkgs, pkgInfo.Name)
+		pm[pkgInfo.Name] = pkgInfo.Types
+	}
+	sort.Strings(pkgs)
+
+	for _, pkg := range pkgs {
+		pkgInfo := r.Program.AllPackages[pm[pkg]]
+		fmt.Fprintf(out, "\t%s\n", pkgInfo.Types.String())
+		for _, file := range pkgInfo.Syntax {
 			filename := r.Program.Fset.Position(file.Pos()).Filename
 			fmt.Fprintf(out, "\t\t%s\n", filename)
 		}
@@ -393,7 +404,7 @@ func (r *Debug) showReferences(out io.Writer) {
 	switch id := r.SelectedNode.(type) {
 	case *ast.Ident:
 		fmt.Fprintf(out, "References to %s:\n", id.Name)
-		ids := names.FindOccurrences(r.SelectedNodePkg.ObjectOf(id), r.Program)
+		ids := names.FindOccurrences(r.SelectedNodePkg.TypesInfo.ObjectOf(id), r.Program)
 		strs := []string{}
 		for id := range ids {
 			description := fmt.Sprintf("  %s: %s",

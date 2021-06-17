@@ -16,8 +16,9 @@ import (
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"github.com/godoctor/godoctor/analysis/dataflow"
 	"github.com/godoctor/godoctor/text"
+
 	"golang.org/x/tools/go/ast/astutil"
-	"golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/packages"
 )
 
 /* -=-=- Sorting -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
@@ -57,7 +58,7 @@ type stmtRange struct {
 	// Definitions reaching the entrypoint to the selection
 	defsReachingSelection map[ast.Stmt]struct{}
 	// PackageInfo used to bind variable names to *types.Var objects
-	pkgInfo *loader.PackageInfo
+	pkgInfo *packages.Package
 	// The package rooted func / method enclosing the selection
 	enclosingFunc *ast.FuncDecl
 }
@@ -67,7 +68,7 @@ type stmtRange struct {
 // statements, the stmtRange is adjusted (if possible) to the closest legal
 // selection.  The given pkgInfo is used to determine the types and bindings of
 // variables in the selection.
-func newStmtRange(file *ast.File, start, end token.Pos, pkgInfo *loader.PackageInfo) (*stmtRange, error) {
+func newStmtRange(file *ast.File, start, end token.Pos, pkgInfo *packages.Package) (*stmtRange, error) {
 	startPath, _ := astutil.PathEnclosingInterval(file, start, start)
 	endPath, _ := astutil.PathEnclosingInterval(file, end-1, end-1)
 
@@ -712,7 +713,7 @@ func (r *ExtractFunc) createExtractedFunc() *extractedFunc {
 		localInits: localInits,
 		define:     declareResult,
 		code:       code,
-		pkgFmt:     pkgUseFmt(r.SelectedNodePkg.Pkg),
+		pkgFmt:     pkgUseFmt(r.SelectedNodePkg.Types),
 	}
 }
 
@@ -775,7 +776,7 @@ func (r *ExtractFunc) analyzeVars() (recv *types.Var,
 	declareResult = len(intersection(returns, declared)) > 0
 
 	if recvNode := r.stmtRange.enclosingFunc.Recv; recvNode != nil {
-		recv = r.SelectedNodePkg.ObjectOf(recvNode.List[0].Names[0]).(*types.Var)
+		recv = r.SelectedNodePkg.TypesInfo.ObjectOf(recvNode.List[0].Names[0]).(*types.Var)
 		params = difference(params, []*types.Var{recv})
 		returns = difference(returns, []*types.Var{recv})
 		locals = difference(locals, []*types.Var{recv})
@@ -799,7 +800,7 @@ func (r *ExtractFunc) analyzeVars() (recv *types.Var,
 				continue
 			}
 
-			namedReturns[r.stmtRange.pkgInfo.ObjectOf(field.Names[0]).(*types.Var)] = struct{}{}
+			namedReturns[r.stmtRange.pkgInfo.TypesInfo.ObjectOf(field.Names[0]).(*types.Var)] = struct{}{}
 		}
 	}
 

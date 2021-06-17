@@ -108,7 +108,7 @@ func (r *ExtractLocal) checkSelectedNodeIsExpr() bool {
 // determines whether it can be assigned to a variable, logging an error and
 // returning false if it cannot.
 func (r *ExtractLocal) checkExprHasValidType() bool {
-	exprType := r.SelectedNodePkg.TypeOf(r.SelectedNode.(ast.Expr))
+	exprType := r.SelectedNodePkg.TypesInfo.TypeOf(r.SelectedNode.(ast.Expr))
 	// fmt.Printf("Node is %s\n", reflect.TypeOf(r.SelectedNode))
 	// fmt.Printf("Type is %s\n", exprType)
 
@@ -730,7 +730,7 @@ func (r *ExtractLocal) checkForNameConflict() bool {
 // node exists.
 func (r *ExtractLocal) scopeEnclosingSelection() *types.Scope {
 	for _, node := range r.PathEnclosingSelection {
-		if scope, found := r.SelectedNodePkg.Info.Scopes[node]; found {
+		if scope, found := r.SelectedNodePkg.TypesInfo.Scopes[node]; found {
 			return scope.Innermost(r.SelectedNode.Pos())
 		}
 	}

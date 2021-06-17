@@ -1,0 +1,4 @@
+# bar v0.0.0 => ./bar
+## explicit
+bar
+# bar => ./bar

@@ -1,5 +1,6 @@
 Working directory is .
 
 Packages/files loaded:
-	main
+	package  ("pkg")
+	package main ("command-line-arguments")
 		./testdata/debug/showpackages/main.go

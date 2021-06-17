@@ -10,7 +10,7 @@ import (
 
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"github.com/willf/bitset"
-	"golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/packages"
 )
 
 // File implements reaching definitions data flow analysis for a
@@ -42,7 +42,7 @@ import (
 // this function as they are disjoint from a cfg's blocks.
 // For analyzing the statements in the cfg.Defers list, each defer
 // should be treated as though it has the same in and out sets as the cfg.Exit node.
-func DefUse(cfg *cfg.CFG, info *loader.PackageInfo) map[ast.Stmt]map[ast.Stmt]struct{} {
+func DefUse(cfg *cfg.CFG, info *packages.Package) map[ast.Stmt]map[ast.Stmt]struct{} {
 	blocks, gen, kill := genKillBitsets(cfg, info)
 	ins, _ := reachingDefBitsets(cfg, gen, kill)
 	return defUseResultSet(blocks, ins)
@@ -51,7 +51,7 @@ func DefUse(cfg *cfg.CFG, info *loader.PackageInfo) map[ast.Stmt]map[ast.Stmt]st
 // DefsReaching builds reaching definitions for a given control flow graph,
 // returning the set of statements that define a variable (i.e., declare or
 // assign it) where that definition reaches the given statement.
-func DefsReaching(stmt ast.Stmt, cfg *cfg.CFG, info *loader.PackageInfo) map[ast.Stmt]struct{} {
+func DefsReaching(stmt ast.Stmt, cfg *cfg.CFG, info *packages.Package) map[ast.Stmt]struct{} {
 	blocks, gen, kill := genKillBitsets(cfg, info)
 	ins, _ := reachingDefBitsets(cfg, gen, kill)
 	return defsReachingResultSet(stmt, blocks, ins)
@@ -59,7 +59,7 @@ func DefsReaching(stmt ast.Stmt, cfg *cfg.CFG, info *loader.PackageInfo) map[ast
 
 // genKillBitsets builds the gen and kill bitsets for each block in a cfg,
 // these are used to compute reaching definitions.
-func genKillBitsets(cfg *cfg.CFG, info *loader.PackageInfo) (blocks []ast.Stmt, gen, kill map[ast.Stmt]*bitset.BitSet) {
+func genKillBitsets(cfg *cfg.CFG, info *packages.Package) (blocks []ast.Stmt, gen, kill map[ast.Stmt]*bitset.BitSet) {
 	okills := make(map[*types.Var]*bitset.BitSet)
 	gen = make(map[ast.Stmt]*bitset.BitSet)
 	kill = make(map[ast.Stmt]*bitset.BitSet)

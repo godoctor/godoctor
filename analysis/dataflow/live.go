@@ -10,7 +10,7 @@ import (
 
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"github.com/willf/bitset"
-	"golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/packages"
 )
 
 // File defines live variables analysis for a statement
@@ -43,16 +43,16 @@ import (
 // More formally:
 //  IN[EXIT] = USE(each d in cfg.Defers)
 //  OUT[EXIT] = {}
-func LiveVars(cfg *cfg.CFG, info *loader.PackageInfo) (in, out map[ast.Stmt]map[*types.Var]struct{}) {
+func LiveVars(cfg *cfg.CFG, info *packages.Package) (in, out map[ast.Stmt]map[*types.Var]struct{}) {
 	vars, def, use := defUseBitsets(cfg, info)
 	ins, outs := liveVarsBitsets(cfg, def, use)
 	return liveVarsResultSets(cfg, vars, ins, outs)
 }
 
 // defUseBitsets builds def and use bitsets for the given cfg in the context
-// of the given loader.PackageInfo. Each entry in the resulting bitsets maps back to
+// of the given packages.Package. Each entry in the resulting bitsets maps back to
 // the same index in the returned vars slice.
-func defUseBitsets(cfg *cfg.CFG, info *loader.PackageInfo) (vars []*types.Var, def, use map[ast.Stmt]*bitset.BitSet) {
+func defUseBitsets(cfg *cfg.CFG, info *packages.Package) (vars []*types.Var, def, use map[ast.Stmt]*bitset.BitSet) {
 	blocks := cfg.Blocks()
 
 	def = make(map[ast.Stmt]*bitset.BitSet, len(blocks))
