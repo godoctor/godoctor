@@ -374,8 +374,18 @@ func (r *Debug) showLoadedPackagesAndFiles(out io.Writer) {
 	fmt.Fprintf(out, "Working directory is %s\n", cwd)
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "Packages/files loaded:")
+	// sort, for testing. blech
+	var pkgs []string
+	pm := make(map[string]*types.Package)
 	for _, pkgInfo := range r.Program.AllPackages {
-		fmt.Fprintf(out, "\t%s\n", pkgInfo.Types.Name())
+		pkgs = append(pkgs, pkgInfo.Name)
+		pm[pkgInfo.Name] = pkgInfo.Types
+	}
+	sort.Strings(pkgs)
+
+	for _, pkg := range pkgs {
+		pkgInfo := r.Program.AllPackages[pm[pkg]]
+		fmt.Fprintf(out, "\t%s\n", pkgInfo.Types.String())
 		for _, file := range pkgInfo.Syntax {
 			filename := r.Program.Fset.Position(file.Pos()).Filename
 			fmt.Fprintf(out, "\t\t%s\n", filename)

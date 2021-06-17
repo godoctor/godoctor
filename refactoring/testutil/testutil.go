@@ -218,6 +218,7 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 		t.Log(result.Log)
 		t.Fatalf("Refactoring produced unexpected errors")
 	} else if !shouldPass && !result.Log.ContainsErrors() {
+		t.Log(result.Log)
 		t.Fatalf("Refactoring should have produced errors but didn't")
 	}
 

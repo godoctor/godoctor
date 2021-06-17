@@ -9,6 +9,7 @@ package loader
 // relies heavily on the packages package to do the heavy lifting.
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -31,7 +32,7 @@ type Program struct {
 }
 
 // Load loads a package, calling packages.Load
-func Load(conf *packages.Config, args ...string) (*Program, error) {
+func Load(conf *packages.Config, errorH func(error), args ...string) (*Program, error) {
 	// TODO(reed): we do kinda need to ensure types is set so that
 	// files are parsed, and syntax is used heavily, and deps are used
 	// in rename refactoring (but not some others, could save some time).
@@ -62,13 +63,16 @@ func Load(conf *packages.Config, args ...string) (*Program, error) {
 	}
 
 	// add these pkgs + their imports, et voila: AllPackages
+	// TODO error handling is a little clumsy, could bundle them into 1 error
 	pkgs := make(map[*types.Package]*packages.Package, len(prog))
-	for _, p := range prog {
-		pkgs[p.Types] = p
-		for _, p := range p.Imports {
-			pkgs[p.Types] = p
+	packages.Visit(prog, nil, func(pkg *packages.Package) {
+		pkgs[pkg.Types] = pkg
+		fmt.Printf("%#v %#v\n", pkg, pkg.Types)
+		for _, err := range pkg.Errors {
+			fmt.Println(err)
+			errorH(err)
 		}
-	}
+	})
 
 	return &Program{
 		Fset:        conf.Fset,

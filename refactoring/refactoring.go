@@ -333,19 +333,7 @@ func createLoader(config *Config, errorHandler func(error)) (*loader.Program, er
 	var lconfig packages.Config
 	lconfig.Env = env
 
-	prog, err := loader.Load(&lconfig, config.Scope...)
-	if err != nil {
-		errorHandler(err)
-		return nil, err
-	}
-
-	for _, p := range prog.AllPackages {
-		for _, err := range p.Errors {
-			errorHandler(err)
-		}
-	}
-
-	return prog, err
+	return loader.Load(&lconfig, errorHandler, config.Scope...)
 }
 
 // guessScope makes a reasonable guess at the refactoring scope if the user
