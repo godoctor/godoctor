@@ -9,7 +9,6 @@ package loader
 // relies heavily on the packages package to do the heavy lifting.
 
 import (
-	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -67,9 +66,7 @@ func Load(conf *packages.Config, errorH func(error), args ...string) (*Program, 
 	pkgs := make(map[*types.Package]*packages.Package, len(prog))
 	packages.Visit(prog, nil, func(pkg *packages.Package) {
 		pkgs[pkg.Types] = pkg
-		fmt.Printf("%#v %#v\n", pkg, pkg.Types)
 		for _, err := range pkg.Errors {
-			fmt.Println(err)
 			errorH(err)
 		}
 	})
