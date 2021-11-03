@@ -8,8 +8,8 @@ import (
 	"go/ast"
 	"go/types"
 
+	"github.com/bits-and-blooms/bitset"
 	"github.com/godoctor/godoctor/analysis/cfg"
-	"github.com/willf/bitset"
 	"golang.org/x/tools/go/loader"
 )
 
