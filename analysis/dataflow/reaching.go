@@ -1,4 +1,4 @@
-// Copyright 2015-2018 Auburn University. All rights reserved.
+github.com/bits-and-blooms/bitsetgithub.com/bits-and-blooms/bitsetgithub.com/bits-and-blooms/bitsetgithub.com/bits-and-blooms/bitset// Copyright 2015-2018 Auburn University. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
