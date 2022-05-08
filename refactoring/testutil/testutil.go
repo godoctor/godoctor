@@ -224,7 +224,7 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 	} else if !shouldPass && !result.Log.ContainsErrors() {
 		t.Log(result.Log)
 		t.Errorf("Refactoring should have produced errors but didn't")
-		return
+		// return
 	}
 
 	debugOutput := result.DebugOutput.String()
@@ -266,6 +266,8 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 				if shouldPass {
 					checkResult(path, string(output), t)
 				}
+
+				fmt.Println(string(output))
 			}
 			return nil
 		})

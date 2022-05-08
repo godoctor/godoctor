@@ -76,6 +76,8 @@ func newStmtRange(file *ast.File, start, end token.Pos, pkgInfo *packages.Packag
 	// that enclose both the start and end of the selection
 	deepestCommonAncestorDepth := -1
 	for i := 0; i < min(len(startPath), len(endPath)); i++ {
+		node := startPath[len(startPath)-1-i]
+		fmt.Printf("order %T depth %v\n", node, deepestCommonAncestorDepth)
 		if startPath[len(startPath)-1-i] == endPath[len(endPath)-1-i] {
 			deepestCommonAncestorDepth++
 		} else {
@@ -91,6 +93,8 @@ func newStmtRange(file *ast.File, start, end token.Pos, pkgInfo *packages.Packag
 	body := []ast.Stmt{}
 loop:
 	for blockDepth > 0 {
+		node := startPath[len(startPath)-1-blockDepth]
+		fmt.Printf("sup %T %v %v %v\n", node, blockDepth, deepestCommonAncestorDepth, len(startPath))
 		switch node := startPath[len(startPath)-1-blockDepth].(type) {
 		case *ast.BlockStmt:
 			body = node.List
@@ -109,6 +113,7 @@ loop:
 			}
 			blockDepth--
 		default:
+			fmt.Printf("yo %T", node)
 			blockDepth--
 		}
 	}
