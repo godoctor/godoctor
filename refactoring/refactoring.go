@@ -309,14 +309,11 @@ func (r *RefactoringBase) Init(config *Config, desc *Description) *Result {
 }
 
 func createLoader(config *Config, errorHandler func(error)) (*loader.Program, error) {
+	// TODO: need to rehack most of this probably to go away as now modules
+	// do not require this GOPATH hackery, it may "just work" in PWD as is
 	var env []string
-	// NOTE: this is breaking in 1.17 and modules will be required.
-	// however, it would be nice to get the tests passing with the packages
-	// stuff on an earlier version of go before attempting to migrate the
-	// tests to running on modules...
 	if config.GoPath != "" {
 		env = append(env, "GOPATH="+config.GoPath)
-		env = append(env, "GO111MODULE=off")
 	} else if gopath := os.Getenv("GOPATH"); gopath != "" {
 		// TODO(reed): is this just backwards compat now? remove?
 		//
