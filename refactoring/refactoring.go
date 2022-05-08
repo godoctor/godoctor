@@ -335,6 +335,24 @@ func createLoader(config *Config, errorHandler func(error)) (*loader.Program, er
 	var lconfig packages.Config
 	lconfig.Env = env
 
+	switch fs := config.FileSystem.(type) {
+	case *filesystem.EditedFileSystem:
+		lconfig.Overlay = make(map[string][]byte, len(fs.Edits))
+		for f := range fs.Edits {
+			r, err := fs.OpenFile(f)
+			if err != nil {
+				// TODO(reed): decorate
+				return nil, err
+			}
+			b, err := ioutil.ReadAll(r)
+			if err != nil {
+				// TODO(reed): decorate
+				return nil, err
+			}
+			lconfig.Overlay[f] = b
+		}
+	}
+
 	return loader.Load(&lconfig, errorHandler, config.Scope...)
 }
 

@@ -266,8 +266,6 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 				if shouldPass {
 					checkResult(path, string(output), t)
 				}
-
-				fmt.Println(string(output))
 			}
 			return nil
 		})
