@@ -80,6 +80,7 @@ const PASS = "pass"
 const FAIL = "fail"
 
 const MAIN_DOT_GO = "main.go"
+const GO_DOT_MOD = "go.mod"
 
 var filterFlag = flag.String("filter", "",
 	"Only tests from directories containing this substring will be run")
@@ -198,6 +199,9 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 		}
 	}
 
+	modFile := filepath.Join(directory, GO_DOT_MOD)
+	modulesOff := !exists(modFile, t)
+
 	mainFile, err := filepath.Abs(mainFile)
 	if err != nil {
 		t.Error(err)
@@ -215,6 +219,7 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 		Selection:  selection,
 		Args:       args,
 		GoPath:     gopath,
+		ModulesOff: modulesOff,
 	}
 	result := r.Run(config)
 	if shouldPass && result.Log.ContainsErrors() {

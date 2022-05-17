@@ -140,6 +140,8 @@ type Config struct {
 	// The GOROOT.  If this is set to the empty string, the GOROOT is
 	// determined from the environment.
 	GoRoot string
+	// Set GO111MODULE=off if true, else determine from the environment.
+	ModulesOff bool
 }
 
 // The Refactoring interface identifies methods common to all refactorings.
@@ -330,6 +332,9 @@ func createLoader(config *Config, errorHandler func(error)) (*loader.Program, er
 		// GOROOT environment variable will be set since the default
 		// GOROOT is not readable.
 		env = append(env, "GOROOT="+goroot)
+	}
+	if config.ModulesOff {
+		env = append(env, "GO111MODULE=off")
 	}
 
 	var lconfig packages.Config
