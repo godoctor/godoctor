@@ -18,14 +18,14 @@ import (
 
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"golang.org/x/tools/go/ast/astutil"
-	"golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/packages"
 )
 
 // PrintDefUseDot prints a GraphViz DOT file showing the control flow graph with
 // definition-use links superimposed.
 //
 // This is used by the debug refactoring.
-func PrintDefUseDot(f io.Writer, fset *token.FileSet, info *loader.PackageInfo, cfg *cfg.CFG) {
+func PrintDefUseDot(f io.Writer, fset *token.FileSet, info *packages.Package, cfg *cfg.CFG) {
 	du := DefUse(cfg, info)
 
 	fmt.Fprintf(f, `digraph mgraph {
@@ -126,7 +126,7 @@ func summarize(stmt ast.Stmt, fset *token.FileSet) string {
 	return sourceCode
 }
 
-func reachingVars(from, to ast.Stmt, info *loader.PackageInfo) string {
+func reachingVars(from, to ast.Stmt, info *packages.Package) string {
 	asgt, updt, decl, _ := ReferencedVars([]ast.Stmt{from}, info)
 	_, _, _, use := ReferencedVars([]ast.Stmt{to}, info)
 
@@ -164,7 +164,7 @@ func reachingVars(from, to ast.Stmt, info *loader.PackageInfo) string {
 // with information about the liveness of local variables superimposed.
 //
 // This is used by the debug refactoring.
-func PrintLiveVarsDot(f io.Writer, fset *token.FileSet, info *loader.PackageInfo, cfg *cfg.CFG) {
+func PrintLiveVarsDot(f io.Writer, fset *token.FileSet, info *packages.Package, cfg *cfg.CFG) {
 	liveIn, liveOut := LiveVars(cfg, info)
 
 	fmt.Fprintf(f, `digraph mgraph {

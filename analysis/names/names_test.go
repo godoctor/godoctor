@@ -7,42 +7,32 @@ package names_test
 import (
 	"fmt"
 	"go/ast"
-	"go/build"
-	"go/parser"
 	"go/types"
 	"os"
 	"path/filepath"
 	"sort"
 	"testing"
 
+	"github.com/godoctor/godoctor/analysis/loader"
 	"github.com/godoctor/godoctor/analysis/names"
 	"github.com/godoctor/godoctor/text"
 
-	"golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/packages"
 )
 
 // -=- Utility Functions -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 func setup(t *testing.T) *loader.Program {
-	var lconfig loader.Config
-	build := build.Default
-	build.Dir = filepath.Join("testdata/src/foo")
-	lconfig.Build = &build
-	lconfig.ParserMode = parser.ParseComments | parser.DeclarationErrors
-	lconfig.AllowErrors = false
-	//lconfig.SourceImports = true
-	lconfig.TypeChecker.Error = func(err error) {
-		t.Fatal(err)
-	}
-	lconfig.CreateFromFilenames("foo", "testdata/src/foo/foo.go")
-	prog, err := lconfig.Load()
+	var lconfig packages.Config
+	lconfig.Dir = filepath.Join("testdata/src/foo")
+	prog, err := loader.Load(&lconfig)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return prog
 }
 
-func findPackage(p *loader.Program, pkgName string, t *testing.T) *loader.PackageInfo {
+func findPackage(p *loader.Program, pkgName string, t *testing.T) *packages.Package {
 	for pkg, info := range p.AllPackages {
 		if pkg.Name() == pkgName {
 			return info
@@ -53,7 +43,7 @@ func findPackage(p *loader.Program, pkgName string, t *testing.T) *loader.Packag
 }
 
 func lookup(p *loader.Program, pkgName, name string, t *testing.T) types.Object {
-	result := findPackage(p, pkgName, t).Pkg.Scope().Lookup(name)
+	result := findPackage(p, pkgName, t).Types.Scope().Lookup(name)
 	if result == nil {
 		t.Fatalf("%s.%s not found", pkgName, name)
 	}
@@ -62,7 +52,7 @@ func lookup(p *loader.Program, pkgName, name string, t *testing.T) types.Object 
 
 func lookupFieldOrMethod(p *loader.Program, pkgName, container, name string, t *testing.T) types.Object {
 	typ := lookup(p, pkgName, container, t).Type()
-	obj, _, _ := types.LookupFieldOrMethod(typ, true, findPackage(p, pkgName, t).Pkg, name)
+	obj, _, _ := types.LookupFieldOrMethod(typ, true, findPackage(p, pkgName, t).Types, name)
 	if obj == nil {
 		t.Fatalf("%s not found for %s.%s", name, pkgName, container)
 	}
@@ -84,7 +74,7 @@ func equals(a, b []string) bool {
 func findOccurrences(pkgName, identName string, t *testing.T) []string {
 	prog := setup(t)
 	ident, pkg := findFirstIdent(prog, pkgName, identName, t)
-	occs := names.FindOccurrences(pkg.ObjectOf(ident), prog)
+	occs := names.FindOccurrences(pkg.TypesInfo.ObjectOf(ident), prog)
 
 	result := []string{}
 	for id := range occs {
@@ -107,7 +97,7 @@ func sortKeys(m map[string][]text.Extent) []string {
 
 func findInComments(pkgName, identName string, t *testing.T) []string {
 	prog := setup(t)
-	file := findPackage(prog, pkgName, t).Files[0]
+	file := findPackage(prog, pkgName, t).Syntax[0]
 	filename := prog.Fset.Position(file.Pos()).Filename
 
 	result := []string{}
@@ -117,10 +107,10 @@ func findInComments(pkgName, identName string, t *testing.T) []string {
 	return result
 }
 
-func findFirstIdent(p *loader.Program, pkgName, ident string, t *testing.T) (*ast.Ident, *loader.PackageInfo) {
+func findFirstIdent(p *loader.Program, pkgName, ident string, t *testing.T) (*ast.Ident, *packages.Package) {
 	pkgInfo := findPackage(p, pkgName, t)
 	var result *ast.Ident
-	ast.Inspect(pkgInfo.Files[0],
+	ast.Inspect(pkgInfo.Syntax[0],
 		func(n ast.Node) bool {
 			switch id := n.(type) {
 			case *ast.Ident:
@@ -162,33 +152,33 @@ func TestMethodReceiver(t *testing.T) {
 func TestFindOccurrences(t *testing.T) {
 	check(findOccurrences("foo", "Exported", t),
 		[]string{
-			"testdata/src/foo/foo.go:36"}, t)
+			"testdata/src/foo/foo.go:32"}, t)
 	check(findOccurrences("bar", "Exported", t),
 		[]string{
-			"testdata/src/foo/foo.go:75",
-			"testdata/src/foo/vendor/bat/bar/bar.go:18",
+			"testdata/src/foo/foo.go:71",
+			"testdata/src/foo/vendor/bar/bar.go:18",
 		}, t)
 	check(findOccurrences("bar", "t", t),
 		[]string{
-			"testdata/src/foo/vendor/bat/bar/bar.go:107",
-			"testdata/src/foo/vendor/bat/bar/bar.go:95"}, t)
+			"testdata/src/foo/vendor/bar/bar.go:107",
+			"testdata/src/foo/vendor/bar/bar.go:95"}, t)
 	check(findOccurrences("bar", "Method", t),
 		[]string{
-			"testdata/src/foo/foo.go:251",
-			"testdata/src/foo/vendor/bat/bar/bar.go:174",
-			"testdata/src/foo/vendor/bat/bar/bar.go:74",
+			"testdata/src/foo/foo.go:247",
+			"testdata/src/foo/vendor/bar/bar.go:174",
+			"testdata/src/foo/vendor/bar/bar.go:74",
 		}, t)
 	check(findOccurrences("foo", "q", t),
 		[]string{
-			"testdata/src/foo/foo.go:141"}, t)
+			"testdata/src/foo/foo.go:137"}, t)
 	check(findInComments("foo", "q", t),
 		[]string{
-			"testdata/src/foo/foo.go:149",
-			"testdata/src/foo/foo.go:156",
-			"testdata/src/foo/foo.go:168",
-			"testdata/src/foo/foo.go:215",
-			"testdata/src/foo/foo.go:266",
-			"testdata/src/foo/foo.go:289"}, t)
+			"testdata/src/foo/foo.go:145",
+			"testdata/src/foo/foo.go:152",
+			"testdata/src/foo/foo.go:164",
+			"testdata/src/foo/foo.go:211",
+			"testdata/src/foo/foo.go:262",
+			"testdata/src/foo/foo.go:285"}, t)
 }
 
 func check(actual, expect []string, t *testing.T) {

@@ -8,7 +8,8 @@ import (
 	"go/ast"
 	"go/types"
 
-	"golang.org/x/tools/go/loader"
+	"github.com/godoctor/godoctor/analysis/loader"
+	"golang.org/x/tools/go/packages"
 )
 
 // FindOccurrences receives an Object and returns the set of all identifiers
@@ -26,13 +27,13 @@ func FindOccurrences(obj types.Object, prog *loader.Program) map[*ast.Ident]bool
 	}
 
 	result := make(map[*ast.Ident]bool)
-	for pkgInfo := range packages(decls, prog) {
-		for id, obj := range pkgInfo.Defs {
+	for pkgInfo := range packagesContaining(decls, prog) {
+		for id, obj := range pkgInfo.TypesInfo.Defs {
 			if decls[obj] {
 				result[id] = true
 			}
 		}
-		for id, obj := range pkgInfo.Uses {
+		for id, obj := range pkgInfo.TypesInfo.Uses {
 			if decls[obj] {
 				result[id] = true
 			}
@@ -41,16 +42,16 @@ func FindOccurrences(obj types.Object, prog *loader.Program) map[*ast.Ident]bool
 	return result
 }
 
-// packages returns a set of PackageInfos that may reference the given
+// packagesContaining returns a set of PackageInfos that may reference the given
 // Objects.  If at least one of the given declarations is exported, the method
 // returns all the packages of this program; otherwise, it returns the
 // package(s) containing the given declarations.
-func packages(decls map[types.Object]bool, program *loader.Program) map[*loader.PackageInfo]bool {
+func packagesContaining(decls map[types.Object]bool, program *loader.Program) map[*packages.Package]bool {
 	// XXX(review D7): If performance is a concern, you could return only
 	// the packages in the reverse transitive closure of the package import
 	// graph, rather than all the packages.
 
-	result := make(map[*loader.PackageInfo]bool)
+	result := make(map[*packages.Package]bool)
 	for decl := range decls {
 		if decl.Exported() {
 			return allPackages(program)
@@ -61,8 +62,8 @@ func packages(decls map[types.Object]bool, program *loader.Program) map[*loader.
 	return result
 }
 
-func allPackages(prog *loader.Program) map[*loader.PackageInfo]bool {
-	result := map[*loader.PackageInfo]bool{}
+func allPackages(prog *loader.Program) map[*packages.Package]bool {
+	result := map[*packages.Package]bool{}
 	for _, pkgInfo := range prog.AllPackages {
 		result[pkgInfo] = true
 	}

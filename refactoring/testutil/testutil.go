@@ -80,6 +80,7 @@ const PASS = "pass"
 const FAIL = "fail"
 
 const MAIN_DOT_GO = "main.go"
+const GO_DOT_MOD = "go.mod"
 
 var filterFlag = flag.String("filter", "",
 	"Only tests from directories containing this substring will be run")
@@ -162,7 +163,8 @@ func runTestsInFiles(directory string, files []string, t *testing.T) {
 	if len(markers) == 0 {
 		pwd, _ := os.Getwd()
 		pwd = filepath.Base(pwd)
-		t.Fatalf("No <<<<< markers found in any files in %s", pwd)
+		t.Errorf("No <<<<< markers found in any files in %s", pwd)
+		return
 	}
 
 	for path, markersInFile := range markers {
@@ -177,7 +179,8 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 
 	r := engine.GetRefactoring(refac)
 	if r == nil {
-		t.Fatalf("There is no refactoring named %s (from marker %s)", refac, marker)
+		t.Errorf("There is no refactoring named %s (from marker %s)", refac, marker)
+		return
 	}
 
 	shouldPass := (passFail == PASS)
@@ -196,9 +199,13 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 		}
 	}
 
+	modFile := filepath.Join(directory, GO_DOT_MOD)
+	modulesOff := !exists(modFile, t)
+
 	mainFile, err := filepath.Abs(mainFile)
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+		return
 	}
 
 	args := refactoring.InterpretArgs(remainder, r)
@@ -212,13 +219,17 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 		Selection:  selection,
 		Args:       args,
 		GoPath:     gopath,
+		ModulesOff: modulesOff,
 	}
 	result := r.Run(config)
 	if shouldPass && result.Log.ContainsErrors() {
 		t.Log(result.Log)
-		t.Fatalf("Refactoring produced unexpected errors")
+		t.Errorf("Refactoring produced unexpected errors")
+		return
 	} else if !shouldPass && !result.Log.ContainsErrors() {
-		t.Fatalf("Refactoring should have produced errors but didn't")
+		t.Log(result.Log)
+		t.Errorf("Refactoring should have produced errors but didn't")
+		// return
 	}
 
 	debugOutput := result.DebugOutput.String()
@@ -226,7 +237,8 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 		debugOutputFilename := filename + ".debugOutput"
 		bytes, err := ioutil.ReadFile(debugOutputFilename)
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
+			return
 		}
 		expectedOutput := sanitize(string(bytes), false)
 		actualOutput := sanitize(debugOutput, true)
@@ -234,7 +246,7 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 			fmt.Printf(">>>>> Debug output does not match contents of %s\n", debugOutputFilename)
 			fmt.Printf(">>>>> NOTE: All occurrences of the working directory name are replaced by \".\"\n")
 			showExpectedAndActual(expectedOutput, actualOutput)
-			t.Fatalf("Refactoring test failed - %s", filename)
+			t.Errorf("Refactoring test failed - %s", filename)
 		}
 	}
 
@@ -254,7 +266,7 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 				}
 				output, err := filesystem.ApplyEdits(edits, fileSystem, path)
 				if err != nil {
-					t.Fatal(err)
+					return err
 				}
 				if shouldPass {
 					checkResult(path, string(output), t)
@@ -263,7 +275,7 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 			return nil
 		})
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
 	}
 }
 
@@ -292,7 +304,8 @@ func sanitize(debugOutput string, replaceCwd bool) string {
 func checkResult(filename string, actualOutput string, t *testing.T) {
 	bytes, err := ioutil.ReadFile(filename + "lden")
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+		return
 	}
 	expectedOutput := strings.Replace(string(bytes), "\r\n", "\n", -1)
 	actualOutput = strings.Replace(actualOutput, "\r\n", "\n", -1)
@@ -305,7 +318,7 @@ func checkResult(filename string, actualOutput string, t *testing.T) {
 	if expectedOutput != actualOutput {
 		fmt.Printf(">>>>> Output does not match %slden\n", filename)
 		showExpectedAndActual(expectedOutput, actualOutput)
-		t.Fatalf("Refactoring test failed - %s", filename)
+		t.Errorf("Refactoring test failed - %s", filename)
 	}
 }
 
@@ -368,6 +381,7 @@ func splitMarker(filename string, marker string, t *testing.T) (refac string, se
 	filename, err := filepath.Abs(filename)
 	if err != nil {
 		t.Fatal(err)
+		return
 	}
 	fields := strings.Split(marker, ",")
 	if len(fields) < 6 {

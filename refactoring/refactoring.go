@@ -15,7 +15,6 @@ import (
 	"bytes"
 	"fmt"
 	"go/ast"
-	"go/build"
 	"go/parser"
 	"go/printer"
 	"go/token"
@@ -27,9 +26,10 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/godoctor/godoctor/analysis/loader"
 	"github.com/godoctor/godoctor/filesystem"
 	"github.com/godoctor/godoctor/text"
-	"golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/packages"
 )
 
 // The maximum number of errors from the go/loader that will be reported
@@ -140,6 +140,8 @@ type Config struct {
 	// The GOROOT.  If this is set to the empty string, the GOROOT is
 	// determined from the environment.
 	GoRoot string
+	// Set GO111MODULE=off if true, else determine from the environment.
+	ModulesOff bool
 }
 
 // The Refactoring interface identifies methods common to all refactorings.
@@ -199,7 +201,7 @@ type RefactoringBase struct {
 	// The deepest ast.Node enclosing the user's selection
 	SelectedNode ast.Node
 	// The package containing the SelectedNode
-	SelectedNodePkg *loader.PackageInfo
+	SelectedNodePkg *packages.Package
 	// The Result of this refactoring, returned to the client invoking it
 	Result
 }
@@ -309,45 +311,54 @@ func (r *RefactoringBase) Init(config *Config, desc *Description) *Result {
 }
 
 func createLoader(config *Config, errorHandler func(error)) (*loader.Program, error) {
-	buildContext := build.Default
-	if os.Getenv("GOPATH") != "" {
+	// TODO: need to rehack most of this probably to go away as now modules
+	// do not require this GOPATH hackery, it may "just work" in PWD as is
+	var env []string
+	if config.GoPath != "" {
+		env = append(env, "GOPATH="+config.GoPath)
+	} else if gopath := os.Getenv("GOPATH"); gopath != "" {
+		// TODO(reed): is this just backwards compat now? remove?
+		//
 		// The test runner may change the GOPATH environment variable
 		// since the Program was started, so set it here explicitly
 		// (not necessary when run as a CLI tool, but necessary when
 		// run from refactoring_test.go)
-		buildContext.GOPATH = os.Getenv("GOPATH")
+		env = append(env, "GOPATH="+gopath)
 	}
-	if config.GoPath != "" {
-		buildContext.GOPATH = config.GoPath
-	}
-	if os.Getenv("GOROOT") != "" {
+	if config.GoRoot != "" {
+		env = append(env, "GOROOT="+config.GoRoot)
+	} else if goroot := os.Getenv("GOROOT"); goroot != "" {
 		// When the Go Doctor Web demo is running on App Engine, the
 		// GOROOT environment variable will be set since the default
 		// GOROOT is not readable.
-		buildContext.GOROOT = os.Getenv("GOROOT")
+		env = append(env, "GOROOT="+goroot)
 	}
-	if config.GoRoot != "" {
-		buildContext.GOROOT = config.GoRoot
+	if config.ModulesOff {
+		env = append(env, "GO111MODULE=off")
 	}
-	buildContext.ReadDir = config.FileSystem.ReadDir
-	buildContext.OpenFile = config.FileSystem.OpenFile
 
-	var lconfig loader.Config
-	lconfig.Build = &buildContext
-	lconfig.ParserMode = parser.ParseComments | parser.DeclarationErrors
-	lconfig.AllowErrors = true
-	//lconfig.SourceImports = true
-	lconfig.TypeChecker.Error = errorHandler
+	var lconfig packages.Config
+	lconfig.Env = env
 
-	rest, err := lconfig.FromArgs(config.Scope, true)
-	if len(rest) > 0 {
-		errorHandler(fmt.Errorf("Unrecognized argument %s",
-			strings.Join(rest, " ")))
+	switch fs := config.FileSystem.(type) {
+	case *filesystem.EditedFileSystem:
+		lconfig.Overlay = make(map[string][]byte, len(fs.Edits))
+		for f := range fs.Edits {
+			r, err := fs.OpenFile(f)
+			if err != nil {
+				// TODO(reed): decorate
+				return nil, err
+			}
+			b, err := ioutil.ReadAll(r)
+			if err != nil {
+				// TODO(reed): decorate
+				return nil, err
+			}
+			lconfig.Overlay[f] = b
+		}
 	}
-	if err != nil {
-		errorHandler(err)
-	}
-	return lconfig.Load()
+
+	return loader.Load(&lconfig, errorHandler, config.Scope...)
 }
 
 // guessScope makes a reasonable guess at the refactoring scope if the user

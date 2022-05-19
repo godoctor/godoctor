@@ -8,7 +8,8 @@ import (
 	"go/ast"
 	"go/types"
 
-	"golang.org/x/tools/go/loader"
+	"github.com/godoctor/godoctor/analysis/loader"
+	"golang.org/x/tools/go/packages"
 )
 
 // FindEmbeddedTypes finds each use of the given Object's type as an embedded
@@ -17,7 +18,7 @@ import (
 func FindEmbeddedTypes(obj types.Object, program *loader.Program) map[types.Object]bool {
 	result := map[types.Object]bool{obj: true}
 	pkgInfo := program.AllPackages[obj.Pkg()]
-	for _, file := range pkgInfo.Files {
+	for _, file := range pkgInfo.Syntax {
 		ast.Inspect(file, func(node ast.Node) bool {
 			if s, ok := node.(*ast.StructType); ok {
 				for _, field := range s.Fields.List {
@@ -33,8 +34,8 @@ func FindEmbeddedTypes(obj types.Object, program *loader.Program) map[types.Obje
 	return result
 }
 
-func match(field *ast.Field, obj types.Object, pkgInfo *loader.PackageInfo) types.Object {
-	fieldType := pkgInfo.TypeOf(field.Type)
+func match(field *ast.Field, obj types.Object, pkgInfo *packages.Package) types.Object {
+	fieldType := pkgInfo.TypesInfo.TypeOf(field.Type)
 	if fieldType != obj.Type() {
 		return nil
 	}
@@ -44,7 +45,7 @@ func match(field *ast.Field, obj types.Object, pkgInfo *loader.PackageInfo) type
 		return nil
 	}
 
-	return pkgInfo.ObjectOf(name)
+	return pkgInfo.TypesInfo.ObjectOf(name)
 }
 
 // findName finds the identifier that determines the implicit name of an

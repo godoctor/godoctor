@@ -1,6 +1,6 @@
 package foo
 
-import "bat/bar"
+import "bar"
 
 func Exported() string { return "foo" + bar.Exported() }
 

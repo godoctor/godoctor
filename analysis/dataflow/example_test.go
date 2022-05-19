@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"go/ast"
 
-	"golang.org/x/tools/go/loader"
-
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"github.com/godoctor/godoctor/analysis/dataflow"
+	"github.com/godoctor/godoctor/analysis/loader"
+	"golang.org/x/tools/go/packages"
 )
 
-func ExampleReachingDefs() {
+func ExampleDefsReaching() {
 	src := `
     package main
 
@@ -30,23 +30,28 @@ func ExampleReachingDefs() {
     }
   `
 
-	// use own loader config, this is just necessary
-	var config loader.Config
-	f, err := config.ParseFile("testing", src)
-	if err != nil {
-		return // probably don't proceed
-	}
-	config.CreateFromFiles("testing", f)
-	prog, err := config.Load()
+	// can ignore overlay stuff, you can just load from disk normally
+	var config packages.Config
+	config.Dir = "testdata"
+	config.Overlay = map[string][]byte{"main.go": []byte(src)}
+
+	prog, err := loader.Load(&config)
 	if err != nil {
 		return
 	}
 
-	funcOne := f.Decls[1].(*ast.FuncDecl)
-	c := cfg.FromFunc(funcOne)
-	du := dataflow.DefUse(c, prog.Created[0])
+	var info *packages.Package
+	for _, info = range prog.AllPackages {
+		if info.Name == "main" {
+			break
+		}
+	}
 
-	ast.Inspect(f, func(n ast.Node) bool {
+	funcOne := info.Syntax[0].Decls[1].(*ast.FuncDecl)
+	c := cfg.FromFunc(funcOne)
+	du := dataflow.DefUse(c, info)
+
+	ast.Inspect(info.Syntax[0], func(n ast.Node) bool {
 		switch stmt := n.(type) {
 		case ast.Stmt:
 			fmt.Println(len(du[stmt]))
@@ -72,23 +77,28 @@ func ExampleLiveVars() {
     }
   `
 
-	// use own loader config, this is just necessary
-	var config loader.Config
-	f, err := config.ParseFile("testing", src)
-	if err != nil {
-		return // probably don't proceed
-	}
-	config.CreateFromFiles("testing", f)
-	prog, err := config.Load()
+	// can ignore overlay stuff, you can just load from disk normally
+	var config packages.Config
+	config.Dir = "testdata"
+	config.Overlay = map[string][]byte{"main.go": []byte(src)}
+
+	prog, err := loader.Load(&config)
 	if err != nil {
 		return
 	}
 
-	funcOne := f.Decls[1].(*ast.FuncDecl)
-	cfg := cfg.FromFunc(funcOne)
-	in, out := dataflow.LiveVars(cfg, prog.Created[0])
+	var info *packages.Package
+	for _, info = range prog.AllPackages {
+		if info.Name == "main" {
+			break
+		}
+	}
 
-	ast.Inspect(f, func(n ast.Node) bool {
+	funcOne := info.Syntax[0].Decls[1].(*ast.FuncDecl)
+	cfg := cfg.FromFunc(funcOne)
+	in, out := dataflow.LiveVars(cfg, info)
+
+	ast.Inspect(info.Syntax[0], func(n ast.Node) bool {
 		switch stmt := n.(type) {
 		case ast.Stmt:
 			_, _ = in[stmt], out[stmt]

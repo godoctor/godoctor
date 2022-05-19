@@ -15,12 +15,12 @@ import (
 	"go/token"
 	"go/types"
 
-	"golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/packages"
 )
 
 // ReferencedVars returns the sets of local variables that are defined or used
 // within the given list of statements (based on syntax).
-func ReferencedVars(stmts []ast.Stmt, info *loader.PackageInfo) (asgt, updt, decl, use map[*types.Var]struct{}) {
+func ReferencedVars(stmts []ast.Stmt, info *packages.Package) (asgt, updt, decl, use map[*types.Var]struct{}) {
 	asgt = make(map[*types.Var]struct{})
 	updt = make(map[*types.Var]struct{})
 	decl = make(map[*types.Var]struct{})
@@ -45,7 +45,7 @@ func ReferencedVars(stmts []ast.Stmt, info *loader.PackageInfo) (asgt, updt, dec
 
 // defs returns the set of variables that are assigned a value in the given
 // statement, either by being assigned or declared
-func defs(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
+func defs(stmt ast.Stmt, info *packages.Package) []*types.Var {
 	union := make(map[*types.Var]struct{})
 	for _, v := range assignments(stmt, info, true) {
 		union[v] = struct{}{}
@@ -65,7 +65,7 @@ func defs(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 }
 
 // assignments extracts any local variables whose values are assigned in the given statement.
-func assignments(stmt ast.Stmt, info *loader.PackageInfo, wantMembers bool) []*types.Var {
+func assignments(stmt ast.Stmt, info *packages.Package, wantMembers bool) []*types.Var {
 	idnts := make(map[*ast.Ident]struct{})
 
 	switch stmt := stmt.(type) {
@@ -113,7 +113,7 @@ func assigned(node ast.Expr) map[*ast.Ident]struct{} {
 
 // decls extracts any local variables that are declared (and implicitly or
 // explicitly assigned a value) in the given statement.
-func decls(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
+func decls(stmt ast.Stmt, info *packages.Package) []*types.Var {
 	idnts := make(map[*ast.Ident]struct{})
 
 	switch stmt := stmt.(type) {
@@ -166,12 +166,12 @@ func decls(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
 	return collectVars(idnts, info)
 }
 
-func collectVars(idnts map[*ast.Ident]struct{}, info *loader.PackageInfo) []*types.Var {
+func collectVars(idnts map[*ast.Ident]struct{}, info *packages.Package) []*types.Var {
 	var vars []*types.Var
 	// should all map to types.Var's, if not we don't want anyway
 	for i := range idnts {
-		if v, ok := info.ObjectOf(i).(*types.Var); ok {
-			if v.Pkg() == info.Pkg && !v.IsField() {
+		if v, ok := info.TypesInfo.ObjectOf(i).(*types.Var); ok {
+			if v.Pkg() == info.Types && !v.IsField() {
 				vars = append(vars, v)
 			}
 		}
@@ -181,16 +181,16 @@ func collectVars(idnts map[*ast.Ident]struct{}, info *loader.PackageInfo) []*typ
 
 // typeCaseVar returns the implicit variable associated with a case clause in a
 // type switch statement.
-func typeCaseVar(info *loader.PackageInfo, cc *ast.CaseClause) *types.Var {
+func typeCaseVar(info *packages.Package, cc *ast.CaseClause) *types.Var {
 	// Removed from go/loader
-	if v := info.Implicits[cc]; v != nil {
+	if v := info.TypesInfo.Implicits[cc]; v != nil {
 		return v.(*types.Var)
 	}
 	return nil
 }
 
 // uses extracts local variables whose values are used in the given statement.
-func uses(stmt ast.Stmt, info *loader.PackageInfo) []*types.Var {
+func uses(stmt ast.Stmt, info *packages.Package) []*types.Var {
 	idnts := make(map[*ast.Ident]struct{})
 
 	ast.Inspect(stmt, func(n ast.Node) bool {
@@ -271,7 +271,7 @@ func union(one, two map[*ast.Ident]struct{}) map[*ast.Ident]struct{} {
 }
 
 // Vars returns the set of variables appearing in node
-func Vars(node ast.Node, info *loader.PackageInfo) map[*types.Var]struct{} {
+func Vars(node ast.Node, info *packages.Package) map[*types.Var]struct{} {
 	result := map[*types.Var]struct{}{}
 	for _, variable := range collectVars(idents(node), info) {
 		result[variable] = struct{}{}
