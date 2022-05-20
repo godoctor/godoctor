@@ -45,3 +45,28 @@ http://gorefactor.org
                     'c;.''       ............         .'.,.         
                       ,:.                                           
 ```
+
+## Installation
+
+```
+git clone https://github.com/godoctor/godoctor
+cd godoctor && go install
+```
+
+For vim users see https://github.com/godoctor/godoctor.vim
+
+## Usage
+
+It's recommended to use godoctor with an editor, though godoctor can be used
+directly.
+
+```
+$ godoctor
+```
+
+The godoctor command without any arguments provides usage information. For
+full documentation, see:
+
+```
+$ godoctor -doc
+```
