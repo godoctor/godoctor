@@ -186,6 +186,10 @@ func check(actual, expect []string, t *testing.T) {
 	if err != nil {
 		t.Fatal("couldn't get wd")
 	}
+	wd, err = filepath.EvalSymlinks(wd)
+	if err != nil {
+		t.Fatalf("couldn't evaluate symlinks on %q: %q", wd, err)
+	}
 	for i := range expect {
 		expect[i] = filepath.Join(wd, expect[i])
 	}
