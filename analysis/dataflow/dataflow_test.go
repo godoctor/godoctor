@@ -541,7 +541,7 @@ func BenchmarkMain(b *testing.B) {
 	config.Dir = "../../"
 	// config.CreateFromFilenames("main", "../../main.go")
 
-	prog, err := loader.Load(&config)
+	prog, err := loader.Load(&config, func(err error) { b.Fatal(err.Error()) })
 	if err != nil {
 		b.Error(err.Error())
 		b.FailNow()
@@ -596,7 +596,7 @@ func getWrapper(t mocker, str string) *CFGWrapper {
 	config.Dir = dir
 	config.Overlay = map[string][]byte{filepath.Join(dir, "/main.go"): []byte(str)}
 
-	prog, err := loader.Load(&config)
+	prog, err := loader.Load(&config, func(err error) { t.Fatal(err.Error()) })
 	if err != nil {
 		t.Fatal(err.Error())
 		return nil
