@@ -313,7 +313,7 @@ func (r *RefactoringBase) Init(config *Config, desc *Description) *Result {
 func createLoader(config *Config, errorHandler func(error)) (*loader.Program, error) {
 	// TODO: need to rehack most of this probably to go away as now modules
 	// do not require this GOPATH hackery, it may "just work" in PWD as is
-	var env []string
+	env := os.Environ()
 	if config.GoPath != "" {
 		env = append(env, "GOPATH="+config.GoPath)
 	} else if gopath := os.Getenv("GOPATH"); gopath != "" {
