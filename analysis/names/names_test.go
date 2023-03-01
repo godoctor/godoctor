@@ -25,7 +25,7 @@ import (
 func setup(t *testing.T) *loader.Program {
 	var lconfig packages.Config
 	lconfig.Dir = filepath.Join("testdata/src/foo")
-	prog, err := loader.Load(&lconfig)
+	prog, err := loader.Load(&lconfig, func(err error) { t.Fatal(err.Error()) })
 	if err != nil {
 		t.Fatal(err)
 	}

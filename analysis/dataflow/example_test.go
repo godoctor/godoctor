@@ -35,8 +35,13 @@ func ExampleDefsReaching() {
 	config.Dir = "testdata"
 	config.Overlay = map[string][]byte{"main.go": []byte(src)}
 
-	prog, err := loader.Load(&config)
+	var laterError error
+
+	prog, err := loader.Load(&config, func(err error) { laterError = err })
 	if err != nil {
+		return
+	}
+	if laterError != nil {
 		return
 	}
 
@@ -82,8 +87,13 @@ func ExampleLiveVars() {
 	config.Dir = "testdata"
 	config.Overlay = map[string][]byte{"main.go": []byte(src)}
 
-	prog, err := loader.Load(&config)
+	var laterError error
+
+	prog, err := loader.Load(&config, func(err error) { laterError = err })
 	if err != nil {
+		return
+	}
+	if laterError != nil {
 		return
 	}
 
