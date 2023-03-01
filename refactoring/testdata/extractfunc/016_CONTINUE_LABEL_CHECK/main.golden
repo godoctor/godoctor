@@ -1,4 +1,4 @@
-//<<<<<extract,29,1,37,2,printMap,pass
+// <<<<<extract,29,1,37,2,printMap,pass
 package main
 
 import "fmt"

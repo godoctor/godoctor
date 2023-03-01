@@ -1,4 +1,4 @@
-//<<<<<extract,13,3,16,3,Foo,fail
+// <<<<<extract,13,3,16,3,Foo,fail
 package main
 
 import "fmt"

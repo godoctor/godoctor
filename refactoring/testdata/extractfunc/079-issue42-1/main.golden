@@ -29,7 +29,7 @@ func (dm Dummy) work(tmp string, listOfWork []string) (outputString string) {
 
 func (dm Dummy) extracted(inputString string) bool {
 	wrkDone := false
-	if !wrkDone && strings.Contains(inputString, "Suffix") { //<<<<<extract,22,2,24,2,extracted,pass
+	if !wrkDone && strings.Contains(inputString, "Suffix") { // <<<<<extract,22,2,24,2,extracted,pass
 		wrkDone = true
 	}
 	return wrkDone

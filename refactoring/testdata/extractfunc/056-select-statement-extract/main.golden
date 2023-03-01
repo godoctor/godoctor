@@ -1,4 +1,4 @@
-//<<<<< extract,26,3,33,3,newFunc,pass
+// <<<<<extract,26,3,33,3,newFunc,pass
 package main
 
 import (

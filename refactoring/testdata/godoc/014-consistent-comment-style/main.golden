@@ -15,7 +15,7 @@ const (
 	StatusBad = 2
 )
 
-//  TODO: NEEDS COMMENT INFO
+// TODO: NEEDS COMMENT INFO
 var (
 	Foo = "Foo"
 	Bar = "Bar"

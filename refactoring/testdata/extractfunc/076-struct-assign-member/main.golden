@@ -7,7 +7,7 @@ func main() {
 		member int
 	}
 	s.member = 1
-	s = extracted(s) //<<<<<extract,10,1,11,1,extracted,pass
+	s = extracted(s) // <<<<<extract,10,1,11,1,extracted,pass
 	fmt.Println(s.member)
 }
 

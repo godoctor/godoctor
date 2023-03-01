@@ -1,6 +1,6 @@
 package main // <<<<< godoc,1,1,1,1,pass
 
-//  TODO: NEEDS COMMENT INFO
+// TODO: NEEDS COMMENT INFO
 type (
 	a int
 	B int
