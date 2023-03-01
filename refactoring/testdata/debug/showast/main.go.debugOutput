@@ -7,20 +7,22 @@
      6  .  .  Obj: nil
      7  .  }
      8  .  Decls: nil
-     9  .  Scope: *ast.Scope {
-    10  .  .  Outer: nil
-    11  .  .  Objects: map[string]*ast.Object (len = 0) {}
-    12  .  }
-    13  .  Imports: nil
-    14  .  Unresolved: nil
-    15  .  Comments: []*ast.CommentGroup (len = 1) {
-    16  .  .  0: *ast.CommentGroup {
-    17  .  .  .  List: []*ast.Comment (len = 1) {
-    18  .  .  .  .  0: *ast.Comment {
-    19  .  .  .  .  .  Slash: ./testdata/debug/showast/main.go:1:14
-    20  .  .  .  .  .  Text: "//<<<<<debug,1,1,1,1,showast,pass"
-    21  .  .  .  .  }
-    22  .  .  .  }
-    23  .  .  }
-    24  .  }
-    25  }
+     9  .  FileStart: ./testdata/debug/showast/main.go:1:1
+    10  .  FileEnd: ./testdata/debug/showast/main.go:1:48
+    11  .  Scope: *ast.Scope {
+    12  .  .  Outer: nil
+    13  .  .  Objects: map[string]*ast.Object (len = 0) {}
+    14  .  }
+    15  .  Imports: nil
+    16  .  Unresolved: nil
+    17  .  Comments: []*ast.CommentGroup (len = 1) {
+    18  .  .  0: *ast.CommentGroup {
+    19  .  .  .  List: []*ast.Comment (len = 1) {
+    20  .  .  .  .  0: *ast.Comment {
+    21  .  .  .  .  .  Slash: ./testdata/debug/showast/main.go:1:14
+    22  .  .  .  .  .  Text: "//<<<<<debug,1,1,1,1,showast,pass"
+    23  .  .  .  .  }
+    24  .  .  .  }
+    25  .  .  }
+    26  .  }
+    27  }
