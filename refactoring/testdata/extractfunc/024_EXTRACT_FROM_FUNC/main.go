@@ -1,4 +1,4 @@
-//<<<<<extract,11,2,15,2,Foo,pass
+// <<<<<extract,11,2,15,2,Foo,pass
 package main
 
 import (

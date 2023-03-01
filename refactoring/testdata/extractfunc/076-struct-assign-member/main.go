@@ -7,6 +7,6 @@ func main() {
 		member int
 	}
 	s.member = 1
-	s.member = 3 //<<<<<extract,10,1,11,1,extracted,pass
+	s.member = 3 // <<<<<extract,10,1,11,1,extracted,pass
 	fmt.Println(s.member)
 }

@@ -10,7 +10,7 @@ func main() {
 	missingSuffix := true
 	// If you extract this if
 	// then it ignores the current value of missingSuffix
-	// <<<<< extract,14,2,16,2,check,pass
+	// <<<<<extract,14,2,16,2,check,pass
 	if strings.Contains(inputString, "Suffix") {
 		missingSuffix = false
 	}

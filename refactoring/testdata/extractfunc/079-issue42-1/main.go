@@ -19,7 +19,7 @@ func (dm Dummy) work(tmp string, listOfWork []string) (outputString string) {
 	inputString := tmp + " Suffix"
 	wrkDone := false
 	// This if can't seem to be extracted with any success
-	if !wrkDone && strings.Contains(inputString, "Suffix") { //<<<<<extract,22,2,24,2,extracted,pass
+	if !wrkDone && strings.Contains(inputString, "Suffix") { // <<<<<extract,22,2,24,2,extracted,pass
 		wrkDone = true
 	}
 	if wrkDone {

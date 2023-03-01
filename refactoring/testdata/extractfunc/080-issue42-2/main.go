@@ -22,7 +22,7 @@ func main() {
 func (dm Dummy) work(listOfWork []string, inputString string) (string, bool) {
 	var workDone bool
 	// This for loop can't seem to be extracted with any success
-	for _, wrk := range listOfWork { //<<<<<extract,25,2,30,2,extracted,pass
+	for _, wrk := range listOfWork { // <<<<<extract,25,2,30,2,extracted,pass
 		for strings.Contains(inputString, wrk) {
 			inputString = strings.Replace(inputString, wrk, ".", -1)
 			workDone = true
