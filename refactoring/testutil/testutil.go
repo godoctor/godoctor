@@ -62,9 +62,11 @@ import (
 	"fmt"
 	"go/parser"
 	"go/token"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -234,7 +236,11 @@ func runRefactoring(directory string, filename string, marker string, t *testing
 
 	debugOutput := result.DebugOutput.String()
 	if len(debugOutput) > 0 {
-		debugOutputFilename := filename + ".debugOutput"
+		debugOutputFilename, err := findExpectedOutput(filename, t)
+		if err != nil {
+			t.Error(err)
+			return
+		}
 		bytes, err := ioutil.ReadFile(debugOutputFilename)
 		if err != nil {
 			t.Error(err)
@@ -290,6 +296,35 @@ func exists(filename string, t *testing.T) bool {
 			return false
 		}
 	}
+}
+
+func getGoVersion() (major, minor int, err error) {
+	s := runtime.Version()
+
+	var trailing string
+	n, err := fmt.Sscanf(s, "go%d.%d%s", &major, &minor, &trailing)
+	if n == 2 && err == io.EOF {
+		// Means there were no trailing characters (i.e., not an alpha/beta)
+		err = nil
+	}
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to parse Go runtime version: %s", err)
+	}
+	return
+}
+
+func findExpectedOutput(filename string, t *testing.T) (string, error) {
+	_, minor, err := getGoVersion()
+	if err != nil {
+		return "", err
+	}
+	for i := minor; i >= 1; i-- {
+		debugOutputFilename := fmt.Sprintf("%s.go1.%d.debugOutput", filename, i)
+		if exists(debugOutputFilename, t) {
+			return debugOutputFilename, nil
+		}
+	}
+	return filename + ".debugOutput", nil
 }
 
 func sanitize(debugOutput string, replaceCwd bool) string {
