@@ -222,7 +222,7 @@ func (r *Debug) showAffected(out io.Writer) {
 		}
 		sort.Strings(result)
 		for _, line := range result {
-			fmt.Fprintf(out, line)
+			fmt.Fprint(out, line)
 		}
 	default:
 		r.Log.Error(errorMsg)

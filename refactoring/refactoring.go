@@ -227,7 +227,7 @@ func (r *RefactoringBase) Init(config *Config, desc *Description) *Result {
 	if config.Scope == nil {
 		var msg string
 		config.Scope, msg = r.guessScope(config)
-		r.Log.Infof(msg)
+		r.Log.Info(msg)
 	} else {
 		r.Log.Infof("Scope is %s", strings.Join(config.Scope, " "))
 	}
@@ -667,7 +667,7 @@ func (r *RefactoringBase) UpdateLog(config *Config, checkForErrors bool) {
 				oldPos := oldFile.Pos(extent.Offset)
 				newPos := mapPos(r.Program.Fset, oldPos,
 					r.Edits, newProgFiles, false)
-				r.Log.Infof(describeEdit(extent, replace))
+				r.Log.Info(describeEdit(extent, replace))
 				r.Log.AssociatePos(newPos, newPos)
 				return true
 			})
