@@ -18,8 +18,8 @@ import (
 var name string = "Go Doctor"
 
 // Go Doctor version number.  This can be overridden using:
-// go build -ldflags "-X main.version 0.6" github.com/godoctor/godoctor
-var version string = "0.6 (Beta)"
+// go build -ldflags "-X main.version 0.8" github.com/godoctor/godoctor
+var version string = "0.8 (Beta)"
 
 func main() {
 	aboutText := fmt.Sprintf("%s %s", name, version)
