@@ -177,8 +177,6 @@ type Result struct {
 	DebugOutput bytes.Buffer
 }
 
-const cgoError1 = "could not import C ("
-const cgoError2 = "undeclared name: C"
 
 type RefactoringBase struct {
 	// The Program to be refactored, including all dependent files
@@ -238,10 +236,7 @@ func (r *RefactoringBase) Init(config *Config, desc *Description) *Result {
 	mutex := &sync.Mutex{}
 	r.Program, err = createLoader(config, func(err error) {
 		message := strings.Replace(err.Error(), stdin+":", "<stdin>:", -1)
-		// TODO: This is temporary until go/loader handles cgo
-		if !strings.Contains(message, cgoError1) &&
-			!strings.HasSuffix(message, cgoError2) &&
-			len(r.Log.Entries) < maxInitialErrors {
+		if len(r.Log.Entries) < maxInitialErrors {
 			mutex.Lock()
 			if err, ok := err.(types.Error); ok {
 				r.Log.Error(err.Msg)
@@ -622,10 +617,7 @@ func (r *RefactoringBase) UpdateLog(config *Config, checkForErrors bool) {
 			return
 		}
 		message := strings.Replace(err.Error(), stdin+":", "<stdin>:", -1)
-		// TODO: This is temporary until go/loader handles cgo
-		if !strings.Contains(message, cgoError1) &&
-			!strings.HasSuffix(message, cgoError2) &&
-			errors < maxInitialErrors {
+		if errors < maxInitialErrors {
 			mutex.Lock()
 			errors++
 			msg := fmt.Sprintf("Completing the transformation will introduce the following error: %s", message)

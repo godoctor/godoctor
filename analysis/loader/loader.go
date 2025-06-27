@@ -47,7 +47,8 @@ func Load(conf *packages.Config, errorH func(error), args ...string) (*Program, 
 		packages.NeedFiles |
 		packages.NeedName |
 		packages.NeedTypesSizes |
-		packages.NeedModule
+		packages.NeedModule |
+		packages.LoadMode(1<<12) // typecheckCgo - enables cgo support
 
 	// TODO(reed): again, this is only desirable for rename
 	conf.Tests = true
