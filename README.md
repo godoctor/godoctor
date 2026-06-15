@@ -1,12 +1,22 @@
 # The Go Doctor
 
-![build](https://api.travis-ci.org/godoctor/godoctor.svg?branch=master)
+> **⚠️ Deprecated — this project is no longer actively maintained.**
+>
+> [**gopls**](https://github.com/golang/tools/tree/master/gopls) — the official
+> Go language server maintained by the Go team — has superseded the Go Doctor.
+> It provides equivalent (and more) refactoring functionality and is actively
+> developed. New users should use gopls; existing users are encouraged to
+> migrate.
+>
+> The source remains available here for historical reference. The previous
+> project website at `gorefactor.org` is being retired. The user manual and
+> install guide are now hosted via GitHub Pages:
+> https://godoctor.github.io/godoctor/
+
 [![GoDoc](https://godoc.org/github.com/godoctor/godoctor?status.png)](https://godoc.org/github.com/godoctor/godoctor)
-![Project Status](https://img.shields.io/badge/status-beta-yellow.svg)
+![Project Status](https://img.shields.io/badge/status-deprecated-red.svg)
 
 ## A golang refactoring tool
-
-http://gorefactor.org
 
 ```
                                  .,;;::;;;;::;,.                    

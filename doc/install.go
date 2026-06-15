@@ -170,6 +170,15 @@ const installGuide = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "
 </head>
 <body id="toc2col">
     <!-- BEGIN BODY -->
+    <div style="background-color: #fff4d6; border: 1px solid #d4a017; border-left: 6px solid #d4a017; padding: 12px 18px; margin: 0 0 12px 0; font-size: 1.1em; line-height: 1.4em;">
+      <strong>This project is deprecated.</strong>
+      <a href="https://github.com/golang/tools/tree/master/gopls">gopls</a>,
+      the official Go language server, has superseded the Go Doctor and
+      provides equivalent refactoring functionality. New users should use
+      gopls. The Go Doctor source remains available at
+      <a href="https://github.com/godoctor/godoctor">github.com/godoctor/godoctor</a>
+      for historical reference.
+    </div>
     <div id="middle">
       <div class="container">
         <div class="column1">
@@ -286,9 +295,7 @@ syntax on
 <a name="install-godoctor"></a>
 <div id="install-godoctor" class="showable">
   <h2>Installation for Users of Other Editors</h2>
-  <p>At the moment, the Go Doctor only has a Vim plug-in.  Contributing a
-  plug-in for another editor (emacs, Sublime Text, etc.) would be a great way
-  to <a href="http://godoctor.com/contrib.html">contribute</a>.</p>
+  <p>At the moment, the Go Doctor only has a Vim plug-in.</p>
   <p>However, you can still use the <b>Go Doctor command line tool</b>.  To
   install:</p>
   <ul>
@@ -296,9 +303,9 @@ syntax on
     <li><tt>go install github.com/godoctor/godoctor</tt></li>
   </ul>
   <p>For examples of how to use the command line tool, see the
-  <a href="http://gorefactor.org/doc.html#EXAMPLES"><tt>godoctor</tt> man
+  <a href="doc.html#godoctor-man"><tt>godoctor</tt> man
   page</a>, or
-  <a href="http://gorefactor.org/doc.html#offline">install a local copy of the
+  <a href="doc.html#offline">install a local copy of the
   man page</a>.</p>
 </div>
             <!-- END CONTENT -->
