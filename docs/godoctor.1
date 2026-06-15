@@ -1,0 +1,100 @@
+.\" Save this as godoctor.1 and process using
+.\"     groff -man -Tascii godoctor.1
+.\" or for PostScript output:
+.\"     groff -t -mandoc -Tps godoctor.1 > godoctor.ps
+.\" or for HTML output:
+.\"     groff -t -mandoc -Thtml godoctor.1 > godoctor.1.html
+.TH godoctor 1 "" "Go Doctor 0.8 (Beta)" ""
+.SH NAME
+godoctor \- refactor Go source code
+.SH SYNOPSIS
+.B godoctor
+[
+.I flag
+.I ...
+.B ]
+.I refactoring
+[
+.I args
+.I ...
+.B ]
+.SH DESCRIPTION
+godoctor refactors Go Source code, outputting a patch file with the changes (unless the -w or -complete flag is specified).
+.PP
+The Go Doctor can be run from the command line, but it is more easily used from an editor like Vim.
+.PP
+The Go Doctor is no longer actively maintained; gopls (https://github.com/golang/tools/tree/master/gopls) provides equivalent functionality. The Go Doctor repository remains available at https://github.com/godoctor/godoctor
+.SH OPTIONS
+The following
+.I flags
+control the behavior of the godoctor:
+
+.PP
+The
+.I refactoring
+determines the refactoring to perform:
+
+.TP
+.B rename
+Changes the name of an identifier
+
+.TP
+.B extract
+Extracts statements to a new function/method
+
+.TP
+.B var
+Extracts an expression, assigning it to a variable
+
+.TP
+.B toggle
+Toggles between a var declaration and := statement
+
+.TP
+.B godoc
+Adds stub GoDoc comments where they are missing
+
+.PP
+The
+.I args
+are specific to each refactoring.  For a list of the arguments a particular refactoring expects, run that refactoring without any arguments.  For example:
+.B godoctor
+rename
+.SH EXAMPLES
+.TP
+Display a list of available refactorings:
+.B godoctor
+-list
+.PP
+.TP
+Display usage information for the Rename refactoring:
+.B godoctor
+rename
+.PP
+.TP
+Rename the identifier in main.go at line 5, column 6 to bar, outputting a patch file:
+.B godoctor
+-pos 5,6:5,6
+-file main.go
+rename
+bar
+.PP
+.TP
+Toy example: Pipe a file to the godoctor and rename n to foo, displaying the result:
+echo 'package main; import "fmt"; func main() { n := 1; fmt.Println(n) }' | godoctor -pos 1,43:1,43 -w rename foo
+.PP
+.SH EXIT STATUS
+.TP
+0
+Success
+.TP
+1
+One or more command line arguments were invalid
+.TP
+2
+Help/usage information was displayed; no commands were executed
+.TP
+3
+The refactoring could not be completed; output contains a detailed error log
+.SH AUTHOR
+See https://github.com/godoctor/godoctor

@@ -1,0 +1,883 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <title>Go Doctor 0.8 (Beta) User's Guide</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <style>
+  html {
+    font-family: Arial;
+    font-size: 0.688em;
+    line-height: 1.364em;
+    background-color: white;
+    color: black;
+  }
+  a {
+    color: black;
+    text-decoration: underline;
+  }
+  a: hover {
+    text-decoration: none;
+  }
+  tt {
+    font-size: 1.2em;
+  }
+  h1 {
+    text-align: center;
+    font-size: 2.6em;
+    font-weight: bold;
+    padding: 20px 0 20px 0;
+    background-color: #e0e0e0;
+  }
+  h2 {
+    text-align: left;
+    font-size: 2.5em;
+    font-weight: bold;
+    padding: 10px 0 10px 0;
+    background-color: #e0e0e0;
+  }
+  h3 {
+    text-align: left;
+    font-size: 1.75em;
+    font-weight: bold;
+    padding: 5px 0 2px 0;
+    border-bottom: 2px dashed #c0c0c0;
+  }
+  h4 {
+    text-align: left;
+    font-size: 1.5em;
+    font-weight: bold;
+    padding: 5px 0 0 0;
+  }
+  .highlight {
+    background-color: yellow;
+  }
+  .dotted {
+    border: 1px dotted;
+  }
+ 
+  .clicktoshow {
+    display: show;
+    //float: right;
+    font-size: 10px;
+    font-weight: normal;
+    color: #808080;
+  }
+  .showable {
+    display: none;
+  }
+
+  #toc2col .column1 {
+    width: 250px;
+    padding: 0;
+    position: fixed;
+    right: 0px;
+    top: 0px;
+  }
+  #toc2col .column2 {
+    width: 628px;
+    padding: 10px 0 10px 0;
+  }
+
+  .box {
+    background-color: #c0c0c0;
+    width: 210px;
+  }
+  .box h2 {
+    text-align: center;
+    font-size: 1.364em;
+    line-height: 1em;
+    font-weight: bold;
+    padding: 3px 0 3px 0;
+    margin-top: 40px;
+    color:#ffffff;
+    background-color: #000000;
+  }
+  .box ul       { list-style: none; padding: 0; margin: 0; }
+  .box ul li    { padding: 5px 0 1px 15px; font-weight: bold;}
+  .box ul ul li { padding: 1px 0 1px 30px; font-weight: normal;}
+
+  .man h1 {
+    text-align: center;
+    font-size: 1.8em;
+    line-height: 1em;
+    font-weight: bold;
+    padding: 3px 0 3px 0;
+    margin-top: 5px;
+    background-color: #ffffff;
+    color: black;
+  }
+  .man h2 {
+    text-align: left;
+    font-size: 1.4em;
+    line-height: 1em;
+    font-weight: bold;
+    padding: 3px 0 3px 0;
+    margin-top: 20px;
+    background-color: #ffffff;
+  }
+
+  .vimdoc pre {
+    font-size:1.0em;
+    margin-left: 20px;
+  }
+  </style>
+  <script language="JavaScript">
+    function setDisplay(selectors, value) {
+      var divs = document.querySelectorAll(selectors);
+      for (var i = 0; i < divs.length; i++) {
+        divs[i].style.display = value;
+      }
+    }
+
+    function show(id) {
+      setDisplay('.showable', 'none');
+      setDisplay('.clicktoshow', 'block');
+      document.getElementById(id).style.display = 'block';
+      document.getElementById(id + '-click').style.display = 'none';
+    }
+
+    function showAll() {
+      setDisplay('.showable', 'block');
+      setDisplay('.clicktoshow', 'none');
+    }
+
+    function hideAll() {
+      setDisplay('.showable', 'none');
+      setDisplay('.clicktoshow', 'block');
+    }
+  </script>
+</head>
+<body id="toc2col">
+    <!-- BEGIN BODY -->
+    <div style="background-color: #fff4d6; border: 1px solid #d4a017; border-left: 6px solid #d4a017; padding: 12px 18px; margin: 0 0 12px 0; font-size: 1.1em; line-height: 1.4em;">
+      <strong>This project is deprecated.</strong>
+      <a href="https://github.com/golang/tools/tree/master/gopls">gopls</a>,
+      the official Go language server, has superseded the Go Doctor and
+      provides equivalent refactoring functionality. New users should use
+      gopls. The Go Doctor source remains available at
+      <a href="https://github.com/godoctor/godoctor">github.com/godoctor/godoctor</a>
+      for historical reference.
+    </div>
+    <div id="middle">
+      <div class="container">
+        <div class="column1">
+          <div class="box">
+            <div class="corner_bottom_left">
+              <div class="corner_top_right">
+                <div class="corner_top_left">
+                  <div class="indent">
+                    <!-- BEGIN TOC -->
+                    <h2>Getting Started</h2>
+                    <ul class="toc2">
+                      <li><a onClick="show('starting');" href="#starting">Getting Started</a></li>
+                      <li><a onClick="show('documentation');" href="#documentation">Online Documentation</a></li>
+                      <li><a onClick="show('offline');" href="#offline">Installing Local Documentation</a></li>
+                    </ul>
+                    <h2>Refactorings</h2>
+                    <ul class="toc2">
+                      
+                      <li><a onClick="show('refactoring-rename');" href="#refactoring-rename">Rename</a></li>
+                      
+                      <li><a onClick="show('refactoring-extract');" href="#refactoring-extract">Extract Function</a></li>
+                      
+                      <li><a onClick="show('refactoring-var');" href="#refactoring-var">Extract Local Variable</a></li>
+                      
+                      <li><a onClick="show('refactoring-toggle');" href="#refactoring-toggle">Toggle var ⇔ :=</a></li>
+                      
+                      <li><a onClick="show('refactoring-godoc');" href="#refactoring-godoc">Add GoDoc</a></li>
+                      
+                    </ul>
+                    <h2>References</h2>
+                    <ul class="toc2">
+                      <li><a onClick="show('godoctor-man');" href="#godoctor-man">Man Page (<tt>godoctor.1</tt>)</a></li>
+                      <li><a onClick="show('godoctor-vim');" href="#godoctor-vim">Vim Plug-in Reference</a></li>
+                      <li><a onClick="show('license');" href="#license">License</a></li>
+                    </ul>
+		    <p style="text-align: center; font-size: 10px; color: #808080;">
+                      <a href="#" onClick="showAll();">Show All</a> |
+                      <a href="#" onClick="hideAll();">Hide All</a>
+                    </p>
+                    <!-- END TOC -->
+                    <br/>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="column2">
+          <div class="indent">
+            <!-- BEGIN CONTENT -->
+<h1>Go Doctor 0.8 (Beta) User's Guide</h1>
+<a name="starting"></a>
+<h3>Getting Started</h3>
+<div id="starting-click" class="clicktoshow">
+  <a href="#starting" onClick="show('starting');">Show&nbsp;&raquo;</a>
+</div>
+<div id="starting" class="showable">
+  <p>If this is your first time using the Go Doctor, see the
+  <a href="https://github.com/godoctor/godoctor">Go Doctor repository on
+  GitHub</a> for basic instructions.</p>
+  <p>You will probably want to run the Go Doctor from Vim, since it allows you
+  to rename variables, extract functions, and perform other refactorings with
+  just a few keystrokes.  Detailed information about the Vim plug-in is
+  available in the <a onClick="show('godoctor-vim');" href="#godoctor-vim">Vim
+  Plug-in Reference</a>.  If you are inclined to use the command-line
+  <tt>godoctor</tt> tool directly, the <a onClick="show('godoctor-man');"
+  href="#godoctor-man"><tt>godoctor</tt> man page</a> contains several examples
+  illustrating typical invocations.</p>
+  <p>Later parts of this user manual contain detailed information on each of
+  the refactorings supported by the Go Doctor.</p>
+</div>
+<a name="documentation"></a>
+<h3>Online Documentation</h3>
+<div id="documentation-click" class="clicktoshow">
+  <a href="#documentation" onClick="show('documentation');">Show&nbsp;&raquo;</a>
+</div>
+<div id="documentation" class="showable">
+  <p>The latest documentation for the Go Doctor (including this user manual,
+  the <tt>godoctor</tt> man page, and the Vim Plug-in Reference) is hosted
+  via <a target="_blank"
+  href="https://github.com/godoctor/godoctor">GitHub Pages</a>.  If you want
+  to install a local copy of the documentation, see below.</p>
+</div>
+<a name="offline"></a>
+<h3>Installing Local Documentation</h3>
+<div id="offline-click" class="clicktoshow">
+  <a href="#offline" onClick="show('offline');">Show&nbsp;&raquo;</a>
+</div>
+<div id="offline" class="showable">
+  <p>If you do not want to use the online documentation, you can install the Go
+  Doctor documentation locally.  The <tt>godoctor</tt> tool generates its own
+  documentation.  It can generate a local copy of the Installation Guide and
+  User Guide on the Go Doctor Web site; it can generate a Unix man page for the
+  <tt>godoctor</tt> tool; it can also generate more complete documentation for
+  the Vim plug-in (by default, the Vim plug-in includes stub documentation
+  pointing to the Go Doctor Web site).</p>
+  <ul>
+    <li><b>To generate a local copy of the Installation Guide:</b><br/><br/>
+      &nbsp;&nbsp;&nbsp;&nbsp;
+      <tt>godoctor -doc install &gt;install.html</tt></li>
+    <li><b>To generate a local copy of the User's Guide:</b><br/><br/>
+      &nbsp;&nbsp;&nbsp;&nbsp;
+      <tt>godoctor -doc user &gt;user.html</tt></li>
+    <li><b>To generate a local copy of the godoctor man page,</b><br/><br/>
+      use the <tt>godoctor</tt> tool to generate the man page, then save it as
+      <i>godoctor.1</i> in a directory on your MANPATH.  For example, if you
+      installed <tt>godoctor</tt> into /usr/local/bin, you will probably want
+      to install the man page into /usr/local/share/man:<br/><br/>
+      <pre>sudo mkdir -p /usr/local/share/man/man1</pre><br/>
+      <pre>sudo sh -c 'godoctor -doc man &gt;/usr/local/share/man/man1/godoctor.1'</pre><br/></li>
+    <li><b>To install complete documentation for the Vim plug-in:</b>
+    <ol class="enum">
+      <li>Use the <tt>godoctor</tt> tool to generate the Vim documentation, and
+        overwrite the <b>godoctor-vim.txt</b> file in the Vim plug-in's
+        <i>doc</i> directory.  For example:<br/><br/>
+        <pre>godoctor -doc vim &gt;~/.vim/godoctor.vim/doc/godoctor-vim.txt</pre></li>
+      <li>In Vim, run<br/><br/>
+        <pre>:helptags ~/.vim/godoctor.vim/doc</pre><br/>
+        to generate help tags from the plug-in documentation.</li>
+      <li>To view the Vim plug-in documentation, execute<br/><br/>
+        <tt>:help godoctor</tt></li>
+    </ol>
+  </ul>
+</div>
+<a name="refactorings"></a>
+<h2>Refactorings</h2>
+<div id="refactorings"></div>
+
+<a name="refactoring-rename"></a>
+<h3>Refactoring: Rename</h3>
+<div id="refactoring-rename-click" class="clicktoshow">
+  <a href="#refactoring-rename" onClick="show('refactoring-rename');">Show&nbsp;&raquo;</a>
+</div>
+<div id="refactoring-rename" class="showable">
+  
+  <h4>Purpose</h4>
+  <p>The Rename refactoring is used to change the names of variables,
+  functions, methods, and types.  Package renaming is not currently
+  supported.</p>
+
+  <h4>Usage</h4>
+  <ol class="enum">
+    <li>Select an identifier to be renamed.</li>
+    <li>Activate the Rename refactoring.</li>
+    <li>Enter a new name for the identifier.</li>
+  </ol>
+
+  <p>An error or warning will be reported if:</p>
+  <ul>
+    <li>The renaming could introduce errors (e.g., two functions would have the
+    same name).</li>
+    <li>The necessary changes cannot be made (e.g., the renaming would change 
+    the name of a function in the Go standard library).</li>
+  </ul>
+
+  <h4>Example</h4>
+  <p>The example below demonstrates the effect of renaming the highlighted
+  occurrence of <tt>hello</tt> to <tt>goodnight</tt>.  Note that there are two
+  different variables named <tt>hello</tt>; since the local identifier was
+  selected, only references to that variable are renamed, as shown.</p>
+  <table cellspacing="5" cellpadding="15" style="border: 0;">
+    <tr>
+      <th>Before</th><th>&nbsp;</th><th>After</th>
+    </tr>
+    <tr>
+      <td class="dotted">
+        <pre>package main
+import "fmt"
+
+var hello = ":-("
+
+func main() {
+    hello = ":-)"
+    var hello string = "hello"
+    var world string = "world"
+    hello = <span class="highlight">hello</span> + ", " + world
+    hello += "!"
+    fmt.Println(hello)
+}</pre>
+      </td>
+      <td>&nbsp;&nbsp;&nbsp;&nbsp;&rArr;&nbsp&nbsp;&nbsp;&nbsp;</td>
+      <td class="dotted">
+        <pre>package main
+import "fmt"
+
+var hello = ":-("
+
+func main() {
+    hello = ":-)"
+    var <span class="highlight">goodnight</span> string = "hello"
+    var world string = "world"
+    <span class="highlight">goodnight</span> = <span class="highlight">goodnight</span> + ", " + world
+    <span class="highlight">goodnight</span> += "!"
+    fmt.Println(goodnight)
+}</pre>
+      </td>
+    </tr>
+  </table>
+
+  <h4>Limitations</h4>
+  <ul>
+    <li><b>Package renaming is not currently supported.</b>  Package renaming
+    requires renaming directories, which causes files to move on the file
+    system.  When the refactoring is activated from a text editor (e.g., Vim),
+    the editor needs to be notified of such changes and respond appropriately.
+    Additional work is needed to support this behavior.</li>
+    <li><b>Name collision detection is overly conservative.</b>  If renaming
+    will introduce shadowing, this is reported as an error, even if it will not
+    change the program's semantics.</li>
+  </ul>
+
+</div>
+
+<a name="refactoring-extract"></a>
+<h3>Refactoring: Extract Function</h3>
+<div id="refactoring-extract-click" class="clicktoshow">
+  <a href="#refactoring-extract" onClick="show('refactoring-extract');">Show&nbsp;&raquo;</a>
+</div>
+<div id="refactoring-extract" class="showable">
+  
+  <h4>Purpose</h4>
+  <p>The Extract Function refactoring creates a new function (or method) from a
+  sequence of statements, then replaces the original statements with a call to
+  that function.</p>
+
+  <h4>Usage</h4>
+  <ol class="enum">
+    <li>Select a sequence of one or more statements inside an existing function
+        or method.</li>
+    <li>Activate the Extract Function refactoring.</li>
+    <li>Enter a name for the new function that will be created.</li>
+  </ol>
+
+  <p>The refactoring will automatically determine what local variables need to
+  be passed to the extracted function and returned as results.</p>
+
+  <p>An error or warning will be reported if the selected statements cannot be
+  extracted into a new function.  Usually, this occurs because they contain a
+  statement like <tt>return</tt> which will have a different meaning in the
+  extracted function.</p>
+
+  <h4>Limitations</h4>
+  <ul>
+    <li>Code containing <tt>return</tt> statements, <tt>defer</tt> statements,
+    or anonymous functions cannot be extracted.</li>
+  </ul>
+
+</div>
+
+<a name="refactoring-var"></a>
+<h3>Refactoring: Extract Local Variable</h3>
+<div id="refactoring-var-click" class="clicktoshow">
+  <a href="#refactoring-var" onClick="show('refactoring-var');">Show&nbsp;&raquo;</a>
+</div>
+<div id="refactoring-var" class="showable">
+  
+  <h4>Purpose</h4>
+  <p>The Extract Local Variable takes an expression, assigns it to a new
+  local variable, then replaces the original expression with a use of that
+  variable.</p>
+
+  <h4>Usage</h4>
+  <ol class="enum">
+    <li>Select an expression in an existing statement.</li>
+    <li>Activate the Extract Local Variable refactoring.</li>
+    <li>Enter a name for the new variable that will be created.</li>
+  </ol>
+
+  <p>An error or warning will be reported if the selected expression cannot be
+  extracted into a variable assignment.  For example, this could occur if the
+  extracted expression is in a loop condition but its value may change on each
+  iteration of the loop, or if the extracted variable's name is the same as the
+  name of an existing variable.</p>
+
+  <h4>Example</h4>
+  <p>The example below demonstrates the effect of extracting the highlighted
+  expression into a new local variable <tt>sum</tt>.</p>
+  <table cellspacing="5" cellpadding="15" style="border: 0;">
+    <tr>
+      <th>Before</th><th>&nbsp;</th><th>After</th>
+    </tr>
+    <tr>
+      <td class="dotted">
+        <pre>package main
+import "fmt"
+
+func main() {
+    y := 2
+    z := 3
+    if x := 5; x == <span class="highlight">y + z</span> {
+        fmt.Println(x)
+    }
+}</pre>
+      </td>
+      <td>&nbsp;&nbsp;&nbsp;&nbsp;&rArr;&nbsp&nbsp;&nbsp;&nbsp;</td>
+      <td class="dotted">
+        <pre>package main
+import "fmt"
+
+func main() {
+    y := 2
+    z := 3
+    <span class="highlight">sum := y + z</span>
+    if x := 5; x == <span class="highlight">sum</span> {
+        fmt.Println(x)
+    }
+}</pre>
+      </td>
+    </tr>
+  </table>
+
+</div>
+
+<a name="refactoring-toggle"></a>
+<h3>Refactoring: Toggle var ⇔ :=</h3>
+<div id="refactoring-toggle-click" class="clicktoshow">
+  <a href="#refactoring-toggle" onClick="show('refactoring-toggle');">Show&nbsp;&raquo;</a>
+</div>
+<div id="refactoring-toggle" class="showable">
+  
+  <h4>Purpose</h4>
+  <p>The Toggle var &hArr; := refactoring converts a <tt>var</tt> declaration to a
+  short assignment statement (using :=), or vice versa.</p>
+
+  <h4>Usage</h4>
+  <ol class="enum">
+    <li>Select a local variable declaration (either a <tt>var</tt> declaration
+    or a := statement).</li>
+    <li>Activate the Toggle var &hArr; := refactoring.</li>
+  </ol>
+
+  <p>If a <tt>var</tt> declaration is selected, it will be converted to a short
+  assignment statement (:=).  If a short assignment statement is selected, it
+  will be converted to a <tt>var</tt> declaration (with an explicit type
+  declaration).</p>
+
+  <p>An error or warning will be reported if the selected statements cannot be
+  converted.  For example, declarations at the file scope must be declared using
+  <tt>var</tt>; they cannot be converted to short assignment statements.</p>
+
+  <h4>Example</h4>
+  <p>The example below demonstrates the effect of toggling the highlighted
+  declaration of <tt>msg</tt> between a short assignment statement and a
+  <tt>var</tt> declaration.</p>
+  <table cellspacing="5" cellpadding="15" style="border: 0;">
+    <tr>
+      <th>Before</th><th>&nbsp;</th><th>After</th>
+    </tr>
+    <tr>
+      <td class="dotted">
+        <pre>package main
+import "fmt"
+
+func main() {
+    <span class="highlight">msg := hello</span>
+    fmt.Println(msg)
+}</pre>
+      </td>
+      <td>&nbsp;&nbsp;&nbsp;&nbsp;&hArr;&nbsp&nbsp;&nbsp;&nbsp;</td>
+      <td class="dotted">
+        <pre>package main
+import "fmt"
+
+func main() {
+    <span class="highlight">var msg string = hello</span>
+    fmt.Println(msg)
+}</pre>
+      </td>
+    </tr>
+  </table>
+
+</div>
+
+<a name="refactoring-godoc"></a>
+<h3>Refactoring: Add GoDoc</h3>
+<div id="refactoring-godoc-click" class="clicktoshow">
+  <a href="#refactoring-godoc" onClick="show('refactoring-godoc');">Show&nbsp;&raquo;</a>
+</div>
+<div id="refactoring-godoc" class="showable">
+  
+  <h4>Purpose</h4>
+  <p>This refactoring searches a file for exported declarations that do not have
+  GoDoc comments and adds TODO comment stubs to those declarations.</p>
+  <p>The refactored source code is formatted (similarly to gofmt).</p>
+
+  <h4>Usage</h4>
+  <p>This refactoring is applied to an entire file.  It does not require any
+  particular text to be selected, and it does not prompt for any additional user
+  input.</p>
+
+  <h4>Example</h4>
+  <p>In the following example, Exported, Shaper, and Rectangle are all exported
+  but lack doc comments.  This refactoring adds a TODO comment for each.</p>
+  <table cellspacing="5" cellpadding="15" style="border: 0;">
+    <tr>
+      <th>Before</th><th>&nbsp;</th><th>After</th>
+    </tr>
+    <tr>
+      <td class="dotted">
+  <pre>package main
+import "fmt"
+
+func main() {
+    Exported()
+}
+
+func Exported() {
+    fmt.Println("Hello, Go")
+}
+
+type Shaper interface {
+}
+ 
+type Rectangle struct {
+}
+  </pre>
+      </td>
+      <td>&nbsp;&nbsp;&nbsp;&nbsp;&rArr;&nbsp;&nbsp;&nbsp;&nbsp;</td>
+      <td class="dotted">
+      <pre>package main
+import "fmt"
+
+func main() {
+    Exported()
+}
+
+<span class="highlight">// Exported TODO: NEEDS COMMENT INFO</span>
+func Exported() {
+    fmt.Println("Hello, Go")
+}
+
+<span class="highlight">// Exported TODO: NEEDS COMMENT INFO</span>
+type Shaper interface {
+}
+  
+<span class="highlight">// Exported TODO: NEEDS COMMENT INFO</span>
+type Rectangle struct {
+}
+</pre>
+      </td>
+    </tr>
+  </table>
+
+  <h4>Limitations</h4>
+  <ul>
+    <li>When a single declaration contains non-exported declarations
+        followed by exported declarations (e.g.,
+        <tt>var x, Y int</tt>), a documentation comment will not be
+        added.</li>
+  </ul>
+
+</div>
+
+<div id="references">
+  <a name="references"></a>
+  <h2>References</h2>
+</div>
+<a name="godoctor-man"></a>
+<h3><tt>godoctor</tt> Man Page</h3>
+<div id="godoctor-man-click" class="clicktoshow">
+  <a href="#godoctor-man" onClick="show('godoctor-man');">Show&nbsp;&raquo;</a>
+</div>
+<div id="godoctor-man" class="showable">
+  <div class="man">
+    <pre>
+.\&#34; Save this as godoctor.1 and process using
+.\&#34;     groff -man -Tascii godoctor.1
+.\&#34; or for PostScript output:
+.\&#34;     groff -t -mandoc -Tps godoctor.1 &gt; godoctor.ps
+.\&#34; or for HTML output:
+.\&#34;     groff -t -mandoc -Thtml godoctor.1 &gt; godoctor.1.html
+.TH godoctor 1 &#34;&#34; &#34;Go Doctor 0.8 (Beta)&#34; &#34;&#34;
+.SH NAME
+godoctor \- refactor Go source code
+.SH SYNOPSIS
+.B godoctor
+[
+.I flag
+.I ...
+.B ]
+.I refactoring
+[
+.I args
+.I ...
+.B ]
+.SH DESCRIPTION
+godoctor refactors Go Source code, outputting a patch file with the changes (unless the -w or -complete flag is specified).
+.PP
+The Go Doctor can be run from the command line, but it is more easily used from an editor like Vim.
+.PP
+The Go Doctor is no longer actively maintained; gopls (https://github.com/golang/tools/tree/master/gopls) provides equivalent functionality. The Go Doctor repository remains available at https://github.com/godoctor/godoctor
+.SH OPTIONS
+The following
+.I flags
+control the behavior of the godoctor:
+
+.PP
+The
+.I refactoring
+determines the refactoring to perform:
+
+.TP
+.B rename
+Changes the name of an identifier
+
+.TP
+.B extract
+Extracts statements to a new function/method
+
+.TP
+.B var
+Extracts an expression, assigning it to a variable
+
+.TP
+.B toggle
+Toggles between a var declaration and := statement
+
+.TP
+.B godoc
+Adds stub GoDoc comments where they are missing
+
+.PP
+The
+.I args
+are specific to each refactoring.  For a list of the arguments a particular refactoring expects, run that refactoring without any arguments.  For example:
+.B godoctor
+rename
+.SH EXAMPLES
+.TP
+Display a list of available refactorings:
+.B godoctor
+-list
+.PP
+.TP
+Display usage information for the Rename refactoring:
+.B godoctor
+rename
+.PP
+.TP
+Rename the identifier in main.go at line 5, column 6 to bar, outputting a patch file:
+.B godoctor
+-pos 5,6:5,6
+-file main.go
+rename
+bar
+.PP
+.TP
+Toy example: Pipe a file to the godoctor and rename n to foo, displaying the result:
+echo &#39;package main; import &#34;fmt&#34;; func main() { n := 1; fmt.Println(n) }&#39; | godoctor -pos 1,43:1,43 -w rename foo
+.PP
+.SH EXIT STATUS
+.TP
+0
+Success
+.TP
+1
+One or more command line arguments were invalid
+.TP
+2
+Help/usage information was displayed; no commands were executed
+.TP
+3
+The refactoring could not be completed; output contains a detailed error log
+.SH AUTHOR
+See https://github.com/godoctor/godoctor
+
+</pre>
+  </div>
+</div>
+<a name="godoctor-vim"></a>
+<h3>Vim Plugin Reference</h3>
+<div id="godoctor-vim-click" class="clicktoshow">
+  <a href="#godoctor-vim" onClick="show('godoctor-vim');">Show&nbsp;&raquo;</a>
+</div>
+<div id="godoctor-vim" class="showable">
+  <div class="vimdoc">
+  <pre>
+*godoctor-vim.txt*
+*godoctor*
+                                   - = = = -                                 ~
+
+
+                           T H E   G O   D O C T O R                         ~
+ 
+                           a golang refactoring tool                         ~
+
+
+                                   - = = = -                                 ~
+
+
+              https://github.com/godoctor/godoctor
+
+
+
+                          Vim Plugin Reference Manual                        ~
+
+
+==============================================================================
+CONTENTS                                                   *godoctor-contents*
+
+    1.Intro.........................................|godoctor-intro|
+    2.Commands......................................|godoctor-commands|
+    3.Global Options................................|godoctor-global-options|
+    4.License.......................................|godoctor-license|
+
+
+==============================================================================
+1. Intro                                                      *godoctor-intro*
+
+The Go Doctor provides source code refactoring for golang programs.
+
+The Go Doctor is no longer actively maintained.  gopls
+(https://github.com/golang/tools/tree/master/gopls) provides equivalent
+functionality and is actively developed.  The Go Doctor source and
+documentation remain available at:
+
+    https://github.com/godoctor/godoctor
+
+This documentation provides a reference for the commands and options unique to
+the Go Doctor Vim plugin.
+
+This documentation was generated for Go Doctor 0.8 (Beta).
+
+==============================================================================
+2. Commands                                                *godoctor-commands*
+
+:Refactor                                                          *:Refactor*
+:GoRefactor                                                      *:GoRefactor*
+
+The Refactor and GoRefactor commands are synonymous; either can be used to
+initiate a Go refactoring.  These commands are available only when a Go source
+file is being edited.
+
+The command name is followed by the refactoring name and arguments (if any).
+For example, to rename an identifier in a Go program to &#34;foo&#34;, move the cursor
+over the identifier (or select it), and issue the command:
+
+Example: &gt;
+    :Refactor rename foo
+&lt;
+
+Vim will autocomplete the refactoring name (&#34;rename&#34; in the example above).
+
+A list of files modified and errors that occurred (if any) are displayed in the
+|location-list|.
+
+:Rename                                                              *:Rename*
+
+The Rename command is a shortcut for &#34;:Refactor rename&#34; and is otherwise used
+similarly.
+
+==============================================================================
+3. Global Options                                    *godoctor-global-options*
+
+                                                              *&#39;doctor_scope&#39;*
+Default: &#34;&#34;
+If this is set, its value is passed to the godoctor via the &#34;-scope&#34; flag.
+
+For example: &gt;
+    let g:doctor_scope=&#39;/path/to/main.go&#39;
+&lt;
+
+Usually, the scope will point to the program entrypoint (main package) for the
+program you want to refactor.  If an explicit scope is not set, the Go Doctor
+assumes that the current directory contains a Go package, and it uses that
+package as the scope.
+
+==============================================================================
+4. License                                                  *godoctor-license*
+
+Copyright Auburn University and others.  All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software
+   without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS &#34;AS IS&#34;
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+ vim:textwidth=78:shiftwidth=4:filetype=help:norl:
+
+</pre>
+  </div>
+</div>
+<a name="license"></a>
+<h3>License</h3>
+<div id="license-click" class="clicktoshow">
+  <a href="#license" onClick="show('license');">Show&nbsp;&raquo;</a>
+</div>
+<div id="license" class="showable">
+  <p>Copyright &copy; Auburn University and others.  All rights reserved.</p>
+  <p>Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:</p>
+  <p>1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.</p>
+  <p>2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.</p>
+  <p>3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.</p>
+  <p>THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</p>
+</div>
+            <!-- END CONTENT -->
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- END BODY -->
+</body>
+</html>
