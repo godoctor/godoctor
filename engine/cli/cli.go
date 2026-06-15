@@ -77,7 +77,7 @@ The <args> following the refactoring name vary depending on the refactoring.
 If a refactoring requires arguments but none are supplied, a message will be
 displayed with a synopsis of the correct usage.
 
-For complete usage information, see the user manual: http://gorefactor.org/doc.html
+For complete usage information, see: https://github.com/godoctor/godoctor
 `
 	}
 }

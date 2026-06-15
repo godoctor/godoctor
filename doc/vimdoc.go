@@ -32,7 +32,7 @@ const vim = `*godoctor-vim.txt*
                                    - = = = -                                 ~
 
 
-                             http://gorefactor.org/
+              https://github.com/godoctor/godoctor
 
 
 
@@ -53,11 +53,12 @@ CONTENTS                                                   *godoctor-contents*
 
 The Go Doctor provides source code refactoring for golang programs.
 
-Complete documentation for the Go Doctor--including installation instructions,
-a "quick start" introduction, and descriptions of all refactorings--can be
-found at the Go Doctor Web site:
+The Go Doctor is no longer actively maintained.  gopls
+(https://github.com/golang/tools/tree/master/gopls) provides equivalent
+functionality and is actively developed.  The Go Doctor source and
+documentation remain available at:
 
-    https://gorefactor.org/
+    https://github.com/godoctor/godoctor
 
 This documentation provides a reference for the commands and options unique to
 the Go Doctor Vim plugin.

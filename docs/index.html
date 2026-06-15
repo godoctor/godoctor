@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>The Go Doctor (deprecated)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      max-width: 720px;
+      margin: 40px auto;
+      padding: 0 20px;
+      color: #222;
+      line-height: 1.5;
+    }
+    h1 { font-size: 2.4em; margin-bottom: 0.2em; }
+    .tagline { color: #666; margin-top: 0; }
+    .banner {
+      background-color: #fff4d6;
+      border: 1px solid #d4a017;
+      border-left: 6px solid #d4a017;
+      padding: 16px 20px;
+      margin: 24px 0;
+      border-radius: 4px;
+    }
+    .banner strong { font-size: 1.1em; }
+    a { color: #0366d6; }
+    code, pre {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+      background: #f6f8fa;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 0.95em;
+    }
+    pre { padding: 12px 16px; overflow-x: auto; }
+    ul { padding-left: 22px; }
+    li { margin: 6px 0; }
+    footer { margin-top: 60px; color: #888; font-size: 0.9em; border-top: 1px solid #eee; padding-top: 16px; }
+  </style>
+</head>
+<body>
+  <h1>The Go Doctor</h1>
+  <p class="tagline">A Go refactoring tool.</p>
+
+  <div class="banner">
+    <strong>This project is deprecated.</strong><br/>
+    <a href="https://github.com/golang/tools/tree/master/gopls">gopls</a> &mdash;
+    the official Go language server maintained by the Go team &mdash; has
+    superseded the Go Doctor and provides equivalent (and more) refactoring
+    functionality. New users should use gopls; existing users are encouraged
+    to migrate. The source code and these archived docs remain available for
+    historical reference.
+  </div>
+
+  <h2>Archived documentation</h2>
+  <ul>
+    <li><a href="install.html">Installation Guide</a></li>
+    <li><a href="doc.html">User's Guide</a> (includes the <code>godoctor</code> man page and Vim plug-in reference)</li>
+    <li><a href="godoctor.1">Raw <code>godoctor.1</code> man page source</a></li>
+    <li><a href="godoctor-vim.txt">Raw Vim help (<code>godoctor-vim.txt</code>)</a></li>
+  </ul>
+
+  <h2>Source</h2>
+  <p>The Go Doctor repository:
+    <a href="https://github.com/godoctor/godoctor">github.com/godoctor/godoctor</a>.
+    The Vim plug-in:
+    <a href="https://github.com/godoctor/godoctor.vim">github.com/godoctor/godoctor.vim</a>.
+  </p>
+
+  <h2>Regenerating these pages</h2>
+  <p>This site is generated from the Go Doctor source. From the repository root:</p>
+  <pre>go run ./hack/gensite</pre>
+
+  <footer>
+    Copyright &copy; Auburn University and others. Licensed under a BSD-style license.
+  </footer>
+</body>
+</html>

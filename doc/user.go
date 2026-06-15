@@ -251,6 +251,15 @@ const userGuide = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "htt
 </head>
 <body id="toc2col">
     <!-- BEGIN BODY -->
+    <div style="background-color: #fff4d6; border: 1px solid #d4a017; border-left: 6px solid #d4a017; padding: 12px 18px; margin: 0 0 12px 0; font-size: 1.1em; line-height: 1.4em;">
+      <strong>This project is deprecated.</strong>
+      <a href="https://github.com/golang/tools/tree/master/gopls">gopls</a>,
+      the official Go language server, has superseded the Go Doctor and
+      provides equivalent refactoring functionality. New users should use
+      gopls. The Go Doctor source remains available at
+      <a href="https://github.com/godoctor/godoctor">github.com/godoctor/godoctor</a>
+      for historical reference.
+    </div>
     <div id="middle">
       <div class="container">
         <div class="column1">
@@ -301,9 +310,8 @@ const userGuide = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "htt
 </div>
 <div id="starting" class="showable">
   <p>If this is your first time using the Go Doctor, see the
-  <a href="http://gorefactor.org/starting.html">Getting Started</a> page on the
-  Go Doctor Web site.  It contains videos (and basic instructions) showing some
-  typical uses of the Go Doctor using the Vim plug-in.</p>
+  <a href="https://github.com/godoctor/godoctor">Go Doctor repository on
+  GitHub</a> for basic instructions.</p>
   <p>You will probably want to run the Go Doctor from Vim, since it allows you
   to rename variables, extract functions, and perform other refactorings with
   just a few keystrokes.  Detailed information about the Vim plug-in is
@@ -322,10 +330,10 @@ const userGuide = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "htt
 </div>
 <div id="documentation" class="showable">
   <p>The latest documentation for the Go Doctor (including this user manual,
-  the <tt>godoctor</tt> man page, and the Vim Plug-in Reference) is always
-  available online at <a target="_blank"
-  href="http://gorefactor.org">http://gorefactor.org</a>.  If you want to
-  install a local copy of the documentation, see below.</p>
+  the <tt>godoctor</tt> man page, and the Vim Plug-in Reference) is hosted
+  via <a target="_blank"
+  href="https://github.com/godoctor/godoctor">GitHub Pages</a>.  If you want
+  to install a local copy of the documentation, see below.</p>
 </div>
 <a name="offline"></a>
 <h3>Installing Local Documentation</h3>

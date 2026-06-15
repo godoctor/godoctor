@@ -47,7 +47,7 @@ godoctor refactors Go Source code, outputting a patch file with the changes (unl
 .PP
 The Go Doctor can be run from the command line, but it is more easily used from an editor like Vim.
 .PP
-For more information and detailed instructions, see the complete documentation at http://gorefactor.org
+The Go Doctor is no longer actively maintained; gopls (https://github.com/golang/tools/tree/master/gopls) provides equivalent functionality. The Go Doctor repository remains available at https://github.com/godoctor/godoctor
 .SH OPTIONS
 The following
 .I flags
@@ -109,5 +109,5 @@ Help/usage information was displayed; no commands were executed
 3
 The refactoring could not be completed; output contains a detailed error log
 .SH AUTHOR
-See http://gorefactor.org
+See https://github.com/godoctor/godoctor
 `
